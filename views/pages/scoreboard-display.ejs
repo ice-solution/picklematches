@@ -1,58 +1,157 @@
 <%- include('../partials/head', { title }) %>
 <% var obs = typeof obsMode !== 'undefined' && obsMode; %>
 <% var transp = typeof transparent !== 'undefined' && transparent; %>
-<body class="<%= transp ? 'bg-transparent' : 'bg-black' %> min-h-screen text-white font-sans">
-  <main id="sb-root" class="flex min-h-screen flex-col items-center justify-center px-6 py-8 <%= obs ? 'py-4' : 'py-10' %>">
-    <% if (!obs) { %>
-      <p id="sb-event-name" class="mb-4 text-base uppercase tracking-widest text-slate-500 md:text-lg"><%= event.name %></p>
-    <% } %>
-    <p id="sb-meta" class="mb-6 text-center text-slate-300 <%= obs ? 'text-2xl md:text-3xl' : 'text-xl md:text-2xl' %>"></p>
-    <div class="grid w-full max-w-6xl grid-cols-3 items-center gap-4 text-center md:gap-8">
-      <div>
-        <p id="sb-team-a" class="text-2xl font-semibold text-emerald-400 md:text-4xl <%= obs ? 'md:text-5xl' : '' %>"><%= scoreboard.teamAName %></p>
-        <p id="sb-score-a" class="mt-4 text-7xl font-bold tabular-nums text-emerald-300 md:text-9xl <%= obs ? 'md:text-[10rem]' : '' %>"><%= scoreboard.scoreA %></p>
+<% var serveA = scoreboard.servingSide !== 'b'; %>
+<style>
+  .sb-card {
+    font-family: 'Noto Sans TC', system-ui, sans-serif;
+    width: min(100%, 52rem);
+    background: rgba(12, 18, 28, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  }
+  .sb-header {
+    padding: 0.55rem 1.25rem 0.45rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #cbd5e1;
+    text-align: center;
+    min-height: 1.5rem;
+  }
+  .sb-header:empty { display: none; }
+  .sb-row {
+    display: grid;
+    grid-template-columns: 2.5rem 1fr auto;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .sb-row:last-of-type { border-bottom: none; }
+  .sb-row.is-serving { background: rgba(255, 255, 255, 0.04); }
+  .sb-serve {
+    width: 1.35rem;
+    height: 1.35rem;
+    margin: 0 auto;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .sb-row.is-serving .sb-serve { opacity: 1; }
+  .sb-serve svg { display: block; width: 100%; height: 100%; fill: #f8fafc; }
+  .sb-name {
+    font-size: 1.75rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    line-height: 1.2;
+    text-align: left;
+  }
+  .sb-score {
+    font-size: 2.75rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    min-width: 2.5ch;
+    text-align: right;
+  }
+  .sb-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1.25rem 0.65rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+  <% if (obs) { %>
+  .sb-card { width: min(100%, 56rem); }
+  .sb-header { font-size: 1.05rem; padding: 0.65rem 1.5rem 0.5rem; }
+  .sb-name { font-size: 2.1rem; }
+  .sb-score { font-size: 3.25rem; }
+  .sb-row { padding: 1rem 1.5rem; grid-template-columns: 3rem 1fr auto; }
+  .sb-serve { width: 1.65rem; height: 1.65rem; }
+  .sb-footer { font-size: 1.1rem; }
+  <% } %>
+</style>
+<body class="<%= transp ? 'bg-transparent' : 'bg-black' %> min-h-screen text-white">
+  <main id="sb-root" class="flex min-h-screen items-center justify-center p-4 <%= obs ? 'p-2' : 'p-8' %>">
+    <div id="sb-card" class="sb-card rounded-lg">
+      <div id="sb-header" class="sb-header"><%= scoreboard.subtitle || '' %></div>
+      <div id="sb-row-a" class="sb-row <%= serveA ? 'is-serving' : '' %>">
+        <span class="sb-serve" aria-hidden="true">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 4 8v8l8 6 8-6V8l-8-6z"/></svg>
+        </span>
+        <span id="sb-team-a" class="sb-name"><%= scoreboard.teamAName %></span>
+        <span id="sb-score-a" class="sb-score"><%= scoreboard.scoreA %></span>
       </div>
-      <div id="sb-games-center-wrap" class="flex min-w-[5rem] flex-col items-center justify-center px-2 md:min-w-[7rem]">
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 md:text-sm">局</p>
-        <p id="sb-games-center" class="mt-1 text-4xl font-bold tabular-nums text-amber-300 md:text-6xl <%= obs ? 'md:text-7xl' : '' %>"><%= scoreboard.gamesA %> - <%= scoreboard.gamesB %></p>
+
+      <div id="sb-row-b" class="sb-row <%= !serveA ? 'is-serving' : '' %>">
+        <span class="sb-serve" aria-hidden="true">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 4 8v8l8 6 8-6V8l-8-6z"/></svg>
+        </span>
+        <span id="sb-team-b" class="sb-name"><%= scoreboard.teamBName %></span>
+        <span id="sb-score-b" class="sb-score"><%= scoreboard.scoreB %></span>
       </div>
-      <div>
-        <p id="sb-team-b" class="text-2xl font-semibold text-sky-400 md:text-4xl <%= obs ? 'md:text-5xl' : '' %>"><%= scoreboard.teamBName %></p>
-        <p id="sb-score-b" class="mt-4 text-7xl font-bold tabular-nums text-sky-300 md:text-9xl <%= obs ? 'md:text-[10rem]' : '' %>"><%= scoreboard.scoreB %></p>
+
+      <div class="sb-footer">
+        <span id="sb-games"></span>
+        <span id="sb-footer-round"></span>
       </div>
     </div>
-    <p id="sb-status" class="mt-8 text-xl text-amber-300 md:text-2xl"></p>
-    <p id="sb-hidden" class="mt-4 hidden text-2xl text-slate-500">待機中</p>
+    <p id="sb-hidden" class="mt-4 hidden text-slate-500">待機中</p>
   </main>
   <script src="/socket.io/socket.io.js"></script>
   <script>
     (function () {
       var eventId = <%- JSON.stringify(eventIdStr) %>;
-      var statusLabels = { idle: '待機', live: '進行中', finished: '完賽' };
+      var scoreboardSlot = <%- JSON.stringify(typeof scoreboardSlot !== 'undefined' ? scoreboardSlot : 1) %>;
 
       function applyBoard(sb) {
         if (!sb) return;
         var visible = sb.isVisible !== false;
+        var serveA = sb.servingSide !== 'b';
+
+        var header = document.getElementById('sb-header');
+        header.textContent = sb.subtitle || '';
+        header.style.display = sb.subtitle ? '' : 'none';
+
         document.getElementById('sb-team-a').textContent = sb.teamAName || '隊伍 A';
         document.getElementById('sb-team-b').textContent = sb.teamBName || '隊伍 B';
         document.getElementById('sb-score-a').textContent = sb.scoreA ?? 0;
         document.getElementById('sb-score-b').textContent = sb.scoreB ?? 0;
+
+        var rowA = document.getElementById('sb-row-a');
+        var rowB = document.getElementById('sb-row-b');
+        rowA.classList.toggle('is-serving', serveA);
+        rowB.classList.toggle('is-serving', !serveA);
+
         var ga = sb.gamesA ?? 0;
         var gb = sb.gamesB ?? 0;
-        document.getElementById('sb-games-center').textContent = ga + ' - ' + gb;
-        var meta = [sb.roundLabel, sb.court, sb.subtitle].filter(Boolean).join(' · ');
-        document.getElementById('sb-meta').textContent = meta;
-        document.getElementById('sb-status').textContent = statusLabels[sb.status] || sb.status || '';
-        document.getElementById('sb-root').style.opacity = '1';
+        var gamesEl = document.getElementById('sb-games');
+        if (ga || gb) {
+          gamesEl.textContent = '局 ' + ga + '-' + gb;
+        } else {
+          gamesEl.textContent = '';
+        }
+        document.getElementById('sb-footer-round').textContent = sb.roundLabel || '';
+
+        document.getElementById('sb-root').style.opacity = visible ? '1' : '0.35';
         document.getElementById('sb-hidden').classList.toggle('hidden', visible);
       }
 
       applyBoard(<%- JSON.stringify(scoreboard) %>);
 
       var socket = io({ transports: ['websocket', 'polling'] });
-      socket.emit('join', { scoreboardEventId: eventId });
+      socket.emit('join', { scoreboardEventId: eventId, scoreboardSlot: scoreboardSlot });
       socket.on('scoreboard:update', function (payload) {
-        if (payload && payload.scoreboard) applyBoard(payload.scoreboard);
+        if (!payload || !payload.scoreboard) return;
+        if (payload.slot != null && payload.slot !== scoreboardSlot) return;
+        applyBoard(payload.scoreboard);
       });
     })();
   </script>

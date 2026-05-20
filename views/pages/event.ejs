@@ -31,7 +31,7 @@
               <td class="py-3 pr-4 font-mono text-slate-300"><%= displayMatchTime(m) %></td>
               <td class="py-3 pr-4"><%= m.teamA && m.teamA.name ? m.teamA.name : '—' %></td>
               <td class="py-3 pr-4"><%= m.teamB && m.teamB.name ? m.teamB.name : '—' %></td>
-              <td class="py-3 pr-4 score-cell"><%= scoreSummary(m) %></td>
+              <td class="py-3 pr-4 score-cell"><%- include('../partials/score-display', { m: m, scoreMainClass: 'font-mono text-sm font-semibold text-emerald-300', scoreDetailClass: 'mt-0.5 block font-mono text-xs text-slate-400' }) %></td>
               <td class="py-3"><%= m.status %></td>
             </tr>
           <% }); %>

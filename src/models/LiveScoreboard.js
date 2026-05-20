@@ -2,35 +2,58 @@ import mongoose from 'mongoose';
 
 const liveScoreboardSchema = new mongoose.Schema(
   {
-    eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true, unique: true },
+    eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true },
+    /** 1 = 主場地直播／場地1，2 = 第二面計分牌 */
+    slot: { type: Number, default: 1, min: 1, max: 2 },
     teamAName: { type: String, default: '隊伍 A', trim: true },
     teamBName: { type: String, default: '隊伍 B', trim: true },
     scoreA: { type: Number, default: 0, min: 0 },
     scoreB: { type: Number, default: 0, min: 0 },
-    /** 已贏局數（例如三局兩勝顯示 2-1） */
     gamesA: { type: Number, default: 0, min: 0 },
     gamesB: { type: Number, default: 0, min: 0 },
+    /** 每局結束時記錄的真實比分（供寫回賽程與畫鬼腳細分） */
+    recordedGames: [{ a: { type: Number, min: 0 }, b: { type: Number, min: 0 } }],
     subtitle: { type: String, default: '', trim: true },
     court: { type: String, default: '', trim: true },
     roundLabel: { type: String, default: '', trim: true },
     status: { type: String, enum: ['idle', 'live', 'finished'], default: 'idle' },
-    /** 前台／OBS 是否顯示比分 */
     isVisible: { type: Boolean, default: true },
-    /** 若從賽程載入，記錄來源場次以便同步比分 */
     linkedMatchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Match', default: null },
-    /** 連結場次的賽制（載入時快取，用於自動判斷完賽） */
     linkedMatchFormat: { type: String, default: null },
+    servingSide: { type: String, enum: ['a', 'b'], default: 'a' },
   },
   { timestamps: true }
 );
 
+liveScoreboardSchema.index({ eventId: 1, slot: 1 }, { unique: true });
+
 export const LiveScoreboard = mongoose.model('LiveScoreboard', liveScoreboardSchema);
 
-/** 取得或建立大會計分牌 */
-export async function getOrCreateScoreboard(eventId) {
-  let board = await LiveScoreboard.findOne({ eventId });
+export function normalizeScoreboardSlot(slot) {
+  return Number(slot) === 2 ? 2 : 1;
+}
+
+/** 取得或建立大會計分牌（slot 1 或 2） */
+export async function getOrCreateScoreboard(eventId, slot = 1) {
+  const s = normalizeScoreboardSlot(slot);
+  let board = await LiveScoreboard.findOne({ eventId, slot: s });
+  if (!board && s === 1) {
+    const legacy = await LiveScoreboard.findOne({ eventId, slot: { $exists: false } });
+    if (legacy) {
+      legacy.slot = 1;
+      await legacy.save();
+      board = legacy;
+    }
+  }
   if (!board) {
-    board = await LiveScoreboard.create({ eventId });
+    try {
+      board = await LiveScoreboard.create({ eventId, slot: s });
+    } catch (err) {
+      if (err?.code === 11000 && s === 2) {
+        board = await LiveScoreboard.findOne({ eventId, slot: 2 });
+      }
+      if (!board) throw err;
+    }
   }
   return board;
 }

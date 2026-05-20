@@ -1,0 +1,9 @@
+<% var sp = scoreDisplayParts(m); %>
+<% var mainCls = typeof scoreMainClass !== 'undefined' ? scoreMainClass : 'font-semibold tabular-nums text-emerald-300'; %>
+<% var detailCls = typeof scoreDetailClass !== 'undefined' ? scoreDetailClass : 'mt-0.5 block text-[10px] leading-snug tabular-nums text-slate-400'; %>
+<div class="match-score-display text-center">
+  <span class="match-score-main <%= mainCls %>"><%= sp.main %></span>
+  <% if (sp.detail) { %>
+    <span class="match-score-detail <%= detailCls %>"><%= sp.detail %></span>
+  <% } %>
+</div>

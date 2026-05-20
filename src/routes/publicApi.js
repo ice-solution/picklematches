@@ -4,7 +4,7 @@ import { Event } from '../models/Event.js';
 import { Tournament } from '../models/Tournament.js';
 import { Match } from '../models/Match.js';
 import { DisplayContent } from '../models/DisplayContent.js';
-import { getOrCreateScoreboard } from '../models/LiveScoreboard.js';
+import { getOrCreateScoreboard, normalizeScoreboardSlot } from '../models/LiveScoreboard.js';
 
 export const publicApiRouter = Router();
 
@@ -44,9 +44,11 @@ publicApiRouter.get('/events/:slug/display', async (req, res) => {
 publicApiRouter.get('/events/:slug/scoreboard', async (req, res) => {
   const event = await getEventBySlug(req.params.slug);
   if (!event) return res.status(404).json({ error: 'not_found' });
-  const scoreboard = (await getOrCreateScoreboard(event._id)).toObject();
+  const slot = normalizeScoreboardSlot(req.query.slot);
+  const scoreboard = (await getOrCreateScoreboard(event._id, slot)).toObject();
   res.json({
     event: { id: event._id, name: event.name, slug: event.slug },
+    slot,
     scoreboard,
     updatedAt: scoreboard.updatedAt,
   });

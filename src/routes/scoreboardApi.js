@@ -3,13 +3,19 @@ import mongoose from 'mongoose';
 import { Event } from '../models/Event.js';
 import { Tournament } from '../models/Tournament.js';
 import { Match } from '../models/Match.js';
-import { LiveScoreboard, getOrCreateScoreboard } from '../models/LiveScoreboard.js';
+import { LiveScoreboard, getOrCreateScoreboard, normalizeScoreboardSlot } from '../models/LiveScoreboard.js';
 import { broadcastScoreboardUpdate } from '../lib/scoreboardSocket.js';
 import { scoreboardFieldsFromMatch } from '../lib/scoreboardFromMatch.js';
 import {
   maybeMarkScoreboardFinished,
   pushScoreboardToLinkedMatchIfFinished,
 } from '../lib/scoreboardPush.js';
+import { flipServingSide, servingSideAfterPoint } from '../lib/scoreboardServing.js';
+import {
+  clearRecordedGames,
+  recordCurrentGameOnBoard,
+  swapRecordedGames,
+} from '../lib/scoreboardRecordedGames.js';
 import { broadcastMatchUpdate } from '../lib/matchSocket.js';
 import { requireStaffApi } from '../middleware/auth.js';
 
@@ -22,21 +28,27 @@ function clampNonNeg(n, fallback = 0) {
   return Math.max(0, Math.floor(v));
 }
 
-async function loadBoardForEvent(eventId) {
+function slotFromRequest(req) {
+  return normalizeScoreboardSlot(req.query?.slot ?? req.body?.slot ?? 1);
+}
+
+async function loadBoardForEvent(eventId, slot) {
   if (!mongoose.isValidObjectId(eventId)) return { error: 'invalid_id', status: 400 };
   const event = await Event.findById(eventId).lean();
   if (!event) return { error: 'not_found', status: 404 };
-  const board = await getOrCreateScoreboard(event._id);
-  return { event, board };
+  const board = await getOrCreateScoreboard(event._id, slot);
+  return { event, board, slot: normalizeScoreboardSlot(slot) };
 }
 
 async function saveBoardAndRespond(req, res, board, eventId, extra = {}) {
+  board.markModified('servingSide');
   await board.save();
-  const populated = await broadcastScoreboardUpdate(req.app, board.eventId);
+  const populated = await broadcastScoreboardUpdate(req.app, eventId, board.slot, board._id);
   const synced = await pushScoreboardToLinkedMatchIfFinished(req.app, board, eventId);
   res.json({
     ok: true,
     scoreboard: populated,
+    slot: board.slot,
     matchSynced: Boolean(synced),
     matchEditUrl: synced?.editUrl || null,
     ...extra,
@@ -45,14 +57,14 @@ async function saveBoardAndRespond(req, res, board, eventId, extra = {}) {
 
 /** 取得計分牌 */
 scoreboardApiRouter.get('/events/:eventId/scoreboard', async (req, res) => {
-  const r = await loadBoardForEvent(req.params.eventId);
+  const r = await loadBoardForEvent(req.params.eventId, slotFromRequest(req));
   if (r.error) return res.status(r.status).json({ error: r.error });
-  res.json({ ok: true, scoreboard: r.board.toObject ? r.board.toObject() : r.board });
+  res.json({ ok: true, scoreboard: r.board.toObject ? r.board.toObject() : r.board, slot: r.slot });
 });
 
 /** 完整更新計分牌 */
 scoreboardApiRouter.patch('/events/:eventId/scoreboard', async (req, res) => {
-  const r = await loadBoardForEvent(req.params.eventId);
+  const r = await loadBoardForEvent(req.params.eventId, slotFromRequest(req));
   if (r.error) return res.status(r.status).json({ error: r.error });
 
   const body = req.body || {};
@@ -76,13 +88,16 @@ scoreboardApiRouter.patch('/events/:eventId/scoreboard', async (req, res) => {
       body.linkedMatchId && mongoose.isValidObjectId(body.linkedMatchId) ? body.linkedMatchId : null;
     if (!board.linkedMatchId) board.linkedMatchFormat = null;
   }
+  if (body.servingSide !== undefined && (body.servingSide === 'a' || body.servingSide === 'b')) {
+    board.servingSide = body.servingSide;
+  }
 
   await saveBoardAndRespond(req, res, board, r.event._id);
 });
 
 /** 列出大會底下可載入的賽事場次 */
 scoreboardApiRouter.get('/events/:eventId/scoreboard/matches', async (req, res) => {
-  const r = await loadBoardForEvent(req.params.eventId);
+  const r = await loadBoardForEvent(req.params.eventId, slotFromRequest(req));
   if (r.error) return res.status(r.status).json({ error: r.error });
 
   const tournaments = await Tournament.find({ eventId: r.event._id }).sort({ order: 1, createdAt: 1 }).lean();
@@ -118,7 +133,7 @@ scoreboardApiRouter.get('/events/:eventId/scoreboard/matches', async (req, res) 
 
 /** 從賽程場次載入至計分牌 */
 scoreboardApiRouter.post('/events/:eventId/scoreboard/load-match', async (req, res) => {
-  const r = await loadBoardForEvent(req.params.eventId);
+  const r = await loadBoardForEvent(req.params.eventId, slotFromRequest(req));
   if (r.error) return res.status(r.status).json({ error: r.error });
 
   const matchId = req.body?.matchId;
@@ -144,7 +159,7 @@ scoreboardApiRouter.post('/events/:eventId/scoreboard/load-match', async (req, r
 
 /** 快捷操作：加分、減分、重置等 */
 scoreboardApiRouter.post('/events/:eventId/scoreboard/action', async (req, res) => {
-  const r = await loadBoardForEvent(req.params.eventId);
+  const r = await loadBoardForEvent(req.params.eventId, slotFromRequest(req));
   if (r.error) return res.status(r.status).json({ error: r.error });
 
   const action = String(req.body?.action || '');
@@ -153,10 +168,20 @@ scoreboardApiRouter.post('/events/:eventId/scoreboard/action', async (req, res) 
   switch (action) {
     case 'point_a':
       board.scoreA += 1;
+      board.servingSide = servingSideAfterPoint('a');
       if (board.status === 'idle') board.status = 'live';
       break;
     case 'point_b':
       board.scoreB += 1;
+      board.servingSide = servingSideAfterPoint('b');
+      if (board.status === 'idle') board.status = 'live';
+      break;
+    case 'serve_a':
+      board.servingSide = 'a';
+      if (board.status === 'idle') board.status = 'live';
+      break;
+    case 'serve_b':
+      board.servingSide = 'b';
       if (board.status === 'idle') board.status = 'live';
       break;
     case 'minus_a':
@@ -166,16 +191,20 @@ scoreboardApiRouter.post('/events/:eventId/scoreboard/action', async (req, res) 
       board.scoreB = Math.max(0, board.scoreB - 1);
       break;
     case 'game_a':
+      recordCurrentGameOnBoard(board);
       board.gamesA += 1;
       board.scoreA = 0;
       board.scoreB = 0;
+      board.servingSide = 'a';
       if (board.status === 'idle') board.status = 'live';
       maybeMarkScoreboardFinished(board);
       break;
     case 'game_b':
+      recordCurrentGameOnBoard(board);
       board.gamesB += 1;
       board.scoreA = 0;
       board.scoreB = 0;
+      board.servingSide = 'b';
       if (board.status === 'idle') board.status = 'live';
       maybeMarkScoreboardFinished(board);
       break;
@@ -189,6 +218,8 @@ scoreboardApiRouter.post('/events/:eventId/scoreboard/action', async (req, res) 
       board.gamesA = 0;
       board.gamesB = 0;
       board.status = 'idle';
+      board.servingSide = 'a';
+      clearRecordedGames(board);
       break;
     case 'finish':
       board.status = 'finished';
@@ -197,6 +228,8 @@ scoreboardApiRouter.post('/events/:eventId/scoreboard/action', async (req, res) 
       [board.teamAName, board.teamBName] = [board.teamBName, board.teamAName];
       [board.scoreA, board.scoreB] = [board.scoreB, board.scoreA];
       [board.gamesA, board.gamesB] = [board.gamesB, board.gamesA];
+      board.servingSide = flipServingSide(board.servingSide);
+      swapRecordedGames(board);
       break;
     default:
       return res.status(400).json({ error: 'invalid_action' });
@@ -207,7 +240,7 @@ scoreboardApiRouter.post('/events/:eventId/scoreboard/action', async (req, res) 
 
 /** 手動寫回賽程（完賽時通常已自動寫回，供補寫） */
 scoreboardApiRouter.post('/events/:eventId/scoreboard/push-match', async (req, res) => {
-  const r = await loadBoardForEvent(req.params.eventId);
+  const r = await loadBoardForEvent(req.params.eventId, slotFromRequest(req));
   if (r.error) return res.status(r.status).json({ error: r.error });
 
   const board = r.board;

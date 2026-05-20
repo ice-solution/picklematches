@@ -28,7 +28,7 @@
           <button type="button" data-side="b" class="adm-score-btn mt-3 w-full rounded-lg bg-sky-700 py-3 text-sm font-semibold text-white active:bg-sky-600">B +1</button>
         </div>
       </div>
-      <p class="mt-6 text-center text-sm text-slate-400">已完成局</p>
+      <p class="mt-6 text-center text-sm text-slate-400">大比分（贏局數）</p>
       <p id="adm-games-disp" class="text-center font-mono text-slate-200"><%= gamesLine(match) %></p>
       <p class="mt-2 text-center text-sm text-slate-500">狀態：<span id="adm-status-disp"><%= match.status %></span></p>
       <p id="adm-score-msg" class="mt-3 text-center text-sm text-amber-300"></p>
@@ -129,6 +129,28 @@
       var matchId = <%- JSON.stringify(String(match._id)) %>;
       var msg = document.getElementById('adm-score-msg');
       function setMsg(t) { msg.textContent = t || ''; }
+      function gamesLineFromMatch(m) {
+        var games = m.completedGames;
+        if (!games || !games.length) {
+          var ca = m.currentPoints && m.currentPoints.a != null ? m.currentPoints.a : 0;
+          var cb = m.currentPoints && m.currentPoints.b != null ? m.currentPoints.b : 0;
+          return ca > 0 || cb > 0 ? '[' + ca + '-' + cb + ']' : '—';
+        }
+        var ga = 0, gb = 0, i, g, real = [];
+        for (i = 0; i < games.length; i++) {
+          g = games[i];
+          if (g.a > g.b) ga++; else if (g.b > g.a) gb++;
+          if (!((g.a === 15 && g.b === 0) || (g.a === 0 && g.b === 15))) real.push(g.a + '-' + g.b);
+        }
+        var main = ga + '-' + gb;
+        var ca2 = m.currentPoints && m.currentPoints.a != null ? m.currentPoints.a : 0;
+        var cb2 = m.currentPoints && m.currentPoints.b != null ? m.currentPoints.b : 0;
+        var live = (m.status === 'live' || (m.status === 'scheduled' && (ca2 > 0 || cb2 > 0))) ? '[' + ca2 + '-' + cb2 + ']' : '';
+        var detail = real.join(' · ');
+        if (live) detail = detail ? detail + ' · ' + live : live;
+        if (!detail) return main;
+        return main + '（' + detail + '）';
+      }
       document.querySelectorAll('.adm-score-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
           var side = btn.getAttribute('data-side');
@@ -149,12 +171,7 @@
               var m = j.match;
               document.getElementById('adm-disp-a').textContent = m.currentPoints && m.currentPoints.a != null ? m.currentPoints.a : 0;
               document.getElementById('adm-disp-b').textContent = m.currentPoints && m.currentPoints.b != null ? m.currentPoints.b : 0;
-              var gl = document.getElementById('adm-games-disp');
-              if (m.completedGames && m.completedGames.length) {
-                gl.textContent = m.completedGames.map(function (g) { return g.a + '-' + g.b; }).join(' ｜ ');
-              } else {
-                gl.textContent = '—';
-              }
+              document.getElementById('adm-games-disp').textContent = gamesLineFromMatch(m);
               document.getElementById('adm-status-disp').textContent = m.status || '';
               setMsg(m.status === 'finished' ? '已完賽' : '');
             })

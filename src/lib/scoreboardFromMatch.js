@@ -1,15 +1,6 @@
-import { formatLabel } from './viewHelpers.js';
+import { countGamesWon, formatLabel } from './viewHelpers.js';
 
-/** 依已完成局計算雙方贏局數 */
-export function countGamesWon(completedGames) {
-  let gamesA = 0;
-  let gamesB = 0;
-  for (const g of completedGames || []) {
-    if (g.a > g.b) gamesA += 1;
-    else if (g.b > g.a) gamesB += 1;
-  }
-  return { gamesA, gamesB };
-}
+export { countGamesWon };
 
 /** 賽程場次 status → 計分牌 status */
 export function matchStatusToBoard(matchStatus) {
@@ -29,6 +20,10 @@ export function scoreboardFieldsFromMatch(match, tournament = null) {
   if (tournament?.name) subtitleParts.push(tournament.name);
   if (match.matchFormat) subtitleParts.push(formatLabel(match.matchFormat));
 
+  const recordedGames = (match.completedGames || [])
+    .filter((g) => g && (g.a > 0 || g.b > 0))
+    .map((g) => ({ a: g.a ?? 0, b: g.b ?? 0 }));
+
   return {
     teamAName: match.teamA?.name || '隊伍 A',
     teamBName: match.teamB?.name || '隊伍 B',
@@ -36,6 +31,7 @@ export function scoreboardFieldsFromMatch(match, tournament = null) {
     scoreB: match.currentPoints?.b ?? 0,
     gamesA,
     gamesB,
+    recordedGames,
     court: match.court || '',
     roundLabel: match.round || '',
     subtitle: subtitleParts.join(' · '),
@@ -43,5 +39,6 @@ export function scoreboardFieldsFromMatch(match, tournament = null) {
     isVisible: true,
     linkedMatchId: match._id,
     linkedMatchFormat: match.matchFormat || null,
+    servingSide: 'a',
   };
 }

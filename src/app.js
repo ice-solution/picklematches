@@ -16,7 +16,7 @@ import { refereeRouter } from './routes/referee.js';
 import { refereeApiRouter } from './routes/refereeApi.js';
 import { adminApiRouter } from './routes/adminApi.js';
 import { scoreboardApiRouter } from './routes/scoreboardApi.js';
-import { scoreSummary, formatLabel, gamesLine } from './lib/viewHelpers.js';
+import { scoreSummary, scoreDisplayParts, formatLabel, gamesLine } from './lib/viewHelpers.js';
 import { isDeuce } from './lib/scoring.js';
 import { displayMatchTime } from './lib/matchTime.js';
 
@@ -34,6 +34,7 @@ export function createApp() {
   app.set('views', path.join(rootDir, 'views'));
   app.set('view engine', 'ejs');
   app.locals.scoreSummary = scoreSummary;
+  app.locals.scoreDisplayParts = scoreDisplayParts;
   app.locals.formatLabel = formatLabel;
   app.locals.gamesLine = gamesLine;
   app.locals.isDeuce = isDeuce;

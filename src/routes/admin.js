@@ -303,20 +303,27 @@ adminRouter.get('/events/:eventId/scoreboard', requireStaff, async (req, res, ne
     if (!mongoose.isValidObjectId(eventId)) return res.status(404).send('Not found');
     const event = await Event.findById(eventId).lean();
     if (!event) return res.status(404).send('Not found');
-    const scoreboard = (await getOrCreateScoreboard(event._id)).toObject();
+    const [board1, board2] = await Promise.all([
+      getOrCreateScoreboard(event._id, 1),
+      getOrCreateScoreboard(event._id, 2),
+    ]);
     const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const displayUrl = `${baseUrl}/e/${event.slug}/scoreboard`;
-    const obsUrl = `${displayUrl}?obs=1`;
-    const jsonUrl = `${baseUrl}/api/public/events/${event.slug}/scoreboard`;
+    const urls = {
+      display1: `${baseUrl}/e/${event.slug}/scoreboard`,
+      obs1: `${baseUrl}/e/${event.slug}/scoreboard?obs=1`,
+      display2: `${baseUrl}/e/${event.slug}/scoreboard/2`,
+      obs2: `${baseUrl}/e/${event.slug}/scoreboard/2?obs=1`,
+      json1: `${baseUrl}/api/public/events/${event.slug}/scoreboard?slot=1`,
+      json2: `${baseUrl}/api/public/events/${event.slug}/scoreboard?slot=2`,
+    };
 
     res.render('pages/admin-scoreboard', {
       title: `大會計分牌 — ${event.name}`,
       event,
-      scoreboard,
+      scoreboard: board1.toObject(),
+      scoreboard2: board2.toObject(),
       userEmail: req.session.email,
-      displayUrl,
-      obsUrl,
-      jsonUrl,
+      urls,
     });
   } catch (e) {
     next(e);

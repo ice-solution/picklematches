@@ -1,4 +1,5 @@
 import { gamesNeededToWinMatch } from './scoring.js';
+import { isSummaryCompletedGame } from './viewHelpers.js';
 
 const BOARD_TO_MATCH_STATUS = {
   idle: 'scheduled',
@@ -8,7 +9,7 @@ const BOARD_TO_MATCH_STATUS = {
 
 /**
  * 將大會計分牌資料寫回賽程場次（需已連結 linkedMatchId）。
- * 計分牌只記錄「贏了幾局」，已完成局會以 15-0 摘要寫入（不含每局細部分數）。
+ * 優先使用計分牌 recordedGames（每局真實比分）；否則以贏局數合成摘要。
  * @returns {{ ok: true, warnings: string[] }}
  */
 export function applyScoreboardToMatch(match, board) {
@@ -20,12 +21,48 @@ export function applyScoreboardToMatch(match, board) {
 
   match.currentPoints = { a: scoreA, b: scoreB };
 
-  const completed = [];
-  for (let i = 0; i < gamesA; i++) completed.push({ a: 15, b: 0 });
-  for (let i = 0; i < gamesB; i++) completed.push({ a: 0, b: 15 });
-  if (completed.length > 0) {
-    warnings.push('completed_games_summary');
+  const hasLivePoints = scoreA > 0 || scoreB > 0;
+  const recorded = Array.isArray(board.recordedGames)
+    ? board.recordedGames.map((g) => ({
+        a: Math.max(0, Number(g.a) || 0),
+        b: Math.max(0, Number(g.b) || 0),
+      }))
+    : [];
+
+  let completed = [];
+  if (recorded.length > 0) {
+    completed = recorded;
+  } else {
+    for (let i = 0; i < gamesA; i++) {
+      const isLast = i === gamesA - 1;
+      if (isLast && gamesB === 0 && hasLivePoints) {
+        completed.push({ a: scoreA, b: scoreB });
+      } else {
+        completed.push({ a: 15, b: 0 });
+      }
+    }
+    for (let i = 0; i < gamesB; i++) {
+      const isLast = i === gamesB - 1;
+      if (isLast && gamesA === 0 && hasLivePoints) {
+        completed.push({ a: scoreA, b: scoreB });
+      } else {
+        completed.push({ a: 0, b: 15 });
+      }
+    }
+    if (completed.some(isSummaryCompletedGame)) {
+      warnings.push('completed_games_summary');
+    }
   }
+
+  const totalWon = gamesA + gamesB;
+  if (
+    hasLivePoints &&
+    totalWon > completed.length &&
+    (board.status === 'finished' || gamesA >= gamesNeededToWinMatch(match.matchFormat) || gamesB >= gamesNeededToWinMatch(match.matchFormat))
+  ) {
+    completed.push({ a: scoreA, b: scoreB });
+  }
+
   match.completedGames = completed;
   match.currentGameIndex = completed.length;
 
