@@ -1,0 +1,354 @@
+<%- include('../partials/head', { title }) %>
+<%- include('../partials/admin-frame-start') %>
+<main class="mx-auto w-full max-w-5xl pb-12 pt-1">
+    <p class="text-sm text-slate-500">
+      <a href="/admin" class="text-emerald-400 underline">後台</a>
+      <span class="text-slate-600"> / </span>
+      <a href="/admin/events/<%= event._id %>" class="text-emerald-400 underline"><%= event.name %></a>
+    </p>
+    <h1 class="mt-4 text-2xl font-bold text-white"><%= tournament.name %></h1>
+    <p class="mt-1 text-sm text-slate-500"><%= tournament.phase === 'group' ? '小組賽' : '淘汰賽' %> ｜ 各組前 <%= tournament.advancePerGroup %> 名晉級
+      <span class="text-slate-600"> · </span>
+      <a href="/admin/events/<%= event._id %>/matches-summary" class="text-emerald-400 underline">大會賽果總覽</a>
+    </p>
+
+    <% if (typeof flash !== 'undefined' && flash) { %>
+      <p class="mt-4 rounded border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200"><%= flash %></p>
+    <% } %>
+    <% if (typeof error !== 'undefined' && error) { %>
+      <p class="mt-4 rounded border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"><%= error %></p>
+    <% } %>
+
+    <section class="mt-8 rounded border border-slate-800 bg-slate-900/40 p-6">
+      <h2 class="text-lg font-semibold text-sky-400">Excel 匯入場次</h2>
+      <p class="mt-2 text-sm text-slate-400">
+        請先建立<strong class="text-slate-200">組別</strong>，並建立或<strong class="text-slate-200">匯入隊伍</strong>（場次 Excel 內隊伍名稱須與後台<strong class="text-slate-200">完全一致</strong>）。
+        開賽欄位請填<strong class="text-slate-200">時:分</strong>（日期由大會設定）。下載範本後編排對戰，再上傳第一個工作表。
+      </p>
+      <p class="mt-2 text-sm">
+        <a href="/admin/tournaments/<%= tournament._id %>/import-template" class="text-sky-400 underline">下載 xlsx 範本</a>
+        <span class="text-slate-600">｜</span>
+        <a href="/docs/xlsx-import-format.md" class="text-slate-500 underline" target="_blank" rel="noopener">欄位說明（專案內文件）</a>
+      </p>
+      <form method="post" action="/admin/tournaments/<%= tournament._id %>/import-matches" enctype="multipart/form-data" class="mt-4 flex flex-wrap items-end gap-3">
+        <div>
+          <label class="block text-xs text-slate-500">選擇檔案</label>
+          <input type="file" name="file" accept=".xlsx,.xls,.csv" required class="mt-1 block w-full text-sm text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-slate-200" />
+        </div>
+        <button type="submit" class="rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-600">上傳匯入</button>
+      </form>
+    </section>
+
+    <% if (typeof importReport !== 'undefined' && importReport) { %>
+      <div class="mt-4 rounded border px-4 py-3 text-sm <%= importReport.error ? 'border-rose-500/50 bg-rose-950/30 text-rose-100' : 'border-emerald-500/40 bg-emerald-950/25 text-emerald-100' %>">
+        <% if (importReport.error) { %>
+          <p class="font-medium text-rose-300"><%= importReport.error %></p>
+        <% } else { %>
+          <p class="font-medium text-emerald-300">匯入完成：新增 <%= importReport.createdCount %> 場比賽</p>
+        <% } %>
+        <% if (importReport.parseErrors && importReport.parseErrors.length) { %>
+          <p class="mt-2 text-xs text-slate-400">解析／略過：</p>
+          <% importReport.parseErrors.forEach(function (line) { %>
+            <p class="text-xs text-slate-400"><%= line %></p>
+          <% }); %>
+        <% } %>
+        <% if (importReport.rowErrors && importReport.rowErrors.length) { %>
+          <ul class="mt-2 list-inside list-disc text-xs text-amber-200/90">
+            <% importReport.rowErrors.slice(0, 15).forEach(function (line) { %>
+              <li><%= line %></li>
+            <% }); %>
+          </ul>
+          <% if (importReport.rowErrors.length > 15) { %>
+            <p class="mt-1 text-xs text-slate-500">…共 <%= importReport.rowErrors.length %> 筆錯誤</p>
+          <% } %>
+        <% } %>
+      </div>
+    <% } %>
+
+    <% if (typeof teamImportReport !== 'undefined' && teamImportReport) { %>
+      <div class="mt-4 rounded border px-4 py-3 text-sm <%= teamImportReport.error ? 'border-rose-500/50 bg-rose-950/30 text-rose-100' : 'border-violet-500/40 bg-violet-950/25 text-violet-100' %>">
+        <% if (teamImportReport.error) { %>
+          <p class="font-medium text-rose-300"><%= teamImportReport.error %></p>
+        <% } else { %>
+          <p class="font-medium text-violet-300">隊伍匯入完成：新增 <%= teamImportReport.createdCount %> 隊</p>
+        <% } %>
+        <% if (teamImportReport.parseErrors && teamImportReport.parseErrors.length) { %>
+          <p class="mt-2 text-xs text-slate-400">解析／略過：</p>
+          <% teamImportReport.parseErrors.forEach(function (line) { %>
+            <p class="text-xs text-slate-400"><%= line %></p>
+          <% }); %>
+        <% } %>
+        <% if (teamImportReport.rowErrors && teamImportReport.rowErrors.length) { %>
+          <ul class="mt-2 list-inside list-disc text-xs text-amber-200/90">
+            <% teamImportReport.rowErrors.slice(0, 15).forEach(function (line) { %>
+              <li><%= line %></li>
+            <% }); %>
+          </ul>
+          <% if (teamImportReport.rowErrors.length > 15) { %>
+            <p class="mt-1 text-xs text-slate-500">…共 <%= teamImportReport.rowErrors.length %> 筆提示</p>
+          <% } %>
+        <% } %>
+      </div>
+    <% } %>
+
+    <form method="post" action="/admin/tournaments/<%= tournament._id %>/update" class="mt-8 space-y-3 rounded border border-slate-800 bg-slate-900/40 p-6">
+      <h2 class="text-lg font-semibold text-emerald-400">賽事設定</h2>
+      <div class="flex flex-wrap gap-3">
+        <input name="name" required value="<%= tournament.name %>" class="min-w-[200px] flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        <input name="advancePerGroup" type="number" min="1" value="<%= tournament.advancePerGroup %>" class="w-28 rounded border border-slate-700 bg-slate-900 px-3 py-2" title="各組前 N 名" />
+        <% if (tournament.phase === 'group') { %>
+          <div class="flex items-center gap-2 rounded border border-slate-800 bg-slate-950/40 px-3 py-2">
+            <span class="text-xs text-slate-500">小組積分</span>
+            <label class="text-xs text-slate-500">勝</label>
+            <input name="groupWinPoints" type="number" value="<%= typeof tournament.groupWinPoints !== 'undefined' ? tournament.groupWinPoints : 1 %>" class="w-14 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm" />
+            <label class="text-xs text-slate-500">負</label>
+            <input name="groupLossPoints" type="number" value="<%= typeof tournament.groupLossPoints !== 'undefined' ? tournament.groupLossPoints : -1 %>" class="w-14 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm" />
+          </div>
+        <% } %>
+        <button type="submit" class="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">儲存</button>
+      </div>
+      <% if (tournament.phase === 'group') { %>
+        <p class="text-xs text-slate-500">名次計算：積分（勝*勝分 + 負*負分）→ 得失分 → 得分。</p>
+      <% } %>
+    </form>
+
+    <section class="mt-12">
+      <h2 class="text-lg font-semibold text-white">組別</h2>
+      <ul class="mt-3 space-y-2">
+        <% groups.forEach(function (g) { %>
+          <li class="rounded border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm"><%= g.name %></li>
+        <% }); %>
+      </ul>
+      <form method="post" action="/admin/tournaments/<%= tournament._id %>/groups" class="mt-4 flex flex-wrap gap-2">
+        <input name="name" required placeholder="組別名稱，例如：A 組" class="min-w-[180px] flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-sm font-semibold">新增組別</button>
+      </form>
+    </section>
+
+    <section class="mt-10 rounded border border-violet-900/50 bg-violet-950/20 p-6">
+      <h2 class="text-lg font-semibold text-violet-300">Excel 匯入隊伍</h2>
+      <p class="mt-2 text-sm text-slate-400">
+        請先建立<strong class="text-slate-200">組別</strong>（若要用「組別」欄指派）。第一列表頭、自第二列起每列一隊；讀取<strong class="text-slate-200">第一個工作表</strong>。
+      </p>
+      <p class="mt-2 text-sm">
+        <a href="/admin/tournaments/<%= tournament._id %>/import-teams-template" class="text-violet-400 underline">下載隊伍 xlsx 範本</a>
+        <span class="text-slate-600">｜</span>
+        <a href="/docs/xlsx-import-format.md" class="text-slate-500 underline" target="_blank" rel="noopener">欄位說明（含隊伍）</a>
+      </p>
+      <form method="post" action="/admin/tournaments/<%= tournament._id %>/import-teams" enctype="multipart/form-data" class="mt-4 flex flex-wrap items-end gap-3">
+        <div>
+          <label class="block text-xs text-slate-500">選擇檔案</label>
+          <input type="file" name="file" accept=".xlsx,.xls,.csv" required class="mt-1 block w-full text-sm text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-slate-200" />
+        </div>
+        <button type="submit" class="rounded bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-600">上傳匯入隊伍</button>
+      </form>
+    </section>
+
+    <section class="mt-12">
+      <h2 class="text-lg font-semibold text-white">隊伍</h2>
+      <ul class="mt-3 divide-y divide-slate-800 rounded border border-slate-800">
+        <% teams.forEach(function (t) { %>
+          <li class="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
+            <span class="font-medium"><%= t.name %></span>
+            <% var g = groups.find(function (x) { return String(x._id) === String(t.groupId); }); %>
+            <span class="text-xs text-slate-500"><%= g ? g.name : '未分組' %></span>
+          </li>
+        <% }); %>
+      </ul>
+      <form method="post" action="/admin/tournaments/<%= tournament._id %>/teams" class="mt-4 flex flex-wrap items-end gap-2">
+        <div class="min-w-[140px] flex-1">
+          <label class="text-xs text-slate-500">隊伍名稱</label>
+          <input name="name" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">組別</label>
+          <select name="groupId" class="mt-1 block w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+            <option value="">未分組</option>
+            <% groups.forEach(function (g) { %>
+              <option value="<%= g._id %>"><%= g.name %></option>
+            <% }); %>
+          </select>
+        </div>
+        <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-sm font-semibold">新增隊伍</button>
+      </form>
+    </section>
+
+    <section class="mt-12">
+      <h2 class="text-lg font-semibold text-white">場次（賽程／賽制）</h2>
+      <% if (tournament.phase === 'knockout') { %>
+        <section class="mt-4 rounded border border-sky-900/60 bg-sky-950/20 p-5">
+          <h3 class="text-sm font-semibold text-sky-300">由小組賽產生淘汰賽（出線 → 畫鬼腳）</h3>
+          <p class="mt-1 text-xs text-slate-400">
+            會依小組賽<strong class="text-slate-200">已完賽</strong>場次計算名次（勝場→得失分→得分），取每組前 N 名，建立出線隊伍與淘汰賽第一輪（含 BYE），並生成後續輪次 TBD 場次供你再編輯對位。
+          </p>
+          <% if (typeof query !== 'undefined' && query && query.gen) { %>
+            <% if (query.gen === 'ok') { %>
+              <p class="mt-3 rounded border border-emerald-500/40 bg-emerald-950/25 px-3 py-2 text-sm text-emerald-200">
+                已完成：新增隊伍 <%= query.teams || '?' %> 隊
+                <% if (query.matches) { %>、新增場次 <%= query.matches %> 場<% } %>
+                <% if (query.updated) { %>、填入/更新場次 <%= query.updated %> 場<% } %>。
+              </p>
+            <% } else { %>
+              <p class="mt-3 rounded border border-rose-500/50 bg-rose-950/25 px-3 py-2 text-sm text-rose-200">
+                產生失敗：<%= query.gen %>
+              </p>
+              <% if (query.gen === 'target_has_matches') { %>
+                <form method="post" action="/admin/tournaments/<%= tournament._id %>/reset-knockout" class="mt-3" onsubmit="return confirm('確定要清空此淘汰賽所有場次與自動產生的隊伍（含 BYE/TBD）？清空後可重新選來源產生。');">
+                  <button type="submit" class="rounded bg-rose-700 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-600">清空淘汰賽（重新設定來源）</button>
+                </form>
+              <% } %>
+            <% } %>
+          <% } %>
+          <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-knockout" class="mt-4 flex flex-wrap items-end gap-3">
+            <div class="min-w-[240px] flex-1">
+              <label class="block text-xs text-slate-500">來源小組賽賽事</label>
+              <select name="sourceTournamentId" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+                <option value="" disabled selected hidden>選擇小組賽…</option>
+                <% (groupTournaments || []).forEach(function (t) { %>
+                  <option value="<%= t._id %>"><%= t.name %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="w-36">
+              <label class="block text-xs text-slate-500">每組取前 N 名</label>
+              <input name="advancePerGroup" type="number" min="1" value="2" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+            </div>
+            <button type="submit" class="rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-600" onclick="return confirm('確定要由小組賽產生淘汰賽？（若此淘汰賽已有場次會失敗）');">產生淘汰賽</button>
+          </form>
+        </section>
+      <% } %>
+      <%- include('../partials/knockout-ladder', { tournament, knockoutLadderColumns }) %>
+      <p class="mt-1 text-sm text-slate-500">每場可選五局三勝、三局兩勝或一局過；可設定日期時間與場地。</p>
+      <div class="mt-4 overflow-x-auto">
+        <table class="w-full min-w-[920px] text-left text-sm">
+          <thead>
+            <tr class="border-b border-slate-800 text-slate-400">
+              <th class="py-2 pr-2">對戰</th>
+              <th class="py-2 pr-2">賽制</th>
+              <th class="py-2 pr-2">開賽時間</th>
+              <th class="py-2 pr-2">場地</th>
+              <th class="py-2 pr-2">比分</th>
+              <th class="py-2">狀態</th>
+              <th class="min-w-[200px] py-2 pr-2">球證</th>
+              <th class="py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% matches.forEach(function (m) { %>
+              <% var mid = String(m._id); var refs = (typeof assignmentByMatchId !== 'undefined' && assignmentByMatchId[mid]) ? assignmentByMatchId[mid] : []; %>
+              <tr class="border-b border-slate-800/80">
+                <td class="py-2 pr-2">
+                  <%= m.teamA && m.teamA.name ? m.teamA.name : '?' %> vs <%= m.teamB && m.teamB.name ? m.teamB.name : '?' %>
+                </td>
+                <td class="py-2 pr-2"><%= formatLabel(m.matchFormat) %></td>
+                <td class="py-2 pr-2 font-mono text-xs text-slate-400"><%= displayMatchTime(m) %></td>
+                <td class="py-2 pr-2"><%= m.court || '—' %></td>
+                <td class="py-2 pr-2 font-mono text-xs text-emerald-300/90"><%= scoreSummary(m) %></td>
+                <td class="py-2"><%= m.status %></td>
+                <td class="align-top py-2 pr-2">
+                  <% if (refs.length) { %>
+                    <ul class="mb-2 space-y-1 text-xs text-slate-400">
+                      <% refs.forEach(function (r) { %>
+                        <li class="flex items-center justify-between gap-2">
+                          <span class="truncate" title="<%= r.email %>"><%= r.name || r.email %></span>
+                          <form method="post" action="/admin/matches/<%= m._id %>/unassign" class="shrink-0">
+                            <input type="hidden" name="redirect" value="/admin/tournaments/<%= tournament._id %>" />
+                            <input type="hidden" name="refereeId" value="<%= r._id %>" />
+                            <button type="submit" class="text-rose-400 underline" title="取消指派">移除</button>
+                          </form>
+                        </li>
+                      <% }); %>
+                    </ul>
+                  <% } %>
+                  <% if (typeof refereeUsers !== 'undefined' && refereeUsers && refereeUsers.length) { %>
+                    <form method="post" action="/admin/matches/<%= m._id %>/assign" class="flex flex-col gap-1 sm:flex-row sm:items-stretch">
+                      <input type="hidden" name="redirect" value="/admin/tournaments/<%= tournament._id %>" />
+                      <select name="refereeId" required class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs">
+                        <option value="" disabled selected hidden>選擇球證…</option>
+                        <% refereeUsers.forEach(function (u) { %>
+                          <option value="<%= u._id %>"><%= u.loginId ? u.loginId + ' · ' : '' %><%= u.name || u.email %></option>
+                        <% }); %>
+                      </select>
+                      <button type="submit" class="shrink-0 rounded bg-sky-800 px-2 py-1.5 text-xs font-semibold text-white hover:bg-sky-700">指派</button>
+                    </form>
+                  <% } else { %>
+                    <p class="text-xs text-amber-500/90"><a href="/admin/referees" class="underline">先新增球證</a></p>
+                  <% } %>
+                </td>
+                <td class="py-2"><a href="/admin/matches/<%= m._id %>/edit" class="text-emerald-400 underline">編輯</a></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+
+      <% if (teams.length >= 2) { %>
+        <form method="post" action="/admin/tournaments/<%= tournament._id %>/matches" class="mt-6 space-y-3 rounded border border-dashed border-slate-700 p-4">
+          <h3 class="text-sm font-semibold text-slate-300">新增場次</h3>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label class="text-xs text-slate-500">隊伍 A</label>
+              <select name="teamA" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+                <% teams.forEach(function (t) { %>
+                  <option value="<%= t._id %>"><%= t.name %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-slate-500">隊伍 B</label>
+              <select name="teamB" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+                <% teams.forEach(function (t) { %>
+                  <option value="<%= t._id %>"><%= t.name %></option>
+                <% }); %>
+              </select>
+            </div>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-3">
+            <div>
+              <label class="text-xs text-slate-500">賽制（整場）</label>
+              <select name="matchFormat" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+                <option value="bestOf3">三局兩勝</option>
+                <option value="bestOf5">五局三勝</option>
+                <option value="singleGame">一局過</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-slate-500">組別（選填）</label>
+              <select name="groupId" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+                <option value="">—</option>
+                <% groups.forEach(function (g) { %>
+                  <option value="<%= g._id %>"><%= g.name %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-slate-500">輪次／標籤</label>
+              <input name="round" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="例如：A 組" />
+            </div>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label class="text-xs text-slate-500">開賽時間（時分）</label>
+              <input name="scheduledTime" type="time" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-500">場地</label>
+              <input name="court" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="1 號場" />
+            </div>
+          </div>
+          <button type="submit" class="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">建立場次</button>
+        </form>
+      <% } else { %>
+        <p class="mt-4 text-sm text-amber-400">請至少建立 2 隊隊伍後再新增場次。</p>
+      <% } %>
+    </section>
+
+    <section class="mt-16 border-t border-rose-900/40 pt-10">
+      <h2 class="text-lg font-semibold text-rose-400">刪除此賽事</h2>
+      <p class="mt-2 text-sm text-slate-500">會一併刪除本賽事下所有組別、隊伍、場次與球證指派，且無法復原。</p>
+      <form method="post" action="/admin/tournaments/<%= tournament._id %>/delete" class="mt-4" onsubmit="return confirm('確定刪除此賽事？此動作無法復原。');">
+        <button type="submit" class="rounded border border-rose-600 bg-rose-950/50 px-4 py-2 text-sm font-semibold text-rose-300 hover:bg-rose-900/50">刪除整筆賽事</button>
+      </form>
+    </section>
+  </main>
+<%- include('../partials/admin-frame-end') %>

@@ -1,0 +1,142 @@
+<%- include('../partials/head', { title }) %>
+<%- include('../partials/admin-frame-start') %>
+<main class="mx-auto w-full max-w-5xl pb-12 pt-1">
+    <p class="text-sm text-slate-500"><a href="/admin" class="text-emerald-400 underline">← 大會列表</a></p>
+    <h1 class="mt-4 text-2xl font-bold text-white">大會設定</h1>
+
+    <% if (typeof flash !== 'undefined' && flash) { %>
+      <p class="mt-4 rounded border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200"><%= flash %></p>
+    <% } %>
+    <% if (typeof error !== 'undefined' && error) { %>
+      <p class="mt-4 rounded border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"><%= error %></p>
+    <% } %>
+
+    <section class="mt-8 rounded border border-sky-900/60 bg-sky-950/30 p-4 text-sm text-slate-300">
+      <h2 class="font-semibold text-sky-300">兩階段賽程：小組賽 → 淘汰賽</h2>
+      <ol class="mt-3 list-decimal space-y-2 pl-5 text-slate-400">
+        <li>在下方<strong class="text-slate-200">新增第一筆賽事</strong>：類型選<strong class="text-slate-200">小組賽</strong>，並設定「各組前 N 名」（例如各組前 2 名出線）。</li>
+        <li>進入該賽事 → 建立<strong>組別、隊伍</strong>，再建立<strong>小組內場次</strong>（單循環對戰請自行排滿各組應打的比賽）。打完小組、依勝負決定名次。</li>
+        <li>回到本頁<strong>再新增第二筆賽事</strong>：類型選<strong class="text-slate-200">淘汰賽</strong>，代表晉級後的階段。</li>
+        <li>進入淘汰賽賽事 → <strong>新增出線隊伍</strong>（與小組賽相同的隊伍名稱可再建一筆，或日後可改為「沿用」同一隊伍資料），並依籤表<strong>建立淘汰場次</strong>（八強、四強、決賽等）。</li>
+      </ol>
+      <p class="mt-3 text-xs text-slate-500">同一個大會底下可以有多筆「賽事」：先完成小組賽賽事內所有比分，再處理淘汰賽賽事。系統目前<strong>不會自動</strong>依小組名次產生淘汰對戰表，晉級隊伍與對位需由賽務在淘汰賽事內建立。</p>
+    </section>
+
+    <form method="post" action="/admin/events/<%= event._id %>/update" class="mt-8 space-y-4 rounded border border-slate-800 bg-slate-900/40 p-6">
+      <h2 class="text-lg font-semibold text-emerald-400">基本資料</h2>
+      <div>
+        <label class="block text-sm text-slate-400">名稱</label>
+        <input name="name" required value="<%= event.name %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+      </div>
+      <div>
+        <label class="block text-sm text-slate-400">網址代號（slug）</label>
+        <input name="slug" required value="<%= event.slug %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-sm" />
+        <p class="mt-1 text-xs text-slate-500">變更後舊網址可寫入別名（本頁儲存時會將舊 slug 加入別名）。</p>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="block text-sm text-slate-400">開始</label>
+          <input name="dateStart" type="datetime-local" value="<%= dateStartLocal %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400">結束</label>
+          <input name="dateEnd" type="datetime-local" value="<%= dateEndLocal %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-400">場地（每行一筆）</label>
+        <textarea name="venues" rows="4" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2"><%= (event.venues || []).join('\n') %></textarea>
+      </div>
+      <div class="flex items-center gap-2">
+        <input type="checkbox" name="isActive" value="1" id="isActive" <%= event.isActive ? 'checked' : '' %> />
+        <label for="isActive" class="text-sm text-slate-300">啟用中</label>
+      </div>
+      <button type="submit" class="rounded bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500">儲存大會</button>
+    </form>
+
+    <section class="mt-12">
+      <h2 class="text-lg font-semibold text-white">賽事（賽制／晉級）</h2>
+      <p class="mt-1 text-sm text-slate-500">每一筆賽事可為小組賽或淘汰賽；小組賽內再管理組別、隊伍與場次。</p>
+
+      <% if (typeof tournamentImportReport !== 'undefined' && tournamentImportReport) { %>
+        <div class="mt-4 rounded border px-4 py-3 text-sm <%= tournamentImportReport.error ? 'border-rose-500/50 bg-rose-950/30 text-rose-100' : 'border-sky-500/40 bg-sky-950/25 text-sky-100' %>">
+          <% if (tournamentImportReport.error) { %>
+            <p class="font-medium text-rose-300"><%= tournamentImportReport.error %></p>
+          <% } else { %>
+            <p class="font-medium text-sky-300">匯入完成：新增 <%= tournamentImportReport.createdCount %> 筆賽事</p>
+          <% } %>
+          <% if (tournamentImportReport.parseErrors && tournamentImportReport.parseErrors.length) { %>
+            <p class="mt-2 text-xs text-slate-400">解析／略過：</p>
+            <% tournamentImportReport.parseErrors.forEach(function (line) { %>
+              <p class="text-xs text-slate-400"><%= line %></p>
+            <% }); %>
+          <% } %>
+          <% if (tournamentImportReport.rowErrors && tournamentImportReport.rowErrors.length) { %>
+            <ul class="mt-2 list-inside list-disc text-xs text-amber-200/90">
+              <% tournamentImportReport.rowErrors.slice(0, 15).forEach(function (line) { %>
+                <li><%= line %></li>
+              <% }); %>
+            </ul>
+            <% if (tournamentImportReport.rowErrors.length > 15) { %>
+              <p class="mt-1 text-xs text-slate-500">…共 <%= tournamentImportReport.rowErrors.length %> 筆提示</p>
+            <% } %>
+          <% } %>
+        </div>
+      <% } %>
+
+      <section class="mt-6 rounded border border-sky-900/60 bg-sky-950/25 p-4">
+        <h3 class="text-sm font-semibold text-sky-300">Excel 匯入賽事（一次建立多個項目）</h3>
+        <p class="mt-1 text-xs text-slate-400">第一列為表頭、讀取第一個工作表；同名賽事（同一大會底下）會略過。</p>
+        <p class="mt-2 text-sm">
+          <a href="/admin/events/<%= event._id %>/import-tournaments-template" class="text-sky-400 underline">下載賽事 xlsx 範本</a>
+        </p>
+        <form method="post" action="/admin/events/<%= event._id %>/import-tournaments" enctype="multipart/form-data" class="mt-3 flex flex-wrap items-end gap-3">
+          <div>
+            <label class="block text-xs text-slate-500">選擇檔案</label>
+            <input type="file" name="file" accept=".xlsx,.xls,.csv" required class="mt-1 block w-full text-sm text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-slate-200" />
+          </div>
+          <button type="submit" class="rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-600">上傳匯入</button>
+        </form>
+      </section>
+
+      <ul class="mt-4 space-y-2">
+        <% tournaments.forEach(function (t) { %>
+          <li class="flex flex-wrap items-center gap-3 rounded border border-slate-800 bg-slate-900/50 px-4 py-3">
+            <span class="font-medium"><%= t.name %></span>
+            <span class="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400"><%= t.phase === 'group' ? '小組賽' : '淘汰賽' %></span>
+            <span class="text-xs text-slate-500">各組前 <%= t.advancePerGroup %> 名</span>
+            <a href="/admin/tournaments/<%= t._id %>" class="ml-auto text-emerald-400 underline">管理賽程與隊伍</a>
+            <form method="post" action="/admin/tournaments/<%= t._id %>/delete" class="inline" onsubmit="return confirm('確定刪除此賽事？將一併刪除底下的組別、隊伍、場次與球證指派，無法復原。');">
+              <button type="submit" class="text-sm text-rose-400 underline hover:text-rose-300">刪除</button>
+            </form>
+          </li>
+        <% }); %>
+      </ul>
+
+      <form method="post" action="/admin/events/<%= event._id %>/tournaments" class="mt-6 space-y-3 rounded border border-dashed border-slate-700 p-4">
+        <h3 class="text-sm font-semibold text-slate-300">新增賽事</h3>
+        <div class="flex flex-wrap gap-3">
+          <input name="name" required placeholder="賽事名稱" class="min-w-[200px] flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+          <select name="phase" class="rounded border border-slate-700 bg-slate-900 px-3 py-2">
+            <option value="group">小組賽</option>
+            <option value="knockout">淘汰賽</option>
+          </select>
+          <input name="advancePerGroup" type="number" min="1" value="2" class="w-24 rounded border border-slate-700 bg-slate-900 px-3 py-2" title="各組前 N 名" />
+          <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-600">新增</button>
+        </div>
+        <p class="text-xs text-slate-500">「各組前 N 名」主要用於小組賽晉級設定。</p>
+      </form>
+    </section>
+
+    <section class="mt-10 rounded border border-amber-900/40 bg-amber-950/20 p-4">
+      <h2 class="font-semibold text-amber-200">大會計分牌（直播）</h2>
+      <p class="mt-2 text-sm text-slate-400">獨立計分介面，供 OBS／直播平台疊圖，無需建立賽程場次。</p>
+      <a href="/admin/events/<%= event._id %>/scoreboard" class="mt-3 inline-block rounded bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600">進入計分牌控制</a>
+    </section>
+
+    <p class="mt-10 flex flex-wrap gap-4">
+      <a href="/admin/events/<%= event._id %>/matches-summary" class="text-emerald-400 underline">賽果總覽</a>
+      <a href="/e/<%= event.slug %>" target="_blank" rel="noopener" class="text-sky-400 underline">開啟前台</a>
+    </p>
+  </main>
+<%- include('../partials/admin-frame-end') %>

@@ -1,0 +1,46 @@
+<%- include('../partials/head', { title }) %>
+<%- include('../partials/admin-frame-start') %>
+<main class="mx-auto w-full max-w-6xl pb-12 pt-1">
+  <p class="text-sm text-slate-500">
+    <a href="/admin/events/<%= event._id %>" class="text-emerald-400 underline">← 大會設定</a>
+  </p>
+  <h1 class="mt-4 text-2xl font-bold text-white">賽果總覽</h1>
+  <p class="mt-1 text-sm text-slate-400"><%= event.name %> — 含本大會下所有賽事場次，可點「編輯」修改資料或進場內計分。</p>
+
+  <div class="mt-8 overflow-x-auto">
+    <table class="w-full min-w-[800px] text-left text-sm">
+      <thead>
+        <tr class="border-b border-slate-800 text-slate-400">
+          <th class="py-2 pr-2">賽事</th>
+          <th class="py-2 pr-2">時間</th>
+          <th class="py-2 pr-2">場地</th>
+          <th class="py-2 pr-2">對戰</th>
+          <th class="py-2 pr-2">比分</th>
+          <th class="py-2 pr-2">狀態</th>
+          <th class="py-2">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!matches.length) { %>
+          <tr><td colspan="7" class="py-8 text-center text-slate-500">尚無場次</td></tr>
+        <% } %>
+        <% matches.forEach(function (m) { %>
+          <tr class="border-b border-slate-800/80">
+            <td class="py-2 pr-2 text-slate-300"><%= m.tournamentName %></td>
+            <td class="py-2 pr-2 font-mono text-xs text-slate-400"><%= displayMatchTime(m) %></td>
+            <td class="py-2 pr-2"><%= m.court || '—' %></td>
+            <td class="py-2 pr-2">
+              <%= m.teamA && m.teamA.name ? m.teamA.name : '?' %> vs <%= m.teamB && m.teamB.name ? m.teamB.name : '?' %>
+            </td>
+            <td class="py-2 pr-2 font-mono text-emerald-300/90"><%= scoreSummary(m) %></td>
+            <td class="py-2 pr-2"><%= m.status %></td>
+            <td class="py-2">
+              <a href="/admin/matches/<%= m._id %>/edit" class="text-emerald-400 underline">編輯／計分</a>
+            </td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</main>
+<%- include('../partials/admin-frame-end') %>

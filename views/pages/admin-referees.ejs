@@ -1,0 +1,93 @@
+<%- include('../partials/head', { title }) %>
+<%- include('../partials/admin-frame-start') %>
+<main class="mx-auto w-full max-w-3xl pb-12 pt-1">
+  <p class="text-sm text-slate-500"><a href="/admin" class="text-emerald-400 underline">← 大會列表</a></p>
+  <h1 class="mt-4 text-2xl font-bold text-white">球證管理</h1>
+  <p class="mt-2 text-sm text-slate-400">
+    在此<strong class="text-slate-200">新增球證帳號</strong>後，可到各賽事「場次」列表或場次<strong class="text-slate-200">編輯</strong>頁<strong class="text-slate-200">指派</strong>。球證使用
+    <a href="/referee/login" class="text-sky-400 underline" target="_blank" rel="noopener">球證登入</a>
+    進入計分（使用<strong class="text-slate-200">登入 ID</strong>，非信箱）。
+  </p>
+
+  <% if (typeof notice !== 'undefined' && notice) { %>
+    <p class="mt-4 rounded border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200"><%= notice %></p>
+  <% } %>
+  <% if (typeof error !== 'undefined' && error) { %>
+    <p class="mt-4 rounded border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"><%= error %></p>
+  <% } %>
+
+  <section class="mt-10 rounded border border-slate-800 bg-slate-900/40 p-6">
+    <h2 class="text-lg font-semibold text-sky-400">新增球證</h2>
+    <form method="post" action="/admin/referees" class="mt-6 space-y-4">
+      <div>
+        <label class="block text-xs text-slate-500">登入 ID（球證以此登入，英數小寫開頭，3–32 字）</label>
+        <input
+          name="loginId"
+          type="text"
+          required
+          minlength="3"
+          maxlength="32"
+          pattern="[a-z0-9][a-z0-9_-]{2,31}"
+          title="英數小寫開頭，可含 _ -"
+          autocomplete="off"
+          class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 font-mono lowercase"
+          autocapitalize="off"
+          placeholder="ref001"
+        />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500">聯絡信箱（內部用，非登入帳號）</label>
+        <input name="email" type="email" required autocomplete="off" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="referee@example.com" />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500">密碼（至少 6 字）</label>
+        <input name="password" type="password" required minlength="6" autocomplete="new-password" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500">顯示名稱（選填）</label>
+        <input name="name" type="text" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="陳球證" />
+      </div>
+      <button type="submit" class="rounded bg-sky-600 px-5 py-2 text-sm font-semibold text-white hover:bg-sky-500">建立球證</button>
+    </form>
+  </section>
+
+  <section class="mt-12">
+    <h2 class="text-lg font-semibold text-white">球證列表</h2>
+    <div class="mt-4 overflow-x-auto rounded border border-slate-800">
+      <table class="w-full min-w-[560px] text-left text-sm">
+        <thead>
+          <tr class="border-b border-slate-800 bg-slate-900/80 text-slate-400">
+            <th class="px-3 py-2">登入 ID</th>
+            <th class="px-3 py-2">信箱</th>
+            <th class="px-3 py-2">名稱</th>
+            <th class="px-3 py-2">指派場次數</th>
+            <th class="px-3 py-2"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!referees.length) { %>
+            <tr><td colspan="5" class="px-3 py-8 text-center text-slate-500">尚無球證，請使用上方表單新增。</td></tr>
+          <% } %>
+          <% referees.forEach(function (r) { %>
+            <tr class="border-b border-slate-800/80">
+              <td class="px-3 py-2 font-mono text-xs text-emerald-300/90"><%= r.loginId || '—' %></td>
+              <td class="px-3 py-2 font-mono text-xs text-slate-400"><%= r.email %></td>
+              <td class="px-3 py-2"><%= r.name || '—' %></td>
+              <td class="px-3 py-2 text-slate-400"><%= r.assignCount %></td>
+              <td class="px-3 py-2 text-right">
+                <% if (!r.assignCount) { %>
+                  <form method="post" action="/admin/referees/<%= r._id %>/delete" class="inline" onsubmit="return confirm('確定刪除此球證？');">
+                    <button type="submit" class="text-rose-400 underline">刪除</button>
+                  </form>
+                <% } else { %>
+                  <span class="text-xs text-slate-600">—</span>
+                <% } %>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<%- include('../partials/admin-frame-end') %>

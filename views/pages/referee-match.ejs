@@ -1,0 +1,68 @@
+<%- include('../partials/head', { title }) %>
+<body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
+  <main class="mx-auto max-w-lg px-4 py-8">
+    <p class="text-sm text-slate-500"><a href="/referee" class="text-sky-400 underline">← 球證首頁</a></p>
+    <h1 class="mt-4 text-xl font-bold text-white">
+      <%= match.teamA && match.teamA.name ? match.teamA.name : '隊伍 A' %>
+      <span class="text-slate-500">vs</span>
+      <%= match.teamB && match.teamB.name ? match.teamB.name : '隊伍 B' %>
+    </h1>
+    <p class="mt-2 text-sm text-slate-400"><%= formatLabel(match.matchFormat) %> ｜ <%= match.status %></p>
+
+    <div class="mt-8 grid grid-cols-2 gap-4">
+      <div>
+        <p class="text-center text-sm text-emerald-400"><%= match.teamA && match.teamA.name ? match.teamA.name : 'A' %></p>
+        <p id="disp-a" class="text-center text-5xl font-bold tabular-nums"><%= match.currentPoints?.a ?? 0 %></p>
+        <button type="button" data-side="a" class="score-btn mt-4 w-full rounded-lg bg-emerald-700 py-4 text-lg font-semibold text-white active:bg-emerald-600">A +1</button>
+      </div>
+      <div>
+        <p class="text-center text-sm text-sky-400"><%= match.teamB && match.teamB.name ? match.teamB.name : 'B' %></p>
+        <p id="disp-b" class="text-center text-5xl font-bold tabular-nums"><%= match.currentPoints?.b ?? 0 %></p>
+        <button type="button" data-side="b" class="score-btn mt-4 w-full rounded-lg bg-sky-700 py-4 text-lg font-semibold text-white active:bg-sky-600">B +1</button>
+      </div>
+    </div>
+
+    <p class="mt-8 text-center text-sm text-slate-400">已完成局</p>
+    <p id="games-disp" class="text-center font-mono text-slate-200"><%= gamesLine(match) %></p>
+    <p id="msg" class="mt-4 text-center text-sm text-amber-300"></p>
+  </main>
+  <script>
+    (function () {
+      var matchId = <%- JSON.stringify(matchId) %>;
+      var msg = document.getElementById('msg');
+      function setMsg(t) { msg.textContent = t || ''; }
+      document.querySelectorAll('.score-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var side = btn.getAttribute('data-side');
+          setMsg('送出中…');
+          fetch('/api/referee/matches/' + matchId + '/point', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ side: side }),
+          })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+            .then(function (_ref) {
+              var ok = _ref.ok, j = _ref.j;
+              if (!ok) {
+                setMsg(j.error || '錯誤');
+                return;
+              }
+              var m = j.match;
+              document.getElementById('disp-a').textContent = m.currentPoints && m.currentPoints.a != null ? m.currentPoints.a : 0;
+              document.getElementById('disp-b').textContent = m.currentPoints && m.currentPoints.b != null ? m.currentPoints.b : 0;
+              var gl = document.getElementById('games-disp');
+              if (m.completedGames && m.completedGames.length) {
+                gl.textContent = m.completedGames.map(function (g) { return g.a + '-' + g.b; }).join(' ｜ ');
+              } else {
+                gl.textContent = '—';
+              }
+              setMsg(m.status === 'finished' ? '已完賽' : '');
+            })
+            .catch(function () { setMsg('網路錯誤'); });
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+<%- include('../partials/head', { title }) %>
+<body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
+  <main class="mx-auto max-w-3xl px-4 py-16">
+    <h1 class="text-3xl font-bold text-emerald-400">匹克球比賽平台</h1>
+    <p class="mt-4 text-slate-300">後台、前台與球證端已建立骨架。請先執行 <code class="rounded bg-slate-800 px-1">npm run seed</code> 建立示範大會；球證以登入 ID <code class="rounded bg-slate-800 px-1">referee1</code> 登入。</p>
+    <ul class="mt-8 space-y-3 text-slate-200">
+      <li><a class="text-emerald-400 underline hover:text-emerald-300" href="/admin/login">管理後台登入</a></li>
+      <li><a class="text-emerald-400 underline hover:text-emerald-300" href="/referee/login">球證登入</a></li>
+      <li><span class="text-slate-400">示範大會前台（seed 後）：</span> <a class="text-emerald-400 underline" href="/e/demo-2026">/e/demo-2026</a></li>
+    </ul>
+  </main>
+</body>
+</html>

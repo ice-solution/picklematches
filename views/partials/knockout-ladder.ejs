@@ -1,0 +1,47 @@
+<% if (tournament.phase === 'knockout') { %>
+<section class="knockout-ladder mt-6 rounded border border-amber-900/45 bg-amber-950/15 p-5" aria-label="淘汰賽畫鬼腳賽程表">
+  <h3 class="text-base font-semibold text-amber-200">淘汰賽程表（畫鬼腳）</h3>
+  <p class="mt-1 text-xs leading-relaxed text-slate-500">
+    依各場次的<strong class="text-slate-400">輪次</strong>分直欄；左側通常為外圍（場次較多）、向右為內圈與決賽。請在建立場次時填寫輪次，例如「八強」「四強」「決賽」。
+  </p>
+  <% if (!knockoutLadderColumns || !knockoutLadderColumns.length) { %>
+    <p class="mt-4 text-sm text-slate-500">尚無場次；建立場次並填寫「輪次」後即顯示本表。</p>
+  <% } else { %>
+    <div class="mt-5 overflow-x-auto pb-2">
+      <div class="flex min-w-min items-stretch">
+        <% knockoutLadderColumns.forEach(function (col, idx) { %>
+          <% if (idx > 0) { %>
+            <div class="flex w-9 shrink-0 items-center justify-center self-stretch text-lg leading-none text-slate-600 select-none" aria-hidden="true">→</div>
+          <% } %>
+          <div class="flex w-52 shrink-0 flex-col border border-slate-800/90 bg-slate-950/60 p-3">
+            <div class="border-b border-amber-800/40 pb-2 text-center text-xs font-semibold uppercase tracking-wide text-amber-300/95"><%= col.label %></div>
+            <div class="mt-3 flex flex-col gap-4">
+              <% col.matches.forEach(function (m) { %>
+                <div class="rounded border border-slate-700/80 bg-slate-900/50 px-2 py-3 text-xs">
+                  <div class="flex items-stretch gap-1">
+                    <div class="flex flex-1 flex-col items-end justify-center text-right text-slate-200">
+                      <span class="leading-tight"><%= m.teamA && m.teamA.name ? m.teamA.name : '?' %></span>
+                    </div>
+                    <div class="relative flex w-7 shrink-0 flex-col items-center justify-center">
+                      <span class="absolute left-0 right-0 top-1/2 border-t border-slate-600"></span>
+                      <span class="relative z-[1] bg-slate-900/90 px-0.5 text-[10px] text-slate-500">vs</span>
+                    </div>
+                    <div class="flex flex-1 flex-col items-start justify-center text-left text-slate-200">
+                      <span class="leading-tight"><%= m.teamB && m.teamB.name ? m.teamB.name : '?' %></span>
+                    </div>
+                  </div>
+                  <p class="mt-2 text-center font-mono text-[11px] text-emerald-300/90"><%= scoreSummary(m) %></p>
+                  <% if (m.status === 'finished' && m.winnerId && (m.winnerId.name || m.winnerId._id)) { %>
+                    <p class="mt-1 text-center text-[10px] text-emerald-500/95">勝：<%= m.winnerId.name || '—' %></p>
+                  <% } %>
+                  <a href="/admin/matches/<%= m._id %>/edit" class="mt-2 block text-center text-sky-400 underline">編輯</a>
+                </div>
+              <% }); %>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+  <% } %>
+</section>
+<% } %>

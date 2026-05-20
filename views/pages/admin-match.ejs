@@ -1,0 +1,166 @@
+<%- include('../partials/head', { title }) %>
+<%- include('../partials/admin-frame-start') %>
+<main class="mx-auto w-full max-w-2xl pb-12 pt-1">
+    <p class="text-sm text-slate-500">
+      <a href="/admin/tournaments/<%= tournament._id %>" class="text-emerald-400 underline">← <%= tournament.name %></a>
+    </p>
+    <h1 class="mt-4 text-xl font-bold text-white">編輯場次</h1>
+
+    <% if (typeof flash !== 'undefined' && flash) { %>
+      <p class="mt-4 rounded border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200"><%= flash %></p>
+    <% } %>
+    <% if (typeof error !== 'undefined' && error) { %>
+      <p class="mt-4 rounded border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"><%= error %></p>
+    <% } %>
+
+    <section class="mt-8 rounded border border-amber-900/40 bg-amber-950/20 p-6">
+      <h2 class="text-lg font-semibold text-amber-200">即時計分（管理員）</h2>
+      <p class="mt-1 text-sm text-slate-400">無須球證指派亦可操作；前台與大螢幕會即時更新。</p>
+      <div class="mt-6 grid grid-cols-2 gap-4">
+        <div>
+          <p class="text-center text-sm text-emerald-400"><%= match.teamA && match.teamA.name ? match.teamA.name : 'A' %></p>
+          <p id="adm-disp-a" class="text-center text-4xl font-bold tabular-nums"><%= match.currentPoints?.a ?? 0 %></p>
+          <button type="button" data-side="a" class="adm-score-btn mt-3 w-full rounded-lg bg-emerald-700 py-3 text-sm font-semibold text-white active:bg-emerald-600">A +1</button>
+        </div>
+        <div>
+          <p class="text-center text-sm text-sky-400"><%= match.teamB && match.teamB.name ? match.teamB.name : 'B' %></p>
+          <p id="adm-disp-b" class="text-center text-4xl font-bold tabular-nums"><%= match.currentPoints?.b ?? 0 %></p>
+          <button type="button" data-side="b" class="adm-score-btn mt-3 w-full rounded-lg bg-sky-700 py-3 text-sm font-semibold text-white active:bg-sky-600">B +1</button>
+        </div>
+      </div>
+      <p class="mt-6 text-center text-sm text-slate-400">已完成局</p>
+      <p id="adm-games-disp" class="text-center font-mono text-slate-200"><%= gamesLine(match) %></p>
+      <p class="mt-2 text-center text-sm text-slate-500">狀態：<span id="adm-status-disp"><%= match.status %></span></p>
+      <p id="adm-score-msg" class="mt-3 text-center text-sm text-amber-300"></p>
+    </section>
+
+    <form method="post" action="/admin/matches/<%= match._id %>/update" class="mt-8 space-y-4 rounded border border-slate-800 bg-slate-900/40 p-6">
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="text-xs text-slate-500">隊伍 A</label>
+          <select name="teamA" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+            <% teams.forEach(function (t) { %>
+              <% var aid = (match.teamA && match.teamA._id) ? match.teamA._id : match.teamA; %>
+              <option value="<%= t._id %>" <%= String(aid) === String(t._id) ? 'selected' : '' %>><%= t.name %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">隊伍 B</label>
+          <select name="teamB" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+            <% teams.forEach(function (t) { %>
+              <% var bid = (match.teamB && match.teamB._id) ? match.teamB._id : match.teamB; %>
+              <option value="<%= t._id %>" <%= String(bid) === String(t._id) ? 'selected' : '' %>><%= t.name %></option>
+            <% }); %>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500">賽制（整場）</label>
+        <select name="matchFormat" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+          <option value="bestOf3" <%= match.matchFormat === 'bestOf3' ? 'selected' : '' %>>三局兩勝</option>
+          <option value="bestOf5" <%= match.matchFormat === 'bestOf5' ? 'selected' : '' %>>五局三勝</option>
+          <option value="singleGame" <%= match.matchFormat === 'singleGame' ? 'selected' : '' %>>一局過</option>
+        </select>
+        <% if (match.status !== 'scheduled') { %>
+          <p class="mt-1 text-xs text-amber-500">比賽已開始或結束，變更賽制可能影響比分合理性，請謹慎。</p>
+        <% } %>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="text-xs text-slate-500">開賽時間（僅時分，日期見大會設定）</label>
+          <input name="scheduledTime" type="time" value="<%= typeof scheduledTimeValue !== 'undefined' ? scheduledTimeValue : '' %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">場地</label>
+          <input name="court" value="<%= match.court || '' %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500">輪次／標籤</label>
+        <input name="round" value="<%= match.round || '' %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+      </div>
+      <div>
+        <label class="text-xs text-slate-500">狀態</label>
+        <select name="status" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+          <% ['scheduled','live','finished','postponed','cancelled'].forEach(function (s) { %>
+            <option value="<%= s %>" <%= match.status === s ? 'selected' : '' %>><%= s %></option>
+          <% }); %>
+        </select>
+      </div>
+      <button type="submit" class="rounded bg-emerald-600 px-6 py-2 font-semibold text-white">儲存場次</button>
+    </form>
+
+    <section class="mt-12 rounded border border-slate-800 bg-slate-900/40 p-6">
+      <h2 class="text-lg font-semibold text-white">球證指派</h2>
+      <p class="mt-1 text-sm text-slate-500">可指派多位球證；球證僅能更新被指派的場次比分。球證請至 <a href="/referee/login" class="text-sky-400 underline" target="_blank" rel="noopener">球證登入</a>。</p>
+      <ul class="mt-4 space-y-2">
+        <% assignedReferees.forEach(function (r) { %>
+          <li class="flex items-center justify-between rounded border border-slate-800 px-3 py-2 text-sm">
+            <span><%= r.name || r.email %></span>
+            <form method="post" action="/admin/matches/<%= match._id %>/unassign" class="inline">
+              <input type="hidden" name="redirect" value="/admin/matches/<%= match._id %>/edit" />
+              <input type="hidden" name="refereeId" value="<%= r._id %>" />
+              <button type="submit" class="text-rose-400 underline">移除</button>
+            </form>
+          </li>
+        <% }); %>
+        <% if (!assignedReferees.length) { %>
+          <li class="text-sm text-slate-500">尚未指派球證</li>
+        <% } %>
+      </ul>
+      <form method="post" action="/admin/matches/<%= match._id %>/assign" class="mt-4 flex flex-wrap gap-2">
+        <input type="hidden" name="redirect" value="/admin/matches/<%= match._id %>/edit" />
+        <select name="refereeId" required class="min-w-[200px] flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2">
+          <option value="" disabled selected hidden>選擇球證帳號</option>
+          <% refereeUsers.forEach(function (u) { %>
+            <option value="<%= u._id %>"><%= u.loginId ? u.loginId + ' · ' : '' %><%= u.name || u.email %></option>
+          <% }); %>
+        </select>
+        <button type="submit" class="rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-white">指派</button>
+      </form>
+      <% if (!refereeUsers.length) { %>
+        <p class="mt-3 text-sm text-amber-500">尚無球證帳號，請至 <a href="/admin/referees" class="underline">球證管理</a> 新增。</p>
+      <% } %>
+    </section>
+  </main>
+  <script>
+    (function () {
+      var matchId = <%- JSON.stringify(String(match._id)) %>;
+      var msg = document.getElementById('adm-score-msg');
+      function setMsg(t) { msg.textContent = t || ''; }
+      document.querySelectorAll('.adm-score-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var side = btn.getAttribute('data-side');
+          setMsg('送出中…');
+          fetch('/api/admin/matches/' + matchId + '/point', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ side: side }),
+          })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+            .then(function (_ref) {
+              var ok = _ref.ok, j = _ref.j;
+              if (!ok) {
+                setMsg(typeof j.error === 'string' ? j.error : (j.error || '錯誤'));
+                return;
+              }
+              var m = j.match;
+              document.getElementById('adm-disp-a').textContent = m.currentPoints && m.currentPoints.a != null ? m.currentPoints.a : 0;
+              document.getElementById('adm-disp-b').textContent = m.currentPoints && m.currentPoints.b != null ? m.currentPoints.b : 0;
+              var gl = document.getElementById('adm-games-disp');
+              if (m.completedGames && m.completedGames.length) {
+                gl.textContent = m.completedGames.map(function (g) { return g.a + '-' + g.b; }).join(' ｜ ');
+              } else {
+                gl.textContent = '—';
+              }
+              document.getElementById('adm-status-disp').textContent = m.status || '';
+              setMsg(m.status === 'finished' ? '已完賽' : '');
+            })
+            .catch(function () { setMsg('網路錯誤'); });
+        });
+      });
+    })();
+  </script>
+<%- include('../partials/admin-frame-end') %>

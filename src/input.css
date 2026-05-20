@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * 後台外殼：寫在 CSS 裡用 @apply，避免只改 EJS 卻忘記跑 build:css 時側欄／主區變成無樣式（貼邊、無寬度）。
+ */
+@layer components {
+  .admin-layout {
+    @apply flex min-h-screen;
+  }
+
+  .admin-sidebar {
+    @apply flex w-64 shrink-0 flex-col border-r border-slate-800 bg-slate-900/95;
+  }
+
+  .admin-main {
+    @apply min-w-0 flex-1 overflow-auto p-6 md:p-8 lg:pl-10 lg:pr-12 lg:py-10;
+  }
+}

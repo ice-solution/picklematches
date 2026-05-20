@@ -1,0 +1,13 @@
+<header class="border-b border-slate-800 bg-slate-900/80 px-4 py-4">
+  <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-4">
+      <a href="/admin" class="font-semibold text-emerald-400 hover:text-emerald-300">管理後台</a>
+      <% if (typeof userEmail !== 'undefined') { %>
+        <span class="text-sm text-slate-500"><%= userEmail %></span>
+      <% } %>
+    </div>
+    <form method="post" action="/admin/logout">
+      <button type="submit" class="text-sm text-amber-400 underline">登出</button>
+    </form>
+  </div>
+</header>

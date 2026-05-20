@@ -1,0 +1,60 @@
+<%- include('../partials/head', { title }) %>
+<% var obs = typeof obsMode !== 'undefined' && obsMode; %>
+<% var transp = typeof transparent !== 'undefined' && transparent; %>
+<body class="<%= transp ? 'bg-transparent' : 'bg-black' %> min-h-screen text-white font-sans">
+  <main id="sb-root" class="flex min-h-screen flex-col items-center justify-center px-6 py-8 <%= obs ? 'py-4' : 'py-10' %>">
+    <% if (!obs) { %>
+      <p id="sb-event-name" class="mb-4 text-base uppercase tracking-widest text-slate-500 md:text-lg"><%= event.name %></p>
+    <% } %>
+    <p id="sb-meta" class="mb-6 text-center text-slate-300 <%= obs ? 'text-2xl md:text-3xl' : 'text-xl md:text-2xl' %>"></p>
+    <div class="grid w-full max-w-6xl grid-cols-3 items-center gap-4 text-center md:gap-8">
+      <div>
+        <p id="sb-team-a" class="text-2xl font-semibold text-emerald-400 md:text-4xl <%= obs ? 'md:text-5xl' : '' %>"><%= scoreboard.teamAName %></p>
+        <p id="sb-score-a" class="mt-4 text-7xl font-bold tabular-nums text-emerald-300 md:text-9xl <%= obs ? 'md:text-[10rem]' : '' %>"><%= scoreboard.scoreA %></p>
+      </div>
+      <div id="sb-games-center-wrap" class="flex min-w-[5rem] flex-col items-center justify-center px-2 md:min-w-[7rem]">
+        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 md:text-sm">局</p>
+        <p id="sb-games-center" class="mt-1 text-4xl font-bold tabular-nums text-amber-300 md:text-6xl <%= obs ? 'md:text-7xl' : '' %>"><%= scoreboard.gamesA %> - <%= scoreboard.gamesB %></p>
+      </div>
+      <div>
+        <p id="sb-team-b" class="text-2xl font-semibold text-sky-400 md:text-4xl <%= obs ? 'md:text-5xl' : '' %>"><%= scoreboard.teamBName %></p>
+        <p id="sb-score-b" class="mt-4 text-7xl font-bold tabular-nums text-sky-300 md:text-9xl <%= obs ? 'md:text-[10rem]' : '' %>"><%= scoreboard.scoreB %></p>
+      </div>
+    </div>
+    <p id="sb-status" class="mt-8 text-xl text-amber-300 md:text-2xl"></p>
+    <p id="sb-hidden" class="mt-4 hidden text-2xl text-slate-500">待機中</p>
+  </main>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    (function () {
+      var eventId = <%- JSON.stringify(eventIdStr) %>;
+      var statusLabels = { idle: '待機', live: '進行中', finished: '完賽' };
+
+      function applyBoard(sb) {
+        if (!sb) return;
+        var visible = sb.isVisible !== false;
+        document.getElementById('sb-team-a').textContent = sb.teamAName || '隊伍 A';
+        document.getElementById('sb-team-b').textContent = sb.teamBName || '隊伍 B';
+        document.getElementById('sb-score-a').textContent = sb.scoreA ?? 0;
+        document.getElementById('sb-score-b').textContent = sb.scoreB ?? 0;
+        var ga = sb.gamesA ?? 0;
+        var gb = sb.gamesB ?? 0;
+        document.getElementById('sb-games-center').textContent = ga + ' - ' + gb;
+        var meta = [sb.roundLabel, sb.court, sb.subtitle].filter(Boolean).join(' · ');
+        document.getElementById('sb-meta').textContent = meta;
+        document.getElementById('sb-status').textContent = statusLabels[sb.status] || sb.status || '';
+        document.getElementById('sb-root').style.opacity = '1';
+        document.getElementById('sb-hidden').classList.toggle('hidden', visible);
+      }
+
+      applyBoard(<%- JSON.stringify(scoreboard) %>);
+
+      var socket = io({ transports: ['websocket', 'polling'] });
+      socket.emit('join', { scoreboardEventId: eventId });
+      socket.on('scoreboard:update', function (payload) {
+        if (payload && payload.scoreboard) applyBoard(payload.scoreboard);
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+[Unit]
+Description=Pickleball Tournament (Testing - testmatch.picklevibes.hk)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/pickleball-test
+EnvironmentFile=/var/www/pickleball-test/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,31 @@
+<%- include('../partials/head', { title }) %>
+<body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
+  <header class="border-b border-slate-800 bg-slate-900/80 px-4 py-4">
+    <div class="mx-auto flex max-w-3xl items-center justify-between">
+      <span class="font-semibold text-sky-400">球證 · 我的場次</span>
+      <div class="flex items-center gap-4 text-sm text-slate-400">
+        <span><%= userEmail %></span>
+        <form method="post" action="/referee/logout"><button type="submit" class="text-amber-400 underline">登出</button></form>
+      </div>
+    </div>
+  </header>
+  <main class="mx-auto max-w-3xl px-4 py-8">
+    <% if (!matches.length) { %>
+      <p class="text-slate-500">目前沒有指派的場次。請聯絡管理員在後台指派。</p>
+    <% } %>
+    <ul class="space-y-3">
+      <% matches.forEach(function (m) { %>
+        <li>
+          <a href="/referee/matches/<%= m._id %>" class="block rounded border border-slate-800 bg-slate-900/50 px-4 py-4 hover:border-sky-700">
+            <div class="flex justify-between gap-2">
+              <span><%= m.teamA && m.teamA.name ? m.teamA.name : '—' %> vs <%= m.teamB && m.teamB.name ? m.teamB.name : '—' %></span>
+              <span class="text-xs text-slate-500"><%= m.status %></span>
+            </div>
+            <p class="mt-1 text-xs text-slate-500"><%= formatLabel(m.matchFormat) %></p>
+          </a>
+        </li>
+      <% }); %>
+    </ul>
+  </main>
+</body>
+</html>

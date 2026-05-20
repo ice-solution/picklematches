@@ -1,0 +1,328 @@
+<%- include('../partials/head', { title }) %>
+<%- include('../partials/admin-frame-start') %>
+<main class="mx-auto w-full max-w-5xl pb-12 pt-1">
+  <p class="text-sm text-slate-500"><a href="/admin/events/<%= event._id %>" class="text-emerald-400 underline">← 大會設定</a></p>
+  <h1 class="mt-4 text-2xl font-bold text-white">大會計分牌</h1>
+  <p class="mt-2 text-sm text-slate-400">獨立於賽程場次，專供直播疊圖使用。後台改分後，顯示頁會即時更新。</p>
+
+  <section class="mt-8 rounded border border-sky-900/60 bg-sky-950/30 p-5">
+    <h2 class="font-semibold text-sky-300">匯出／OBS 連結</h2>
+    <p class="mt-2 text-xs text-slate-500">在 OBS 新增「瀏覽器」來源，貼上 OBS 專用網址（透明背景）。寬度建議 1920、高度 400–600。</p>
+    <div class="mt-4 space-y-3">
+      <label class="block text-xs text-slate-500">直播顯示頁</label>
+      <div class="flex flex-wrap gap-2">
+        <input id="url-display" readonly value="<%= displayUrl %>" class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs" />
+        <button type="button" data-copy="url-display" class="rounded bg-slate-700 px-3 py-2 text-sm hover:bg-slate-600">複製</button>
+        <a href="<%= displayUrl %>" target="_blank" rel="noopener" class="rounded border border-slate-600 px-3 py-2 text-sm text-emerald-400 hover:bg-slate-800">預覽 ↗</a>
+      </div>
+      <label class="block text-xs text-slate-500">OBS 透明模式</label>
+      <div class="flex flex-wrap gap-2">
+        <input id="url-obs" readonly value="<%= obsUrl %>" class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs" />
+        <button type="button" data-copy="url-obs" class="rounded bg-slate-700 px-3 py-2 text-sm hover:bg-slate-600">複製</button>
+        <a href="<%= obsUrl %>" target="_blank" rel="noopener" class="rounded border border-slate-600 px-3 py-2 text-sm text-emerald-400 hover:bg-slate-800">預覽 ↗</a>
+      </div>
+      <label class="block text-xs text-slate-500">JSON API（外部工具／自訂疊圖）</label>
+      <div class="flex flex-wrap gap-2">
+        <input id="url-json" readonly value="<%= jsonUrl %>" class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs" />
+        <button type="button" data-copy="url-json" class="rounded bg-slate-700 px-3 py-2 text-sm hover:bg-slate-600">複製</button>
+        <a href="<%= jsonUrl %>" target="_blank" rel="noopener" class="rounded border border-slate-600 px-3 py-2 text-sm text-sky-400 hover:bg-slate-800">開啟 ↗</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="mt-8 rounded border border-violet-900/50 bg-violet-950/20 p-6">
+    <h2 class="text-lg font-semibold text-violet-200">從賽事載入</h2>
+    <p class="mt-1 text-sm text-slate-400">選擇本大會已建立的賽事場次，自動填入隊名、目前比分、局數、場地與輪次。</p>
+    <p id="load-match-empty" class="mt-3 hidden text-sm text-slate-500">尚無場次。請先到「賽程／隊伍」建立賽事與場次。</p>
+    <div id="load-match-form" class="mt-4 space-y-3">
+      <div>
+        <label class="text-xs text-slate-500">賽事</label>
+        <select id="sel-tournament" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm">
+          <option value="">— 全部賽事 —</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500">場次</label>
+        <select id="sel-match" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm">
+          <option value="">請選擇場次</option>
+        </select>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" id="btn-load-match" class="rounded bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500">載入至計分牌</button>
+        <button type="button" id="btn-sync-match" class="hidden rounded border border-violet-600 px-4 py-2 text-sm text-violet-300 hover:bg-violet-950/50">從賽程同步 ↓</button>
+      </div>
+      <p id="linked-match-hint" class="text-xs text-slate-500"></p>
+      <p class="text-xs text-slate-600">已連結場次時：<strong class="text-slate-400">完賽</strong>或達勝局數後會<strong class="text-emerald-400">自動寫入賽程</strong>。可按「從賽程同步」拉回最新賽程比分。</p>
+    </div>
+  </section>
+
+  <section class="mt-8 rounded border border-amber-900/40 bg-amber-950/20 p-6">
+    <h2 class="text-lg font-semibold text-amber-200">即時控制</h2>
+    <div class="mt-6 grid grid-cols-3 items-start gap-3 sm:gap-6">
+      <div class="min-w-0">
+        <label class="text-xs text-slate-500">隊伍 A</label>
+        <input id="fld-team-a" type="text" value="<%= scoreboard.teamAName %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        <p class="mt-3 text-center text-xs text-slate-500">本局分</p>
+        <p id="disp-score-a" class="text-center text-4xl font-bold tabular-nums text-emerald-400 sm:text-5xl"><%= scoreboard.scoreA %></p>
+        <div class="mt-3 grid grid-cols-3 gap-2">
+          <button type="button" data-action="point_a" class="col-span-2 rounded-lg bg-emerald-700 py-4 text-base font-semibold text-white active:bg-emerald-600 sm:py-5 sm:text-lg">A +1</button>
+          <button type="button" data-action="minus_a" class="rounded-lg bg-slate-700 py-4 text-base font-semibold active:bg-slate-600">−1</button>
+        </div>
+      </div>
+      <div class="flex flex-col items-center justify-center px-1 sm:px-2">
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">局數</p>
+        <p id="disp-games-center" class="mt-2 whitespace-nowrap text-center text-3xl font-bold tabular-nums text-amber-300 sm:text-4xl"><%= scoreboard.gamesA %> - <%= scoreboard.gamesB %></p>
+        <div class="mt-4 grid w-full grid-cols-1 gap-2">
+          <button type="button" data-action="game_a" class="rounded-lg bg-emerald-900/80 px-2 py-2.5 text-xs font-semibold text-emerald-200 active:bg-emerald-800 sm:text-sm">A 贏局</button>
+          <button type="button" data-action="game_b" class="rounded-lg bg-sky-900/80 px-2 py-2.5 text-xs font-semibold text-sky-200 active:bg-sky-800 sm:text-sm">B 贏局</button>
+        </div>
+      </div>
+      <div class="min-w-0">
+        <label class="text-xs text-slate-500">隊伍 B</label>
+        <input id="fld-team-b" type="text" value="<%= scoreboard.teamBName %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        <p class="mt-3 text-center text-xs text-slate-500">本局分</p>
+        <p id="disp-score-b" class="text-center text-4xl font-bold tabular-nums text-sky-400 sm:text-5xl"><%= scoreboard.scoreB %></p>
+        <div class="mt-3 grid grid-cols-3 gap-2">
+          <button type="button" data-action="point_b" class="col-span-2 rounded-lg bg-sky-700 py-4 text-base font-semibold text-white active:bg-sky-600 sm:py-5 sm:text-lg">B +1</button>
+          <button type="button" data-action="minus_b" class="rounded-lg bg-slate-700 py-4 text-base font-semibold active:bg-slate-600">−1</button>
+        </div>
+      </div>
+    </div>
+    <div class="mt-6 flex flex-wrap gap-2">
+      <button type="button" data-action="finish" class="rounded bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600">標記完賽</button>
+      <button type="button" data-action="reset_game" class="rounded border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800">本局清零</button>
+      <button type="button" data-action="reset_all" class="rounded border border-rose-800 px-4 py-2 text-sm text-rose-300 hover:bg-rose-950/40">全部重置</button>
+      <button type="button" data-action="swap" class="rounded border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800">交換左右</button>
+    </div>
+    <p id="sb-msg" class="mt-4 text-center text-sm text-amber-300"></p>
+  </section>
+
+  <section class="mt-8 space-y-4 rounded border border-slate-800 bg-slate-900/40 p-6">
+    <h2 class="text-lg font-semibold text-emerald-400">場次資訊</h2>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label class="text-xs text-slate-500">輪次／階段</label>
+        <input id="fld-round" type="text" value="<%= scoreboard.roundLabel %>" placeholder="例：八強" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+      </div>
+      <div>
+        <label class="text-xs text-slate-500">場地</label>
+        <input id="fld-court" type="text" value="<%= scoreboard.court %>" placeholder="例：1 號場" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+      </div>
+    </div>
+    <div>
+      <label class="text-xs text-slate-500">副標題</label>
+      <input id="fld-subtitle" type="text" value="<%= scoreboard.subtitle %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+    </div>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label class="text-xs text-slate-500">狀態</label>
+        <select id="fld-status" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+          <option value="idle" <%= scoreboard.status === 'idle' ? 'selected' : '' %>>待機</option>
+          <option value="live" <%= scoreboard.status === 'live' ? 'selected' : '' %>>進行中</option>
+          <option value="finished" <%= scoreboard.status === 'finished' ? 'selected' : '' %>>完賽</option>
+        </select>
+      </div>
+      <div class="flex items-end">
+        <label class="flex items-center gap-2 text-sm text-slate-300">
+          <input id="fld-visible" type="checkbox" <%= scoreboard.isVisible ? 'checked' : '' %> class="rounded" />
+          前台顯示比分
+        </label>
+      </div>
+    </div>
+    <button type="button" id="btn-save-meta" class="rounded bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-500">儲存場次資訊與隊名</button>
+  </section>
+</main>
+<script>
+(function () {
+  var eventId = <%- JSON.stringify(String(event._id)) %>;
+  var apiBase = '/api/admin/events/' + eventId + '/scoreboard';
+
+  function applyBoard(sb) {
+    if (!sb) return;
+    document.getElementById('disp-score-a').textContent = sb.scoreA;
+    document.getElementById('disp-score-b').textContent = sb.scoreB;
+    var ga = sb.gamesA ?? 0;
+    var gb = sb.gamesB ?? 0;
+    document.getElementById('disp-games-center').textContent = ga + ' - ' + gb;
+    document.getElementById('fld-team-a').value = sb.teamAName;
+    document.getElementById('fld-team-b').value = sb.teamBName;
+    document.getElementById('fld-round').value = sb.roundLabel || '';
+    document.getElementById('fld-court').value = sb.court || '';
+    document.getElementById('fld-subtitle').value = sb.subtitle || '';
+    document.getElementById('fld-status').value = sb.status;
+    document.getElementById('fld-visible').checked = sb.isVisible !== false;
+  }
+
+  function msg(t) {
+    var el = document.getElementById('sb-msg');
+    el.textContent = t || '';
+    if (t) setTimeout(function () { if (el.textContent === t) el.textContent = ''; }, 2000);
+  }
+
+  async function patch(body) {
+    var res = await fetch(apiBase, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(body),
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'failed');
+    onBoardSaved(data);
+    return data;
+  }
+
+  async function action(name) {
+    var res = await fetch(apiBase + '/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ action: name }),
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'failed');
+    onBoardSaved(data);
+  }
+
+  document.querySelectorAll('[data-action]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      action(btn.getAttribute('data-action')).catch(function (e) { msg(e.message); });
+    });
+  });
+
+  document.getElementById('btn-save-meta').addEventListener('click', function () {
+    patch({
+      teamAName: document.getElementById('fld-team-a').value,
+      teamBName: document.getElementById('fld-team-b').value,
+      roundLabel: document.getElementById('fld-round').value,
+      court: document.getElementById('fld-court').value,
+      subtitle: document.getElementById('fld-subtitle').value,
+      status: document.getElementById('fld-status').value,
+      isVisible: document.getElementById('fld-visible').checked,
+    }).catch(function (e) { msg(e.message); });
+  });
+
+  document.querySelectorAll('[data-copy]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = btn.getAttribute('data-copy');
+      var input = document.getElementById(id);
+      navigator.clipboard.writeText(input.value).then(function () { msg('已複製'); });
+    });
+  });
+
+  var matchCatalog = { tournaments: [], matches: [], linkedMatchId: null };
+
+  function statusTag(s) {
+    var map = { scheduled: '未開', live: '進行中', finished: '完賽', postponed: '延期', cancelled: '取消' };
+    return map[s] || s;
+  }
+
+  function fillMatchOptions() {
+    var tSel = document.getElementById('sel-tournament');
+    var mSel = document.getElementById('sel-match');
+    var tid = tSel.value;
+    var list = matchCatalog.matches.filter(function (m) {
+      return !tid || m.tournamentId === tid;
+    });
+    mSel.innerHTML = '<option value="">請選擇場次</option>';
+    list.forEach(function (m) {
+      var opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = '[' + statusTag(m.status) + '] ' + m.label;
+      if (m.id === matchCatalog.linkedMatchId) opt.selected = true;
+      mSel.appendChild(opt);
+    });
+  }
+
+  function updateLinkedHint() {
+    var hint = document.getElementById('linked-match-hint');
+    var syncBtn = document.getElementById('btn-sync-match');
+    if (!matchCatalog.linkedMatchId) {
+      hint.textContent = '';
+      syncBtn.classList.add('hidden');
+      return;
+    }
+    var m = matchCatalog.matches.find(function (x) { return x.id === matchCatalog.linkedMatchId; });
+    hint.textContent = m ? '已連結場次：' + m.label + '（完賽自動寫入賽程）' : '已連結場次 ID：' + matchCatalog.linkedMatchId;
+    syncBtn.classList.remove('hidden');
+  }
+
+  function onBoardSaved(data) {
+    applyBoard(data.scoreboard);
+    if (data.matchSynced) {
+      msg('已寫入賽程');
+    } else {
+      msg('已更新');
+    }
+  }
+
+  function initMatchPicker(data) {
+    matchCatalog.tournaments = data.tournaments || [];
+    matchCatalog.matches = data.matches || [];
+    matchCatalog.linkedMatchId = data.linkedMatchId || null;
+
+    var empty = document.getElementById('load-match-empty');
+    var form = document.getElementById('load-match-form');
+    if (!matchCatalog.matches.length) {
+      empty.classList.remove('hidden');
+      form.classList.add('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+    form.classList.remove('hidden');
+
+    var tSel = document.getElementById('sel-tournament');
+    tSel.innerHTML = '<option value="">— 全部賽事 —</option>';
+    matchCatalog.tournaments.forEach(function (t) {
+      var opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.name;
+      tSel.appendChild(opt);
+    });
+  if (matchCatalog.linkedMatchId) {
+      var linked = matchCatalog.matches.find(function (m) { return m.id === matchCatalog.linkedMatchId; });
+      if (linked) tSel.value = linked.tournamentId;
+    }
+    fillMatchOptions();
+    updateLinkedHint();
+  }
+
+  async function loadFromMatch(matchId) {
+    var res = await fetch(apiBase + '/load-match', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ matchId: matchId }),
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'failed');
+    onBoardSaved(data);
+    matchCatalog.linkedMatchId = matchId;
+    updateLinkedHint();
+    if (!data.matchSynced) {
+      msg('已從賽事載入：' + (data.match && data.match.label ? data.match.label : ''));
+    }
+  }
+
+  document.getElementById('sel-tournament').addEventListener('change', fillMatchOptions);
+
+  document.getElementById('btn-load-match').addEventListener('click', function () {
+    var matchId = document.getElementById('sel-match').value;
+    if (!matchId) { msg('請先選擇場次'); return; }
+    loadFromMatch(matchId).catch(function (e) { msg(e.message); });
+  });
+
+  document.getElementById('btn-sync-match').addEventListener('click', function () {
+    if (!matchCatalog.linkedMatchId) { msg('尚未連結場次'); return; }
+    loadFromMatch(matchCatalog.linkedMatchId).catch(function (e) { msg(e.message); });
+  });
+
+  fetch(apiBase + '/matches', { credentials: 'same-origin' })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.ok) initMatchPicker(data);
+    })
+    .catch(function () { msg('無法載入賽事列表'); });
+})();
+</script>
+<%- include('../partials/admin-frame-end') %>

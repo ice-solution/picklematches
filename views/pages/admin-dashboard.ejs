@@ -1,0 +1,33 @@
+<%- include('../partials/head', { title }) %>
+<%- include('../partials/admin-frame-start') %>
+<main class="mx-auto w-full max-w-5xl pb-12 pt-1">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <h2 class="text-lg font-semibold text-white">大會列表</h2>
+      <a href="/admin/events/new" class="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500">新增大會</a>
+    </div>
+    <ul class="mt-6 space-y-2">
+      <% if (!events.length) { %>
+        <li class="text-slate-500">尚無大會。可 <a href="/admin/events/new" class="text-emerald-400 underline">新增大會</a> 或執行 <code class="rounded bg-slate-800 px-1">npm run seed</code> 建立示範資料。</li>
+      <% } %>
+      <% events.forEach(function (ev) { %>
+        <li class="flex flex-wrap items-center gap-3 rounded border border-slate-800 bg-slate-900/50 px-4 py-3">
+          <span class="font-medium"><%= ev.name %></span>
+          <span class="text-xs text-slate-500">/<%= ev.slug %></span>
+          <a class="ml-auto text-emerald-400 underline" href="/admin/events/<%= ev._id %>">管理</a>
+          <a class="text-sky-400 underline" href="/admin/events/<%= ev._id %>/matches-summary">賽果</a>
+          <a class="text-slate-400 underline" href="/e/<%= ev.slug %>" target="_blank" rel="noopener">前台</a>
+        </li>
+      <% }); %>
+    </ul>
+    <section class="mt-12 rounded border border-slate-800 bg-slate-900/30 p-4 text-sm text-slate-400">
+      <p class="font-medium text-slate-300">後台可設定項目</p>
+      <ul class="mt-2 list-inside list-disc space-y-1">
+        <li>大會名稱、slug、日期、場地列表</li>
+        <li>賽事（小組／淘汰）、各組前 N 名晉級</li>
+        <li>組別、隊伍</li>
+        <li>場次：對戰組合、<strong class="text-slate-200">賽制</strong>（三局兩勝／五局三勝／一局過）、時間、場地、狀態</li>
+        <li>球證管理與指派</li>
+      </ul>
+    </section>
+  </main>
+<%- include('../partials/admin-frame-end') %>

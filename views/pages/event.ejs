@@ -1,0 +1,58 @@
+<%- include('../partials/head', { title: event.name }) %>
+<body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
+  <main class="mx-auto max-w-5xl px-4 py-10">
+    <header class="border-b border-slate-800 pb-6">
+      <h1 class="text-2xl font-bold text-emerald-400"><%= event.name %></h1>
+      <p class="mt-2 text-sm text-slate-400">即時賽程（Socket 連線後自動更新）</p>
+    </header>
+    <section class="mt-8 overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead>
+          <tr class="border-b border-slate-800 text-slate-400">
+            <th class="py-2 pr-4">直播比分頁</th>
+            <th class="py-2 pr-4">開賽</th>
+            <th class="py-2 pr-4">隊伍 A</th>
+            <th class="py-2 pr-4">隊伍 B</th>
+            <th class="py-2 pr-4">比分</th>
+            <th class="py-2">狀態</th>
+          </tr>
+        </thead>
+        <tbody id="match-rows">
+          <% matches.forEach(function (m) { %>
+            <tr class="border-b border-slate-800/80 match-row" data-id="<%= m._id %>">
+              <td class="py-3 pr-4">
+                <a
+                  class="inline-block rounded bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-100 hover:bg-slate-700"
+                  href="/e/<%= event.slug %>/screen/<%= m._id %>"
+                  target="_blank"
+                  rel="noopener"
+                >開啟直播</a>
+              </td>
+              <td class="py-3 pr-4 font-mono text-slate-300"><%= displayMatchTime(m) %></td>
+              <td class="py-3 pr-4"><%= m.teamA && m.teamA.name ? m.teamA.name : '—' %></td>
+              <td class="py-3 pr-4"><%= m.teamB && m.teamB.name ? m.teamB.name : '—' %></td>
+              <td class="py-3 pr-4 score-cell"><%= scoreSummary(m) %></td>
+              <td class="py-3"><%= m.status %></td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </section>
+    <p class="mt-8 text-center">
+      <a class="text-emerald-400 underline" href="/">首頁</a>
+    </p>
+  </main>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    (function () {
+      const eventId = <%- JSON.stringify(eventIdStr) %>;
+      const socket = io({ transports: ['websocket', 'polling'] });
+      socket.emit('join', { eventId: eventId });
+      socket.on('match:update', function (payload) {
+        if (!payload || !payload.match) return;
+        location.reload();
+      });
+    })();
+  </script>
+</body>
+</html>

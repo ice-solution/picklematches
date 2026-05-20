@@ -1,0 +1,39 @@
+<%- include('../partials/head', { title }) %>
+<body class="min-h-screen bg-black text-white font-sans">
+  <main class="flex min-h-screen flex-col items-center justify-center px-6 py-10">
+    <p class="mb-6 text-sm uppercase tracking-widest text-slate-500"><%= event.name %></p>
+    <div class="grid w-full max-w-5xl grid-cols-2 gap-8 text-center">
+      <div>
+        <p class="text-2xl font-semibold text-emerald-400 md:text-4xl"><%= match.teamA && match.teamA.name ? match.teamA.name : '隊伍 A' %></p>
+        <p class="mt-6 text-8xl font-bold tabular-nums md:text-9xl"><%= match.currentPoints?.a ?? 0 %></p>
+      </div>
+      <div>
+        <p class="text-2xl font-semibold text-sky-400 md:text-4xl"><%= match.teamB && match.teamB.name ? match.teamB.name : '隊伍 B' %></p>
+        <p class="mt-6 text-8xl font-bold tabular-nums md:text-9xl"><%= match.currentPoints?.b ?? 0 %></p>
+      </div>
+    </div>
+    <div class="mt-12 text-center text-slate-400">
+      <p class="text-sm">已完成局</p>
+      <p class="mt-2 font-mono text-lg text-slate-200"><%= gamesLine(match) %></p>
+    </div>
+    <p class="mt-8 text-xl text-amber-300"><%= match.status === 'finished' ? '完賽' : match.status === 'live' ? '進行中' : '未開始' %></p>
+    <% var ca = match.currentPoints?.a ?? 0, cb = match.currentPoints?.b ?? 0; %>
+    <% if (match.status === 'live' && isDeuce(ca, cb)) { %>
+      <p class="mt-4 text-3xl font-bold text-rose-400">DEUCE</p>
+    <% } %>
+  </main>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    (function () {
+      var matchId = <%- JSON.stringify(String(match._id)) %>;
+      var socket = io({ transports: ['websocket', 'polling'] });
+      socket.emit('join', { matchId: matchId });
+      socket.on('match:update', function (payload) {
+        if (!payload || !payload.match) return;
+        if (String(payload.match._id) !== matchId) return;
+        location.reload();
+      });
+    })();
+  </script>
+</body>
+</html>

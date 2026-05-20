@@ -1,0 +1,35 @@
+<%- include('../partials/head', { title }) %>
+<body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
+  <main class="mx-auto flex max-w-md flex-col justify-center px-4 py-20">
+    <h1 class="text-2xl font-bold text-sky-400">球證登入</h1>
+    <% if (error) { %>
+      <p class="mt-4 rounded border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"><%= error %></p>
+    <% } %>
+    <form method="post" action="/referee/login" class="mt-8 space-y-4">
+      <input type="hidden" name="next" value="<%= typeof next !== 'undefined' ? next : '' %>" />
+      <div>
+        <label class="block text-sm text-slate-400">登入 ID</label>
+        <input
+          name="loginId"
+          type="text"
+          required
+          minlength="3"
+          maxlength="32"
+          pattern="[a-z0-9][a-z0-9_-]{2,31}"
+          title="英數小寫開頭，3–32 字，可含底線、連字號"
+          class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 font-mono lowercase"
+          autocapitalize="off"
+          autocomplete="username"
+        />
+        <p class="mt-1 text-xs text-slate-500">例：ref001、court_a（建立帳號時由管理員設定）</p>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-400">密碼</label>
+        <input name="password" type="password" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" autocomplete="current-password" />
+      </div>
+      <button type="submit" class="w-full rounded bg-sky-600 py-2 font-semibold text-white hover:bg-sky-500">登入</button>
+    </form>
+    <p class="mt-8 text-center text-sm text-slate-500"><a class="text-emerald-400 underline" href="/">返回首頁</a></p>
+  </main>
+</body>
+</html>

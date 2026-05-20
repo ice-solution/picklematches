@@ -1,0 +1,34 @@
+<%- include('../partials/head', { title }) %>
+<%- include('../partials/admin-frame-start') %>
+<main class="mx-auto w-full max-w-xl pb-12 pt-1">
+    <p class="text-sm text-slate-500"><a href="/admin" class="text-emerald-400 underline">← 大會列表</a></p>
+    <h1 class="mt-4 text-2xl font-bold text-white">新增大會</h1>
+    <% if (typeof error !== 'undefined' && error) { %>
+      <p class="mt-4 rounded border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"><%= error %></p>
+    <% } %>
+    <form method="post" action="/admin/events" class="mt-8 space-y-4">
+      <div>
+        <label class="block text-sm text-slate-400">大會名稱</label>
+        <input name="name" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="例如：春季公開賽" />
+      </div>
+      <div>
+        <label class="block text-sm text-slate-400">網址代號（slug）</label>
+        <input name="slug" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-sm" placeholder="例如：spring-2026" />
+        <p class="mt-1 text-xs text-slate-500">前台網址為 /e/&lt;slug&gt;，僅限英文、數字、連字號。</p>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-400">開始（選填）</label>
+        <input name="dateStart" type="datetime-local" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+      </div>
+      <div>
+        <label class="block text-sm text-slate-400">結束（選填）</label>
+        <input name="dateEnd" type="datetime-local" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+      </div>
+      <div>
+        <label class="block text-sm text-slate-400">場地列表（每行一筆，選填）</label>
+        <textarea name="venues" rows="3" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="1 號場&#10;2 號場"></textarea>
+      </div>
+      <button type="submit" class="rounded bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500">建立</button>
+    </form>
+  </main>
+<%- include('../partials/admin-frame-end') %>
