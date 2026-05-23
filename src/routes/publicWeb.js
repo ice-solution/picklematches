@@ -2,7 +2,9 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import { loadEventBySlug } from '../middleware/loadEvent.js';
 import { Match } from '../models/Match.js';
+import { Group } from '../models/Group.js';
 import { Tournament } from '../models/Tournament.js';
+import { enrichMatchesForSchedule } from '../lib/viewHelpers.js';
 import { getOrCreateScoreboard, normalizeScoreboardSlot } from '../models/LiveScoreboard.js';
 import { getEventGroupStandings } from '../lib/groupStandings.js';
 
@@ -12,12 +14,15 @@ publicWebRouter.get('/:eventSlug', loadEventBySlug, async (req, res, next) => {
   try {
     const event = req.event;
     const tournaments = await Tournament.find({ eventId: event._id }).sort({ order: 1 }).lean();
-    const matches = await Match.find({
-      tournamentId: { $in: tournaments.map((t) => t._id) },
-    })
-      .populate('teamA teamB')
-      .sort({ scheduledTime: 1, createdAt: 1 })
-      .lean();
+    const tids = tournaments.map((t) => t._id);
+    const [matchesRaw, groups] = await Promise.all([
+      Match.find({ tournamentId: { $in: tids } })
+        .populate('teamA teamB')
+        .sort({ scheduledTime: 1, createdAt: 1 })
+        .lean(),
+      Group.find({ tournamentId: { $in: tids } }).select('_id name tournamentId').lean(),
+    ]);
+    const matches = enrichMatchesForSchedule(matchesRaw, tournaments, groups);
 
     const groupStandingsList = await getEventGroupStandings(event._id);
     const highlightTeam = String(req.query.team || req.query.q || '').trim();

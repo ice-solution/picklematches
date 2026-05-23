@@ -78,3 +78,26 @@ export function formatLabel(matchFormat) {
   };
   return map[matchFormat] || matchFormat;
 }
+
+/** 公開賽程表：附加賽事名稱、小組／輪次標籤 */
+export function enrichMatchesForSchedule(matches, tournaments, groups) {
+  const tName = Object.fromEntries((tournaments || []).map((t) => [String(t._id), t.name]));
+  const gName = Object.fromEntries((groups || []).map((g) => [String(g._id), g.name]));
+  return (matches || []).map((m) => {
+    let groupName = m.groupId ? gName[String(m.groupId)] || '' : '';
+    if (!groupName) {
+      const ta = m.teamA;
+      const tb = m.teamB;
+      if (ta?.groupId && tb?.groupId && String(ta.groupId) === String(tb.groupId)) {
+        groupName = gName[String(ta.groupId)] || '';
+      }
+    }
+    const round = String(m.round || '').trim();
+    return {
+      ...m,
+      tournamentName: tName[String(m.tournamentId)] || '',
+      groupName,
+      scheduleGroupLabel: groupName || round || '',
+    };
+  });
+}

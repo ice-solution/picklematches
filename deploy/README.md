@@ -64,6 +64,18 @@ cd /var/www/pickleball-prod && ./deploy/deploy.sh prod
 ./deploy/remote-deploy.sh prod
 ```
 
+## 首頁轉去大會報分表
+
+在該環境 `.env` 設定（建議用程式，可帶 `#standings` 錨點）：
+
+```bash
+HOME_REDIRECT=/e/match-ap-2026#standings
+```
+
+改完重啟 Node：`sudo systemctl restart pickleball-prod`
+
+若只用 Apache `Redirect` / `RewriteRule`，`#` 在設定檔裡是註解符號，通常**無法**可靠轉到 `#standings`；最多轉到 `/e/match-ap-2026`。
+
 ## Cloudflare
 
 - SSL/TLS：**Flexible**
