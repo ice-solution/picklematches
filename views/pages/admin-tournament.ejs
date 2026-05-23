@@ -179,7 +179,9 @@
         <section class="mt-4 rounded border border-sky-900/60 bg-sky-950/20 p-5">
           <h3 class="text-sm font-semibold text-sky-300">由小組賽產生淘汰賽（出線 → 畫鬼腳）</h3>
           <p class="mt-1 text-xs text-slate-400">
-            會依小組賽<strong class="text-slate-200">已完賽</strong>場次計算名次（勝場→得失分→得分），取每組前 N 名，建立出線隊伍與淘汰賽第一輪（含 BYE），並生成後續輪次 TBD 場次供你再編輯對位。
+            會依小組賽<strong class="text-slate-200">已完賽</strong>場次計算名次，取每組前 N 名出線。
+            <strong class="text-slate-200">4 隊（2 組×前 2）</strong>：自動建立 <strong class="text-slate-200">準決賽 2 場</strong>（A1 對 B2、A2 對 B1）、<strong class="text-slate-200">決賽</strong>與<strong class="text-slate-200">季軍賽</strong>（準決賽敗者對戰）；準決賽完賽後會自動填入決賽／季軍賽隊伍。
+            其他人數則建立首輪及決賽 TBD 占位。
           </p>
           <% if (typeof query !== 'undefined' && query && query.gen) { %>
             <% if (query.gen === 'ok') { %>

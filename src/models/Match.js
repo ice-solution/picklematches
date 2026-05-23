@@ -38,6 +38,9 @@ const matchSchema = new mongoose.Schema(
       b: { type: Number, min: 0, default: 0 },
     },
     winnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Team' },
+    /** 淘汰賽：完賽後勝者／敗者填入對應占位隊名（如 W-SF1、L-SF1） */
+    knockoutWinnerSlot: { type: String, trim: true, default: null },
+    knockoutLoserSlot: { type: String, trim: true, default: null },
   },
   { timestamps: true }
 );

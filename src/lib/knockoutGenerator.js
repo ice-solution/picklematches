@@ -41,12 +41,12 @@ function letterForIndex(i) {
   return String.fromCharCode(A + hi) + String.fromCharCode(A + lo);
 }
 
-async function fillKnockoutSlots(koTournamentId, slotToTeamId) {
+export async function fillKnockoutSlots(koTournamentId, slotToTeamId) {
   const matches = await Match.find({ tournamentId: koTournamentId }).populate('teamA teamB').exec();
   const bye = await Team.findOne({ tournamentId: koTournamentId, name: 'BYE', isPlaceholder: true }).lean();
   const byeId = bye?._id ? String(bye._id) : null;
 
-  let updated = 0;
+  const updatedIds = [];
   for (const m of matches) {
     const a = m.teamA;
     const b = m.teamB;
@@ -78,10 +78,10 @@ async function fillKnockoutSlots(koTournamentId, slotToTeamId) {
 
     if (changed) {
       await m.save();
-      updated += 1;
+      updatedIds.push(m._id);
     }
   }
-  return updated;
+  return updatedIds;
 }
 
 async function ensurePlaceholderTeam(tournamentId, name) {
@@ -186,8 +186,8 @@ export async function generateKnockoutFromGroup({
         }
       }
     }
-    const updatedMatches = await fillKnockoutSlots(ko._id, slotToTeamId);
-    return { ok: true, createdTeams: koTeamIds.length, createdMatches: 0, updatedMatches };
+    const filledIds = await fillKnockoutSlots(ko._id, slotToTeamId);
+    return { ok: true, createdTeams: koTeamIds.length, createdMatches: 0, updatedMatches: filledIds.length };
   }
 
   const bracketSize = nextPow2(koTeamIds.length);
@@ -229,9 +229,10 @@ export async function generateKnockoutFromGroup({
       for (let i = 0; i < takeN; i++) {
         const teamA = r1[i].koTeamId; // g1 第 i+1 名
         const teamB = r2[takeN - 1 - i].koTeamId; // g2 反向
+        const sfIndex = createdMatchIds.length;
         const m = await Match.create({
           tournamentId: ko._id,
-          round: firstRoundLabel,
+          round: koTeamIds.length === 4 ? '準決賽' : firstRoundLabel,
           matchFormat: MATCH_FORMAT.BEST_OF_3,
           teamA,
           teamB,
@@ -241,6 +242,12 @@ export async function generateKnockoutFromGroup({
           completedGames: [],
           currentGameIndex: 0,
           currentPoints: { a: 0, b: 0 },
+          ...(koTeamIds.length === 4
+            ? {
+                knockoutWinnerSlot: `W-SF${sfIndex + 1}`,
+                knockoutLoserSlot: `L-SF${sfIndex + 1}`,
+              }
+            : {}),
         });
         createdMatchIds.push(m._id);
       }
@@ -261,14 +268,16 @@ export async function generateKnockoutFromGroup({
       seeds[i] = koTeamIds[i];
     }
     const pairs = seedPairs(bracketSize);
+    let sfIdx = 0;
     for (const [s1, s2] of pairs) {
       const teamA = seeds[s1 - 1];
       const teamB = seeds[s2 - 1];
       const isBye = String(teamA) !== String(byeTeamId) && String(teamB) === String(byeTeamId);
+      const isFourTeamSemi = koTeamIds.length === 4 && !isBye;
 
       const m = await Match.create({
         tournamentId: ko._id,
-        round: firstRoundLabel,
+        round: isFourTeamSemi ? '準決賽' : firstRoundLabel,
         matchFormat: MATCH_FORMAT.BEST_OF_3,
         teamA,
         teamB,
@@ -279,34 +288,77 @@ export async function generateKnockoutFromGroup({
         currentGameIndex: 0,
         currentPoints: { a: 0, b: 0 },
         winnerId: isBye ? teamA : undefined,
+        ...(isFourTeamSemi
+          ? {
+              knockoutWinnerSlot: `W-SF${sfIdx + 1}`,
+              knockoutLoserSlot: `L-SF${sfIdx + 1}`,
+            }
+          : {}),
       });
+      if (isFourTeamSemi) sfIdx += 1;
       createdMatchIds.push(m._id);
     }
   }
 
-  // Create next rounds with TBD placeholders (so ladder can display columns)
-  let size = bracketSize / 2;
-  while (size >= 2) {
-    const label = roundLabelForSize(size);
-    for (let i = 0; i < size / 2; i++) {
-      const t1 = await ensurePlaceholderTeam(ko._id, `TBD-${label}-${i * 2 + 1}`);
-      const t2 = await ensurePlaceholderTeam(ko._id, `TBD-${label}-${i * 2 + 2}`);
-      const m = await Match.create({
-        tournamentId: ko._id,
-        round: label,
-        matchFormat: MATCH_FORMAT.BEST_OF_3,
-        teamA: t1,
-        teamB: t2,
-        court: '',
-        scheduledTime: '',
-        status: 'scheduled',
-        completedGames: [],
-        currentGameIndex: 0,
-        currentPoints: { a: 0, b: 0 },
-      });
-      createdMatchIds.push(m._id);
+  // 4 強（2 組各前 2）：準決賽 → 決賽 + 季軍賽（敗者對戰）
+  if (koTeamIds.length === 4) {
+    const w1 = await ensurePlaceholderTeam(ko._id, 'W-SF1');
+    const w2 = await ensurePlaceholderTeam(ko._id, 'W-SF2');
+    const l1 = await ensurePlaceholderTeam(ko._id, 'L-SF1');
+    const l2 = await ensurePlaceholderTeam(ko._id, 'L-SF2');
+
+    const finalM = await Match.create({
+      tournamentId: ko._id,
+      round: '決賽',
+      matchFormat: MATCH_FORMAT.BEST_OF_3,
+      teamA: w1,
+      teamB: w2,
+      court: '',
+      scheduledTime: '',
+      status: 'scheduled',
+      completedGames: [],
+      currentGameIndex: 0,
+      currentPoints: { a: 0, b: 0 },
+    });
+    const bronzeM = await Match.create({
+      tournamentId: ko._id,
+      round: '季軍賽',
+      matchFormat: MATCH_FORMAT.BEST_OF_3,
+      teamA: l1,
+      teamB: l2,
+      court: '',
+      scheduledTime: '',
+      status: 'scheduled',
+      completedGames: [],
+      currentGameIndex: 0,
+      currentPoints: { a: 0, b: 0 },
+    });
+    createdMatchIds.push(finalM._id, bronzeM._id);
+  } else {
+    // 其他規模：決賽等 TBD 占位（無季軍賽）
+    let size = bracketSize / 2;
+    while (size >= 2) {
+      const label = roundLabelForSize(size);
+      for (let i = 0; i < size / 2; i++) {
+        const t1 = await ensurePlaceholderTeam(ko._id, `TBD-${label}-${i * 2 + 1}`);
+        const t2 = await ensurePlaceholderTeam(ko._id, `TBD-${label}-${i * 2 + 2}`);
+        const m = await Match.create({
+          tournamentId: ko._id,
+          round: label,
+          matchFormat: MATCH_FORMAT.BEST_OF_3,
+          teamA: t1,
+          teamB: t2,
+          court: '',
+          scheduledTime: '',
+          status: 'scheduled',
+          completedGames: [],
+          currentGameIndex: 0,
+          currentPoints: { a: 0, b: 0 },
+        });
+        createdMatchIds.push(m._id);
+      }
+      size = size / 2;
     }
-    size = size / 2;
   }
 
   return { ok: true, createdTeams: koTeamIds.length, createdMatches: createdMatchIds.length };
