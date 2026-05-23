@@ -4,6 +4,7 @@ import { loadEventBySlug } from '../middleware/loadEvent.js';
 import { Match } from '../models/Match.js';
 import { Tournament } from '../models/Tournament.js';
 import { getOrCreateScoreboard, normalizeScoreboardSlot } from '../models/LiveScoreboard.js';
+import { getEventGroupStandings } from '../lib/groupStandings.js';
 
 export const publicWebRouter = Router({ mergeParams: true });
 
@@ -18,11 +19,16 @@ publicWebRouter.get('/:eventSlug', loadEventBySlug, async (req, res, next) => {
       .sort({ scheduledTime: 1, createdAt: 1 })
       .lean();
 
+    const groupStandingsList = await getEventGroupStandings(event._id);
+    const highlightTeam = String(req.query.team || req.query.q || '').trim();
+
     res.render('pages/event', {
       title: event.name,
       event,
       tournaments,
       matches,
+      groupStandingsList,
+      highlightTeam,
       eventIdStr: event._id.toString(),
     });
   } catch (e) {

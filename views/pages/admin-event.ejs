@@ -135,8 +135,10 @@
     </section>
 
     <p class="mt-10 flex flex-wrap gap-4">
-      <a href="/admin/events/<%= event._id %>/matches-summary" class="text-emerald-400 underline">賽果總覽</a>
-      <a href="/e/<%= event.slug %>" target="_blank" rel="noopener" class="text-sky-400 underline">開啟前台</a>
+      <a href="/admin/events/<%= event._id %>/matches-summary" class="text-emerald-400 underline">賽果總覽／小組報分表</a>
+      <a href="/admin/events/<%= event._id %>/matches-summary#standings" class="text-emerald-400 underline">小組報分表</a>
+      <a href="/e/<%= event.slug %>#standings" target="_blank" rel="noopener" class="text-sky-400 underline">觀眾前台報分表 ↗</a>
+      <a href="/e/<%= event.slug %>" target="_blank" rel="noopener" class="text-sky-400 underline">觀眾前台賽程 ↗</a>
     </p>
   </main>
 <%- include('../partials/admin-frame-end') %>

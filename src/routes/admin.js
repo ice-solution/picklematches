@@ -28,6 +28,7 @@ import {
   buildTournamentImportTemplateSheet,
 } from '../lib/tournamentImport.js';
 import { buildKnockoutLadderColumns } from '../lib/knockoutLadder.js';
+import { getEventGroupStandings } from '../lib/groupStandings.js';
 import { normalizeLoginId, LOGIN_ID_RE } from '../lib/loginId.js';
 import { generateKnockoutFromGroup } from '../lib/knockoutGenerator.js';
 import { getOrCreateScoreboard } from '../models/LiveScoreboard.js';
@@ -247,11 +248,17 @@ adminRouter.get('/events/:eventId/matches-summary', requireStaff, async (req, re
     matches.forEach((m) => {
       m.tournamentName = tName[String(m.tournamentId)] || '—';
     });
+    const groupStandingsList = await getEventGroupStandings(event._id);
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const publicEventUrl = `${baseUrl}/e/${event.slug}`;
+
     res.render('pages/admin-event-matches', {
       title: `賽果總覽 — ${event.name}`,
       event,
       tournaments,
       matches,
+      groupStandingsList,
+      publicEventUrl,
       userEmail: req.session.email,
     });
   } catch (e) {

@@ -103,3 +103,32 @@ export async function computeGroupStandings(tournamentId) {
   return groupBlocks;
 }
 
+/**
+ * 大會底下所有小組賽賽事的報分表（供前台顯示）
+ * @returns {Promise<Array<{ tournament: object, advancePerGroup: number, groups: Array }>>}
+ */
+export async function getEventGroupStandings(eventId) {
+  const eid = new mongoose.Types.ObjectId(eventId);
+  const tournaments = await Tournament.find({ eventId: eid, phase: 'group' })
+    .sort({ order: 1, createdAt: 1 })
+    .lean();
+
+  const list = [];
+  for (const t of tournaments) {
+    const blocks = await computeGroupStandings(t._id);
+    const advanceN = Math.max(1, t.advancePerGroup ?? 2);
+    for (const block of blocks) {
+      block.rows.forEach((row, idx) => {
+        row.rank = idx + 1;
+        row.advances = idx < advanceN;
+      });
+    }
+    list.push({
+      tournament: t,
+      advancePerGroup: advanceN,
+      groups: blocks,
+    });
+  }
+  return list;
+}
+

@@ -5,6 +5,7 @@ import { Tournament } from '../models/Tournament.js';
 import { Match } from '../models/Match.js';
 import { DisplayContent } from '../models/DisplayContent.js';
 import { getOrCreateScoreboard, normalizeScoreboardSlot } from '../models/LiveScoreboard.js';
+import { getEventGroupStandings } from '../lib/groupStandings.js';
 
 export const publicApiRouter = Router();
 
@@ -17,6 +18,13 @@ publicApiRouter.get('/events/:slug', async (req, res) => {
   const event = await getEventBySlug(req.params.slug);
   if (!event) return res.status(404).json({ error: 'not_found' });
   res.json({ event });
+});
+
+publicApiRouter.get('/events/:slug/standings', async (req, res) => {
+  const event = await getEventBySlug(req.params.slug);
+  if (!event) return res.status(404).json({ error: 'not_found' });
+  const standings = await getEventGroupStandings(event._id);
+  res.json({ event: { id: event._id, slug: event.slug, name: event.name }, standings });
 });
 
 publicApiRouter.get('/events/:slug/matches', async (req, res) => {

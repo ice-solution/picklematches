@@ -7,7 +7,71 @@
   <h1 class="mt-4 text-2xl font-bold text-white">賽果總覽</h1>
   <p class="mt-1 text-sm text-slate-400"><%= event.name %> — 含本大會下所有賽事場次，可點「編輯」修改資料或進場內計分。</p>
 
-  <div class="mt-8 overflow-x-auto">
+  <p class="mt-4 flex flex-wrap gap-4 text-sm">
+    <% if (typeof groupStandingsList !== 'undefined' && groupStandingsList && groupStandingsList.length) { %>
+      <a href="#standings" class="font-semibold text-emerald-400 underline">↓ 小組報分表</a>
+    <% } %>
+    <a href="#schedule" class="text-sky-400 underline">↓ 場次列表</a>
+    <a href="<%= typeof publicEventUrl !== 'undefined' ? publicEventUrl : '/e/' + event.slug %>" target="_blank" rel="noopener" class="text-sky-400 underline">觀眾前台 ↗</a>
+    <% if (typeof groupStandingsList !== 'undefined' && groupStandingsList && groupStandingsList.length) { %>
+      <a href="<%= publicEventUrl %>#standings" target="_blank" rel="noopener" class="text-violet-400 underline">觀眾報分表 ↗</a>
+    <% } %>
+  </p>
+
+  <% if (typeof groupStandingsList !== 'undefined' && groupStandingsList && groupStandingsList.length) { %>
+  <%- include('../partials/group-standings', { groupStandingsList: groupStandingsList, highlightTeam: '' }) %>
+  <% } else { %>
+  <p class="mt-8 rounded border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm text-slate-500">
+    此大會尚無「小組賽」類型賽事，或尚未建立組別／隊伍。報分表只會統計<strong class="text-slate-400">小組賽</strong>且<strong class="text-slate-400">已完賽</strong>的場次。
+  </p>
+  <% } %>
+
+  <% if (typeof groupStandingsList !== 'undefined' && groupStandingsList && groupStandingsList.length) { %>
+  <script>
+    (function () {
+      var form = document.getElementById('team-lookup-form');
+      if (!form) return;
+      function norm(s) { return String(s || '').trim().toLowerCase(); }
+      function applyTeamHighlight(query) {
+        var q = norm(query);
+        var rows = document.querySelectorAll('.standings-row');
+        var msg = document.getElementById('team-lookup-msg');
+        rows.forEach(function (tr) {
+          var name = tr.getAttribute('data-team') || '';
+          var match = q && (norm(name) === q || norm(name).indexOf(q) !== -1 || q.indexOf(norm(name)) !== -1);
+          tr.classList.toggle('ring-2', !!match);
+          tr.classList.toggle('ring-amber-400', !!match);
+          tr.classList.toggle('bg-amber-950/40', !!match);
+        });
+        if (!msg) return;
+        if (!q) { msg.classList.add('hidden'); msg.textContent = ''; return; }
+        var hit = document.querySelector('.standings-row.ring-amber-400');
+        if (hit) {
+          msg.textContent = (hit.getAttribute('data-team') || '') + '：' + (hit.getAttribute('data-group') || '') + ' 第 ' + (hit.getAttribute('data-rank') || '') + ' 名';
+          msg.classList.remove('hidden');
+          hit.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          msg.textContent = '找不到隊伍「' + query + '」';
+          msg.classList.remove('hidden');
+        }
+      }
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var input = document.getElementById('team-lookup-input');
+        applyTeamHighlight(input ? input.value.trim() : '');
+      });
+      var clearBtn = document.getElementById('team-lookup-clear');
+      if (clearBtn) clearBtn.addEventListener('click', function () {
+        var input = document.getElementById('team-lookup-input');
+        if (input) input.value = '';
+        applyTeamHighlight('');
+      });
+    })();
+  </script>
+  <% } %>
+
+  <section id="schedule" class="mt-10 overflow-x-auto">
+    <h2 class="mb-4 text-lg font-semibold text-white">場次列表</h2>
     <table class="w-full min-w-[800px] text-left text-sm">
       <thead>
         <tr class="border-b border-slate-800 text-slate-400">
@@ -41,6 +105,6 @@
         <% }); %>
       </tbody>
     </table>
-  </div>
+  </section>
 </main>
 <%- include('../partials/admin-frame-end') %>
