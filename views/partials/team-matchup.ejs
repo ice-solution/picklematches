@@ -1,0 +1,27 @@
+<%
+  var ta = typeof teamA !== 'undefined' ? teamA : null;
+  var tb = typeof teamB !== 'undefined' ? teamB : null;
+  var vsClass =
+    typeof vsClass !== 'undefined' && vsClass ? vsClass : 'shrink-0 px-3 text-xs font-medium text-slate-500';
+  var wrapClass =
+    typeof wrapClass !== 'undefined' && wrapClass
+      ? wrapClass
+      : 'team-matchup flex w-full min-w-[220px] max-w-md items-center justify-between gap-2';
+%>
+<div class="<%= wrapClass %>">
+  <div class="min-w-0 flex-1 pr-1">
+    <%- include('team-display', {
+      team: ta,
+      align: 'left',
+      secondaryClass: 'block max-w-[11rem] truncate text-xs text-slate-500',
+    }) %>
+  </div>
+  <span class="<%= vsClass %>">vs</span>
+  <div class="min-w-0 flex-1 pl-1 text-right">
+    <%- include('team-display', {
+      team: tb,
+      align: 'right',
+      secondaryClass: 'block max-w-[11rem] truncate text-xs text-slate-500 ml-auto',
+    }) %>
+  </div>
+</div>

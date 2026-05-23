@@ -16,9 +16,10 @@ import { refereeRouter } from './routes/referee.js';
 import { refereeApiRouter } from './routes/refereeApi.js';
 import { adminApiRouter } from './routes/adminApi.js';
 import { scoreboardApiRouter } from './routes/scoreboardApi.js';
-import { scoreSummary, scoreDisplayParts, formatLabel, gamesLine } from './lib/viewHelpers.js';
+import { scoreSummary, scoreDisplayParts, formatLabel, gamesLine, matchStatusLabel, formatTeamWithCode } from './lib/viewHelpers.js';
 import { isDeuce } from './lib/scoring.js';
-import { displayMatchTime } from './lib/matchTime.js';
+import { displayMatchTime, displayMatchSchedule } from './lib/matchTime.js';
+import { formatDateDisplayZh } from './lib/datetime.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, '..');
@@ -39,6 +40,10 @@ export function createApp() {
   app.locals.gamesLine = gamesLine;
   app.locals.isDeuce = isDeuce;
   app.locals.displayMatchTime = displayMatchTime;
+  app.locals.displayMatchSchedule = displayMatchSchedule;
+  app.locals.formatDateDisplayZh = formatDateDisplayZh;
+  app.locals.matchStatusLabel = matchStatusLabel;
+  app.locals.formatTeamWithCode = formatTeamWithCode;
 
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({ origin: true, credentials: true }));

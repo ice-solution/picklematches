@@ -1,0 +1,31 @@
+<%
+  var t = typeof team !== 'undefined' ? team : null;
+  var align = typeof align !== 'undefined' ? align : 'left';
+  var code = t && t.code ? String(t.code).trim() : '';
+  var name = t && t.name ? String(t.name).trim() : '';
+  var alignClass =
+    align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left';
+  var checkedIn = !!(t && t.checkedIn);
+  var _primaryClass =
+    typeof primaryClass !== 'undefined' && primaryClass
+      ? primaryClass
+      : checkedIn && code
+        ? 'font-semibold text-emerald-400'
+        : 'font-medium text-slate-100';
+  var _secondaryClass =
+    typeof secondaryClass !== 'undefined' && secondaryClass
+      ? secondaryClass
+      : 'block text-xs text-slate-500';
+%>
+<% if (!t || (!code && !name)) { %>
+  <span class="team-display inline-block leading-snug <%= alignClass %> text-slate-500">—</span>
+<% } else if (code) { %>
+  <span class="team-display inline-block leading-snug <%= alignClass %>">
+    <span class="team-code-label <%= _primaryClass %>" data-team-code="<%= code %>"><%= code %></span>
+    <% if (name) { %><span class="<%= _secondaryClass %>"><%= name %></span><% } %>
+  </span>
+<% } else { %>
+  <span class="team-display inline-block leading-snug <%= alignClass %>">
+    <span class="<%= _primaryClass %>"><%= name %></span>
+  </span>
+<% } %>

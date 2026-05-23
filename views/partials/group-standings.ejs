@@ -1,39 +1,33 @@
 <% if (typeof groupStandingsList !== 'undefined' && groupStandingsList && groupStandingsList.length) { %>
-<section id="standings" class="mt-10">
-  <div class="flex flex-wrap items-end justify-between gap-4 border-b border-slate-800 pb-4">
-    <div>
-      <h2 class="text-xl font-bold text-emerald-400">小組賽報分表</h2>
-      <p class="mt-1 text-sm text-slate-400">依<strong class="text-slate-300">已完賽</strong>場次計算；標記完賽後會依<strong class="text-slate-300">比分較高者為勝</strong>（多局則先比贏局數）。積分 → 得失分 → 得分。淺綠底色為晉級區。</p>
-    </div>
-    <form id="team-lookup-form" class="flex flex-wrap items-end gap-2" role="search">
-      <div>
-        <label for="team-lookup-input" class="block text-xs text-slate-500">查詢隊伍名次</label>
-        <input
-          id="team-lookup-input"
-          type="search"
-          placeholder="輸入隊伍名稱"
-          value="<%= typeof highlightTeam !== 'undefined' ? highlightTeam : '' %>"
-          class="mt-1 w-48 min-w-[10rem] rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white sm:w-56"
-        />
-      </div>
-      <button type="submit" class="rounded bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600">查看</button>
-      <button type="button" id="team-lookup-clear" class="rounded border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800">清除</button>
-    </form>
+<section <% if (typeof hideSectionHeading === 'undefined' || !hideSectionHeading) { %>id="standings"<% } %> class="mt-10">
+  <div class="border-b border-slate-800 pb-4">
+    <% if (typeof hideSectionHeading === 'undefined' || !hideSectionHeading) { %>
+    <h2 class="text-xl font-bold text-emerald-400">小組賽報分表</h2>
+    <% } else { %>
+    <h3 class="text-lg font-bold text-emerald-400">小組報分表</h3>
+    <% } %>
+    <p class="mt-1 text-sm text-slate-400">依<strong class="text-slate-300">已完賽</strong>場次計算；標記完賽後會依<strong class="text-slate-300">比分較高者為勝</strong>（多局則先比贏局數）。積分 → 得失分 → 得分。淺綠底色為晉級區。</p>
   </div>
-  <p id="team-lookup-msg" class="mt-3 hidden text-sm text-amber-300"></p>
 
   <% groupStandingsList.forEach(function (tblock) { %>
     <div class="mt-8">
       <h3 class="text-lg font-semibold text-white"><%= tblock.tournament.name %></h3>
-      <p class="mt-1 text-xs text-slate-500">各組前 <%= tblock.advancePerGroup %> 名晉級</p>
-      <div class="mt-4 grid gap-6 lg:grid-cols-2">
+      <p class="mt-1 text-xs text-slate-500">
+        <% if (tblock.tournament.competitionDate && typeof formatDateDisplayZh === 'function') { %>
+          <span class="text-sky-400/90"><%= formatDateDisplayZh(tblock.tournament.competitionDate) %></span>
+          <span class="text-slate-600"> · </span>
+        <% } %>
+        各組前 <%= tblock.advancePerGroup %> 名晉級
+      </p>
+      <div class="mt-4 grid gap-4 sm:gap-6 lg:grid-cols-2">
         <% tblock.groups.forEach(function (gblock) { %>
           <div class="overflow-x-auto rounded border border-slate-800 bg-slate-900/40">
             <p class="border-b border-slate-800 bg-slate-800/50 px-3 py-2 text-center text-sm font-bold text-sky-300"><%= gblock.group.name %></p>
-            <table class="w-full text-left text-sm standings-table">
+            <table class="w-full min-w-[280px] text-left text-xs sm:text-sm standings-table">
               <thead>
                 <tr class="border-b border-slate-800 text-xs text-slate-500">
                   <th class="px-2 py-2 text-center w-10">名次</th>
+                  <th class="px-2 py-2 text-center w-12">代號</th>
                   <th class="px-2 py-2">隊伍</th>
                   <th class="px-2 py-2 text-center">場</th>
                   <th class="px-2 py-2 text-center">勝</th>
@@ -44,16 +38,18 @@
               </thead>
               <tbody>
                 <% if (!gblock.rows.length) { %>
-                  <tr><td colspan="7" class="px-3 py-4 text-center text-slate-500">尚無隊伍</td></tr>
+                  <tr><td colspan="8" class="px-3 py-4 text-center text-slate-500">尚無隊伍</td></tr>
                 <% } %>
                 <% gblock.rows.forEach(function (row) { %>
                   <tr
                     class="standings-row border-b border-slate-800/60 <%= row.advances ? 'bg-emerald-950/35' : '' %>"
                     data-team="<%= row.name %>"
+                    data-team-code="<%= row.code || '' %>"
                     data-rank="<%= row.rank %>"
                     data-group="<%= gblock.group.name %>"
                   >
                     <td class="px-2 py-2 text-center font-bold tabular-nums text-slate-300"><%= row.rank %></td>
+                    <td class="standings-code px-2 py-2 text-center font-mono text-xs font-bold <%= row.checkedIn ? 'text-emerald-400' : 'text-sky-300/90' %>"><%= row.code || '—' %></td>
                     <td class="px-2 py-2 font-medium text-slate-100"><%= row.name %></td>
                     <td class="px-2 py-2 text-center tabular-nums text-slate-400"><%= row.played %></td>
                     <td class="px-2 py-2 text-center tabular-nums text-emerald-400/90"><%= row.wins %></td>

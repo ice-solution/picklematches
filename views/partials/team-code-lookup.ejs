@@ -1,0 +1,21 @@
+<div class="mt-4 rounded-lg border border-slate-800 bg-slate-900/50 px-4 py-3">
+  <form id="team-code-lookup-form" class="flex flex-wrap items-end gap-2" role="search">
+    <div>
+      <label for="team-code-lookup-input" class="block text-xs text-slate-500">查詢編號</label>
+      <input
+        id="team-code-lookup-input"
+        type="search"
+        inputmode="text"
+        autocomplete="off"
+        autocapitalize="characters"
+        placeholder="例如 A1、B2"
+        value="<%= typeof highlightCode !== 'undefined' ? highlightCode : '' %>"
+        class="mt-1 w-28 min-w-[5rem] rounded border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm uppercase text-white sm:w-32"
+      />
+    </div>
+    <button type="submit" class="rounded bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600">查看</button>
+    <button type="button" id="team-code-lookup-clear" class="rounded border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800">清除</button>
+  </form>
+  <p id="team-code-lookup-msg" class="mt-2 hidden text-sm text-orange-300"></p>
+  <p class="mt-1 text-xs text-slate-600">只會在目前選中的<strong class="text-slate-400">比賽組別</strong>內搜尋；符合的賽程會以<strong class="text-orange-400">粗橙色框</strong>標示。</p>
+</div>

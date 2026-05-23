@@ -6,6 +6,12 @@ const tournamentSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     /** group: 小組賽, knockout: 淘汰賽 — 同一 Event 下可有多筆 */
     phase: { type: String, enum: ['group', 'knockout'], required: true },
+    /** 淘汰賽對應的小組賽賽事（產生淘汰或後台綁定） */
+    sourceGroupTournamentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Tournament',
+      default: null,
+    },
     /** 各組取前 N 名晉級（不含最佳第三名） */
     advancePerGroup: { type: Number, min: 1, default: 2 },
     /**
@@ -15,6 +21,8 @@ const tournamentSchema = new mongoose.Schema(
     groupWinPoints: { type: Number, default: 1 },
     groupLossPoints: { type: Number, default: -1 },
     order: { type: Number, default: 0 },
+    /** 比賽日期 YYYY-MM-DD（前台賽程顯示用） */
+    competitionDate: { type: String, trim: true, default: '' },
   },
   { timestamps: true }
 );

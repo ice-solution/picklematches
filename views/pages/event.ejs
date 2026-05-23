@@ -1,61 +1,102 @@
 <%- include('../partials/head', { title: event.name }) %>
 <body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
-  <main class="mx-auto max-w-5xl px-4 py-10">
-    <header class="border-b border-slate-800 pb-6">
-      <h1 class="text-2xl font-bold text-emerald-400"><%= event.name %></h1>
-      <p class="mt-2 text-sm text-slate-400">即時更新（比分變更後自動刷新）</p>
-      <% if (typeof groupStandingsList !== 'undefined' && groupStandingsList && groupStandingsList.length) { %>
-      <nav class="mt-4 flex flex-wrap gap-3 text-sm">
-        <a href="#standings" class="rounded bg-emerald-800/60 px-3 py-1.5 font-semibold text-emerald-100 hover:bg-emerald-700/60">小組報分表</a>
-        <a href="#schedule" class="rounded border border-slate-700 px-3 py-1.5 text-slate-300 hover:bg-slate-800">賽程表</a>
+  <main class="mx-auto max-w-6xl px-3 py-6 sm:px-4 sm:py-10">
+    <header class="border-b border-slate-800 pb-4 sm:pb-6">
+      <h1 class="text-xl font-bold text-emerald-400 sm:text-2xl"><%= event.name %></h1>
+      <p class="mt-2 text-xs text-slate-400 sm:text-sm">即時更新（比分變更後自動刷新）</p>
+      <nav class="mt-4 space-y-3 text-sm" id="event-nav">
+        <div class="-mx-3 flex items-center gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+          <% if (typeof podiumsWithResults !== 'undefined' && podiumsWithResults && podiumsWithResults.length) { %>
+            <button
+              type="button"
+              class="comp-tab rounded border border-amber-700/60 px-3 py-1.5 text-amber-200 hover:bg-amber-950/40 <%= activeCompKey === '__podium__' ? 'bg-amber-800/80 font-semibold text-amber-50' : '' %>"
+              data-comp-key="__podium__"
+            >獎台總覽</button>
+          <% } %>
+          <span class="text-xs text-slate-500">比賽日期</span>
+          <% (typeof dateGroups !== 'undefined' ? dateGroups : []).forEach(function (dg) { %>
+            <button
+              type="button"
+              class="date-tab rounded px-3 py-1.5 font-medium <%= activeDateKey === dg.key ? 'bg-sky-800/70 text-sky-50' : 'border border-slate-700 text-slate-300 hover:bg-slate-800' %>"
+              data-date-key="<%= dg.key %>"
+            ><%= dg.label %></button>
+          <% }); %>
+        </div>
+        <div id="comp-nav-rows" class="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:overflow-visible sm:px-0">
+          <% (typeof dateGroups !== 'undefined' ? dateGroups : []).forEach(function (dg) { %>
+            <div
+              class="date-comp-nav flex min-w-min gap-2 pb-1 sm:min-w-0 sm:flex-wrap <%= activeDateKey === dg.key ? '' : 'hidden' %>"
+              data-date-key="<%= dg.key %>"
+            >
+              <span class="hidden shrink-0 text-xs text-slate-500 sm:inline sm:mr-1">組別</span>
+              <% dg.competitions.forEach(function (c) { %>
+                <button
+                  type="button"
+                  class="comp-tab rounded px-3 py-1.5 font-medium <%= activeCompKey === c.key ? 'bg-emerald-800/70 text-emerald-50' : 'border border-slate-700 text-slate-300 hover:bg-slate-800' %>"
+                  data-comp-key="<%= c.key %>"
+                  data-date-key="<%= dg.key %>"
+                ><%= c.name %></button>
+              <% }); %>
+              <% dg.orphanKnockouts.forEach(function (o) { %>
+                <button
+                  type="button"
+                  class="comp-tab rounded border border-slate-700 px-3 py-1.5 text-slate-300 hover:bg-slate-800 <%= activeCompKey === o.key ? 'bg-emerald-800/70 text-emerald-50 font-medium' : '' %>"
+                  data-comp-key="<%= o.key %>"
+                  data-date-key="<%= dg.key %>"
+                ><%= o.name %></button>
+              <% }); %>
+            </div>
+          <% }); %>
+        </div>
       </nav>
-      <% } %>
+      <%- include('../partials/team-code-lookup', {
+        highlightCode: typeof highlightCode !== 'undefined' ? highlightCode : (typeof highlightTeam !== 'undefined' ? highlightTeam : ''),
+      }) %>
     </header>
 
-    <%- include('../partials/group-standings', { groupStandingsList: typeof groupStandingsList !== 'undefined' ? groupStandingsList : [], highlightTeam: typeof highlightTeam !== 'undefined' ? highlightTeam : '' }) %>
-
-    <section id="schedule" class="mt-10 overflow-x-auto">
-      <h2 class="mb-4 text-xl font-bold text-white">賽程表</h2>
-      <table class="w-full min-w-[960px] text-left text-sm">
-        <thead>
-          <tr class="border-b border-slate-800 text-slate-400">
-            <th class="py-2 pr-4">直播比分頁</th>
-            <th class="py-2 pr-4">比賽組別</th>
-            <th class="py-2 pr-4">開賽</th>
-            <th class="py-2 pr-4">場地</th>
-            <th class="py-2 pr-4">隊伍 A</th>
-            <th class="py-2 pr-4">隊伍 B</th>
-            <th class="py-2 pr-4">比分</th>
-            <th class="py-2">狀態</th>
-          </tr>
-        </thead>
-        <tbody id="match-rows">
-          <% matches.forEach(function (m) { %>
-            <tr class="border-b border-slate-800/80 match-row" data-id="<%= m._id %>">
-              <td class="py-3 pr-4">
-                <a
-                  class="inline-block rounded bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-100 hover:bg-slate-700"
-                  href="/e/<%= event.slug %>/screen/<%= m._id %>"
-                  target="_blank"
-                  rel="noopener"
-                >開啟直播</a>
-              </td>
-              <td class="py-3 pr-4 text-slate-200">
-                <% var divLabel = [m.tournamentName, m.scheduleGroupLabel].filter(Boolean).join(' · '); %>
-                <%= divLabel || '—' %>
-              </td>
-              <td class="py-3 pr-4 font-mono text-slate-300"><%= displayMatchTime(m) %></td>
-              <td class="py-3 pr-4 text-slate-300"><%= m.court || '—' %></td>
-              <td class="py-3 pr-4"><%= m.teamA && m.teamA.name ? m.teamA.name : '—' %></td>
-              <td class="py-3 pr-4"><%= m.teamB && m.teamB.name ? m.teamB.name : '—' %></td>
-              <td class="py-3 pr-4 score-cell"><%- include('../partials/score-display', { m: m, scoreMainClass: 'font-mono text-sm font-semibold text-emerald-300', scoreDetailClass: 'mt-0.5 block font-mono text-xs text-slate-400' }) %></td>
-              <td class="py-3"><%= m.status %></td>
-            </tr>
-          <% }); %>
-        </tbody>
-      </table>
+    <% if (typeof podiumsWithResults !== 'undefined' && podiumsWithResults && podiumsWithResults.length) { %>
+    <section
+      id="podium"
+      class="competition-panel mt-10 scroll-mt-24 <%= activeCompKey === '__podium__' ? '' : 'hidden' %>"
+      data-comp-key="__podium__"
+    >
+      <h2 class="text-xl font-bold text-amber-300">獎台總覽</h2>
+      <div class="mt-8 grid gap-10 lg:grid-cols-2">
+        <% podiumsWithResults.forEach(function (item) { %>
+          <div class="rounded-lg border border-slate-800 bg-slate-900/40 p-5">
+            <h3 class="mb-4 text-center text-lg font-semibold text-white"><%= item.name %></h3>
+            <%- include('../partials/podium-display', { podium: item.podium }) %>
+          </div>
+        <% }); %>
+      </div>
     </section>
-    <p class="mt-8 text-center">
+    <% } %>
+
+    <% (typeof dateGroups !== 'undefined' ? dateGroups : []).forEach(function (dg) { %>
+      <% dg.competitions.forEach(function (comp) { %>
+        <%- include('../partials/event-competition-panel', {
+          comp: comp,
+          dateKey: dg.key,
+          event: event,
+          highlightTeam: typeof highlightTeam !== 'undefined' ? highlightTeam : '',
+          activeCompKey: typeof activeCompKey !== 'undefined' ? activeCompKey : '',
+          activeDateKey: typeof activeDateKey !== 'undefined' ? activeDateKey : '',
+        }) %>
+      <% }); %>
+      <% dg.orphanKnockouts.forEach(function (comp) { %>
+        <%- include('../partials/event-competition-panel', {
+          comp: comp,
+          dateKey: dg.key,
+          event: event,
+          highlightTeam: typeof highlightTeam !== 'undefined' ? highlightTeam : '',
+          activeCompKey: typeof activeCompKey !== 'undefined' ? activeCompKey : '',
+          activeDateKey: typeof activeDateKey !== 'undefined' ? activeDateKey : '',
+          isOrphanKnockout: true,
+        }) %>
+      <% }); %>
+    <% }); %>
+
+    <p class="mt-12 text-center">
       <a class="text-emerald-400 underline" href="/">首頁</a>
     </p>
   </main>
@@ -63,75 +104,342 @@
   <script>
     (function () {
       var eventId = <%- JSON.stringify(eventIdStr) %>;
-      var initialTeam = <%- JSON.stringify(typeof highlightTeam !== 'undefined' ? highlightTeam : '') %>;
+      var initialCode = <%- JSON.stringify(typeof highlightCode !== 'undefined' ? highlightCode : (typeof highlightTeam !== 'undefined' ? highlightTeam : '')) %>;
+      var initialComp = <%- JSON.stringify(typeof activeCompKey !== 'undefined' ? activeCompKey : '') %>;
+      var initialDate = <%- JSON.stringify(typeof activeDateKey !== 'undefined' ? activeDateKey : '') %>;
+      var activeDate = initialDate;
+      var activeCompKey = initialComp || '';
 
-      function norm(s) {
-        return String(s || '').trim().toLowerCase();
+      function styleCompTab(btn, on) {
+        btn.classList.toggle('bg-emerald-800/70', on);
+        btn.classList.toggle('text-emerald-50', on);
+        btn.classList.toggle('font-semibold', on);
+        btn.classList.toggle('border', !on);
+        btn.classList.toggle('border-slate-700', !on);
+        btn.classList.toggle('text-slate-300', !on);
       }
 
-      function applyTeamHighlight(query) {
-        var q = norm(query);
-        var rows = document.querySelectorAll('.standings-row');
-        var msg = document.getElementById('team-lookup-msg');
-        rows.forEach(function (tr) {
-          var name = tr.getAttribute('data-team') || '';
-          var match = q && (norm(name) === q || norm(name).indexOf(q) !== -1 || q.indexOf(norm(name)) !== -1);
-          tr.classList.toggle('ring-2', !!match);
-          tr.classList.toggle('ring-amber-400', !!match);
-          tr.classList.toggle('bg-amber-950/40', !!match);
+      function styleDateTab(btn, on) {
+        btn.classList.toggle('bg-sky-800/70', on);
+        btn.classList.toggle('text-sky-50', on);
+        btn.classList.toggle('font-semibold', on);
+        btn.classList.toggle('border', !on);
+        btn.classList.toggle('border-slate-700', !on);
+        btn.classList.toggle('text-slate-300', !on);
+      }
+
+      function showDate(dateKey, keepComp) {
+        activeDate = dateKey || '';
+        document.querySelectorAll('.date-comp-nav').forEach(function (el) {
+          el.classList.toggle('hidden', el.getAttribute('data-date-key') !== activeDate);
         });
+        document.querySelectorAll('.date-tab').forEach(function (btn) {
+          styleDateTab(btn, btn.getAttribute('data-date-key') === activeDate);
+        });
+        var url = new URL(window.location.href);
+        if (activeDate) url.searchParams.set('date', activeDate);
+        else url.searchParams.delete('date');
+
+        if (!keepComp) {
+          var nav = document.querySelector('.date-comp-nav[data-date-key="' + activeDate + '"]');
+          var first = nav ? nav.querySelector('.comp-tab') : null;
+          if (first) showComp(first.getAttribute('data-comp-key'), true);
+          else window.history.replaceState({}, '', url);
+        } else {
+          window.history.replaceState({}, '', url);
+        }
+      }
+
+      function showComp(key, skipDateSync) {
+        activeCompKey = key || '';
+        var panel = document.querySelector('.competition-panel[data-comp-key="' + key + '"]');
+        if (panel && !skipDateSync) {
+          var dk = panel.getAttribute('data-date-key');
+          if (dk && dk !== activeDate) showDate(dk, true);
+        }
+
+        document.querySelectorAll('.competition-panel').forEach(function (el) {
+          el.classList.toggle('hidden', el.getAttribute('data-comp-key') !== key);
+        });
+        document.querySelectorAll('.comp-tab').forEach(function (btn) {
+          var compKey = btn.getAttribute('data-comp-key');
+          var on = compKey === key;
+          var isPodium = key === '__podium__';
+          if (isPodium) {
+            btn.classList.toggle('bg-amber-800/80', on);
+            btn.classList.toggle('text-amber-50', on);
+            btn.classList.toggle('font-semibold', on);
+          } else if (compKey) {
+            styleCompTab(btn, on);
+          }
+        });
+        var url = new URL(window.location.href);
+        url.searchParams.set('comp', key);
+        if (activeDate && key !== '__podium__') url.searchParams.set('date', activeDate);
+        window.history.replaceState({}, '', url);
+
+        var lookupInput = document.getElementById('team-code-lookup-input');
+        if (lookupInput && lookupInput.value.trim()) {
+          applyCodeHighlight(lookupInput.value.trim());
+        }
+      }
+
+      function getActivePanel() {
+        if (activeCompKey && activeCompKey !== '__podium__') {
+          return document.querySelector('.competition-panel[data-comp-key="' + activeCompKey + '"]');
+        }
+        return null;
+      }
+
+      document.querySelectorAll('.date-tab').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          showDate(btn.getAttribute('data-date-key'), false);
+        });
+      });
+
+      document.querySelectorAll('.comp-tab').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          showComp(btn.getAttribute('data-comp-key'));
+        });
+      });
+
+      if (initialDate) showDate(initialDate, true);
+      if (initialComp) {
+        var has = document.querySelector('.competition-panel[data-comp-key="' + initialComp + '"]');
+        if (has) showComp(initialComp, true);
+        else if (initialComp === '__podium__') showComp('__podium__', true);
+      }
+
+      function normCode(s) {
+        return String(s || '').trim().toUpperCase();
+      }
+
+      function rowHasCode(row, q) {
+        var labels = row.querySelectorAll('.team-code-label');
+        for (var i = 0; i < labels.length; i++) {
+          if (normCode(labels[i].getAttribute('data-team-code')) === q) return true;
+        }
+        return false;
+      }
+
+      function clearCodeHighlight(scope) {
+        var root = scope || document;
+        root.querySelectorAll('.schedule-match-row').forEach(function (row) {
+          row.classList.remove(
+            'border-orange-500',
+            '!border-orange-500',
+            '!border-4',
+            'border-4',
+            'ring-4',
+            'ring-orange-400/80',
+            'bg-orange-950/25',
+            'bg-orange-950/35',
+            'outline',
+            'outline-4',
+            '-outline-offset-4',
+            'outline-orange-500',
+            'schedule-code-hit'
+          );
+          if (row.tagName !== 'TR') row.classList.add('border', 'border-slate-800');
+        });
+        root.querySelectorAll('.knockout-match-card').forEach(function (card) {
+          card.classList.remove(
+            '!border-4',
+            '!border-orange-500',
+            'ring-4',
+            'ring-orange-400/80',
+            'bg-orange-950/25'
+          );
+        });
+        root.querySelectorAll('.standings-row').forEach(function (tr) {
+          tr.classList.remove('ring-4', 'ring-orange-400', 'bg-orange-950/30');
+          var codeCell = tr.querySelector('.standings-code');
+          if (codeCell) codeCell.classList.remove('text-orange-400', 'font-bold');
+        });
+      }
+
+      function markScheduleHit(row, on) {
+        row.classList.toggle('schedule-code-hit', !!on);
+        if (row.tagName === 'TR') {
+          row.classList.toggle('bg-orange-950/35', !!on);
+          row.classList.toggle('outline', !!on);
+          row.classList.toggle('outline-4', !!on);
+          row.classList.toggle('-outline-offset-4', !!on);
+          row.classList.toggle('outline-orange-500', !!on);
+        } else {
+          row.classList.toggle('!border-4', !!on);
+          row.classList.toggle('!border-orange-500', !!on);
+          row.classList.toggle('border-slate-800', !on);
+          row.classList.toggle('ring-4', !!on);
+          row.classList.toggle('ring-orange-400/80', !!on);
+          row.classList.toggle('bg-orange-950/25', !!on);
+        }
+      }
+
+      function applyCodeHighlight(query) {
+        var q = normCode(query);
+        var msg = document.getElementById('team-code-lookup-msg');
+
+        clearCodeHighlight(document);
+
         if (!msg) return;
         if (!q) {
           msg.classList.add('hidden');
           msg.textContent = '';
           return;
         }
-        var hit = document.querySelector('.standings-row.ring-amber-400');
-        if (hit) {
-          var rank = hit.getAttribute('data-rank');
-          var group = hit.getAttribute('data-group');
-          var team = hit.getAttribute('data-team');
-          msg.textContent = team + '：' + group + ' 第 ' + rank + ' 名';
+
+        if (activeCompKey === '__podium__' || !getActivePanel()) {
+          msg.textContent = '請先選擇上方的比賽組別，再查詢編號。';
           msg.classList.remove('hidden');
-          hit.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+
+        var panel = getActivePanel();
+        var scheduleHits = 0;
+        var firstScrollTarget = null;
+
+        panel.querySelectorAll('.schedule-match-row').forEach(function (row) {
+          if (row.classList.contains('hidden')) return;
+          var match = rowHasCode(row, q);
+          markScheduleHit(row, match);
+          if (match) {
+            scheduleHits += 1;
+            if (!firstScrollTarget) firstScrollTarget = row;
+          }
+        });
+
+        panel.querySelectorAll('.knockout-match-card').forEach(function (card) {
+          var match = rowHasCode(card, q);
+          card.classList.toggle('!border-4', !!match);
+          card.classList.toggle('!border-orange-500', !!match);
+          card.classList.toggle('ring-4', !!match);
+          card.classList.toggle('ring-orange-400/80', !!match);
+          card.classList.toggle('bg-orange-950/25', !!match);
+          if (match) {
+            scheduleHits += 1;
+            if (!firstScrollTarget) firstScrollTarget = card;
+          }
+        });
+
+        var standingHit = null;
+        panel.querySelectorAll('.standings-row').forEach(function (tr) {
+          var code = normCode(tr.getAttribute('data-team-code') || '');
+          var match = code === q;
+          tr.classList.toggle('ring-4', !!match);
+          tr.classList.toggle('ring-orange-400', !!match);
+          tr.classList.toggle('bg-orange-950/30', !!match);
+          var codeCell = tr.querySelector('.standings-code');
+          if (codeCell) {
+            codeCell.classList.toggle('text-orange-400', !!match);
+            codeCell.classList.toggle('font-bold', !!match);
+          }
+          if (match && !standingHit) standingHit = tr;
+        });
+
+        if (standingHit || firstScrollTarget) {
+          var scrollTarget = standingHit || firstScrollTarget;
+          if (scrollTarget) scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          var parts = [];
+          if (standingHit) {
+            parts.push(
+              (standingHit.getAttribute('data-team-code') || q) +
+                '（' +
+                (standingHit.getAttribute('data-team') || '') +
+                '）' +
+                '：' +
+                (standingHit.getAttribute('data-group') || '') +
+                ' 第 ' +
+                (standingHit.getAttribute('data-rank') || '') +
+                ' 名'
+            );
+          }
+          if (scheduleHits) {
+            parts.push('本組別賽程 ' + scheduleHits + ' 場');
+          }
+          msg.textContent = parts.join(' · ');
+          msg.classList.remove('hidden');
         } else {
-          msg.textContent = '找不到隊伍「' + query + '」，請檢查名稱是否與報分表完全一致。';
+          msg.textContent =
+            '在目前組別找不到編號「' + query + '」。請確認組別與代號（如 A1、B2）。';
           msg.classList.remove('hidden');
         }
       }
 
-      var form = document.getElementById('team-lookup-form');
-      if (form) {
-        form.addEventListener('submit', function (e) {
-          e.preventDefault();
-          var input = document.getElementById('team-lookup-input');
-          var v = input ? input.value.trim() : '';
-          if (v) {
-            var url = new URL(window.location.href);
-            url.searchParams.set('team', v);
-            window.history.replaceState({}, '', url);
-          }
-          applyTeamHighlight(v);
+      document.querySelectorAll('.competition-panel').forEach(function (panel) {
+        var filters = panel.querySelectorAll('.phase-filter');
+        if (!filters.length) return;
+        filters.forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var phase = btn.getAttribute('data-phase');
+            filters.forEach(function (b) {
+              var on = b === btn;
+              b.classList.toggle('bg-emerald-800/70', on);
+              b.classList.toggle('text-white', on);
+              b.classList.toggle('font-semibold', on);
+              b.classList.toggle('border', !on);
+              b.classList.toggle('border-slate-600', !on);
+              b.classList.toggle('text-slate-300', !on);
+            });
+            panel.querySelectorAll('.schedule-match-row').forEach(function (row) {
+              var rp = row.getAttribute('data-phase') || '';
+              var show = phase === 'all' || rp === phase;
+              row.classList.toggle('hidden', !show);
+            });
+          });
         });
-        var clearBtn = document.getElementById('team-lookup-clear');
-        if (clearBtn) {
-          clearBtn.addEventListener('click', function () {
-            var input = document.getElementById('team-lookup-input');
-            if (input) input.value = '';
-            var url = new URL(window.location.href);
+      });
+
+      var form = document.getElementById('team-code-lookup-form');
+      if (form) {
+        var input = document.getElementById('team-code-lookup-input');
+        function syncUrl(code) {
+          var url = new URL(window.location.href);
+          var v = normCode(code);
+          if (v) url.searchParams.set('code', v);
+          else {
+            url.searchParams.delete('code');
             url.searchParams.delete('team');
             url.searchParams.delete('q');
-            window.history.replaceState({}, '', url);
-            applyTeamHighlight('');
+          }
+          window.history.replaceState({}, '', url);
+        }
+        function runHighlight() {
+          var v = input ? input.value.trim() : '';
+          syncUrl(v);
+          applyCodeHighlight(v);
+        }
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          runHighlight();
+        });
+        if (input) {
+          input.addEventListener('input', function () {
+            runHighlight();
           });
         }
-        if (initialTeam) applyTeamHighlight(initialTeam);
+        var clearBtn = document.getElementById('team-code-lookup-clear');
+        if (clearBtn) {
+          clearBtn.addEventListener('click', function () {
+            if (input) input.value = '';
+            syncUrl('');
+            applyCodeHighlight('');
+          });
+        }
+        if (initialCode) {
+          if (input) input.value = initialCode;
+          applyCodeHighlight(initialCode);
+        }
+      }
+
+      if (window.location.hash === '#standings') {
+        var first = document.querySelector('.competition-panel:not(.hidden) .comp-standings, .competition-panel:not(.hidden) #standings');
+        if (first) first.scrollIntoView({ behavior: 'smooth' });
       }
 
       var socket = io({ transports: ['websocket', 'polling'] });
       socket.emit('join', { eventId: eventId });
-      socket.on('match:update', function (payload) {
-        if (!payload || !payload.match) return;
+      socket.on('match:update', function () {
         location.reload();
       });
     })();

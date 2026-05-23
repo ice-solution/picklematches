@@ -11,7 +11,9 @@
     "build:css": "tailwindcss -i ./src/input.css -o ./public/css/styles.css --minify",
     "build:css:dev": "tailwindcss -i ./src/input.css -o ./public/css/styles.css --watch",
     "seed": "node scripts/seed.js",
-    "db:clear": "node scripts/clearDb.js --yes"
+    "db:clear": "node scripts/clearDb.js --yes",
+    "db:set-tournament-dates": "node scripts/set-event-tournament-dates.js",
+    "db:sync-team-codes": "node scripts/sync-event-team-codes.js"
   },
   "engines": {
     "node": ">=18"

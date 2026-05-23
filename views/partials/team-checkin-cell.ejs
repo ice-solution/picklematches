@@ -1,0 +1,15 @@
+<% var t = typeof team !== 'undefined' ? team : null; %>
+<% if (t && !t.isPlaceholder) { %>
+<td class="team-checkin-cell w-11 px-2 py-2 text-center align-middle">
+  <input
+    type="checkbox"
+    class="team-checkin h-5 w-5 cursor-pointer rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-2 focus:ring-emerald-500/50"
+    data-team-id="<%= t._id %>"
+    <%= t.checkedIn ? 'checked' : '' %>
+    title="<%= t.checkedIn ? '已報到' : '點擊標記為已報到' %>"
+    aria-label="隊伍報到"
+  />
+</td>
+<% } else if (t) { %>
+<td class="w-11 px-2 py-2 text-center text-slate-600">—</td>
+<% } %>

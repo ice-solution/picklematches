@@ -79,9 +79,42 @@ export function formatLabel(matchFormat) {
   return map[matchFormat] || matchFormat;
 }
 
+export function matchStatusLabel(status) {
+  const map = {
+    scheduled: '未開',
+    live: '進行中',
+    finished: '完賽',
+    postponed: '延期',
+    cancelled: '取消',
+  };
+  return map[status] || status || '—';
+}
+
+/** 下拉選單等純文字：A1 楊霖鑫 */
+export function formatTeamWithCode(team) {
+  if (!team) return '—';
+  const name = team.name || '—';
+  const code = team.code ? String(team.code).trim() : '';
+  if (code) return `${code} ${name}`;
+  return name;
+}
+
+/** 隊伍顯示用主／副標（編號 + 名稱） */
+export function teamDisplayParts(team) {
+  if (!team) return { primary: '—', secondary: '' };
+  const name = team.name ? String(team.name).trim() : '';
+  const code = team.code ? String(team.code).trim() : '';
+  if (code) return { primary: code, secondary: name };
+  return { primary: name || '—', secondary: '' };
+}
+
 /** 公開賽程表：附加賽事名稱、小組／輪次標籤 */
 export function enrichMatchesForSchedule(matches, tournaments, groups) {
   const tName = Object.fromEntries((tournaments || []).map((t) => [String(t._id), t.name]));
+  const tPhase = Object.fromEntries((tournaments || []).map((t) => [String(t._id), t.phase]));
+  const tDate = Object.fromEntries(
+    (tournaments || []).map((t) => [String(t._id), String(t.competitionDate || '').trim()])
+  );
   const gName = Object.fromEntries((groups || []).map((g) => [String(g._id), g.name]));
   return (matches || []).map((m) => {
     let groupName = m.groupId ? gName[String(m.groupId)] || '' : '';
@@ -96,6 +129,8 @@ export function enrichMatchesForSchedule(matches, tournaments, groups) {
     return {
       ...m,
       tournamentName: tName[String(m.tournamentId)] || '',
+      tournamentPhase: tPhase[String(m.tournamentId)] || '',
+      competitionDate: tDate[String(m.tournamentId)] || '',
       groupName,
       scheduleGroupLabel: groupName || round || '',
     };

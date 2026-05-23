@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import mongoose from 'mongoose';
 import { Group } from '../models/Group.js';
 import { Team } from '../models/Team.js';
+import { ensureGroupByName, syncTeamCodesForTournament } from './teamCodes.js';
 
 /** 表頭 → 內部欄位 key */
 const HEADER_MAP = new Map([
@@ -15,6 +16,10 @@ const HEADER_MAP = new Map([
   ['組別', 'group'],
   ['seed', 'seed'],
   ['種子', 'seed'],
+  ['code', 'code'],
+  ['代號', 'code'],
+  ['編號', 'code'],
+  ['隊伍編號', 'code'],
 ]);
 
 function normalizeHeaderKey(raw) {
@@ -81,11 +86,15 @@ export function parseTeamWorkbookBuffer(buffer) {
       }
     }
 
+    const code =
+      colIndex.code !== undefined ? String(line[colIndex.code] ?? '').trim() : '';
+
     rows.push({
       rowNum: r + 1,
       name: teamName,
       groupName,
       seed,
+      code,
     });
   }
 
@@ -128,26 +137,23 @@ export async function importTeamsFromRows(tournamentId, rows) {
       continue;
     }
 
-    let groupId;
-    if (row.groupName) {
-      const g =
-        groupByName.get(row.groupName.trim()) || groupByName.get(row.groupName.trim().toLowerCase());
-      if (!g) {
-        errors.push(`第 ${row.rowNum} 列：找不到組別「${row.groupName}」`);
-        continue;
-      }
-      groupId = g._id;
-    }
+    const g = await ensureGroupByName(tournamentId, row.groupName, groupByName);
+    const groupId = g._id;
 
     await Team.create({
       tournamentId: tid,
       groupId,
       name: n,
+      code: row.code || '',
       seed: row.seed !== undefined ? row.seed : undefined,
     });
     created.push(n);
     seenNames.add(key);
     addedThisBatch.add(key);
+  }
+
+  if (created.length) {
+    await syncTeamCodesForTournament(tournamentId);
   }
 
   return { createdCount: created.length, errors };
@@ -159,6 +165,7 @@ export function buildTeamImportTemplateSheet() {
     ['紅隊', 'A組', 1],
     ['藍隊', 'A組', 2],
     ['黃隊', 'B組', ''],
+    ['', '說明：group 留空會自動建立 A組；無此組別名稱時會自動新增組別', ''],
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
   const wb = XLSX.utils.book_new();

@@ -123,6 +123,18 @@ export async function generateKnockoutFromGroup({
   if (ko.phase !== 'knockout') return { ok: false, error: 'target_not_knockout' };
   if (String(src.eventId) !== String(ko.eventId)) return { ok: false, error: 'different_event' };
 
+  await Tournament.updateOne(
+    { _id: knockoutTournamentId },
+    {
+      $set: {
+        sourceGroupTournamentId: sourceTournamentId,
+        ...(src.competitionDate
+          ? { competitionDate: String(src.competitionDate).trim() }
+          : {}),
+      },
+    }
+  );
+
   const existingMatchCount = await Match.countDocuments({ tournamentId: ko._id });
 
   const groups = await Group.find({ tournamentId: src._id }).sort({ order: 1, createdAt: 1 }).lean();

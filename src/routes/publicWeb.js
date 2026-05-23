@@ -7,6 +7,13 @@ import { Tournament } from '../models/Tournament.js';
 import { enrichMatchesForSchedule } from '../lib/viewHelpers.js';
 import { getOrCreateScoreboard, normalizeScoreboardSlot } from '../models/LiveScoreboard.js';
 import { getEventGroupStandings } from '../lib/groupStandings.js';
+import {
+  buildEventCompetitions,
+  buildEventDateGroups,
+  findCompInDateGroups,
+  pickDefaultEventDateKey,
+} from '../lib/eventCompetitions.js';
+import { repairFinishedMatchesForTournament } from '../lib/matchResult.js';
 
 export const publicWebRouter = Router({ mergeParams: true });
 
@@ -15,25 +22,78 @@ publicWebRouter.get('/:eventSlug', loadEventBySlug, async (req, res, next) => {
     const event = req.event;
     const tournaments = await Tournament.find({ eventId: event._id }).sort({ order: 1 }).lean();
     const tids = tournaments.map((t) => t._id);
-    const [matchesRaw, groups] = await Promise.all([
+    const koTids = tournaments.filter((t) => t.phase === 'knockout').map((t) => t._id);
+    for (const tid of koTids) {
+      await repairFinishedMatchesForTournament(tid);
+    }
+
+    const [matchesRaw, groups, koMatchesRaw] = await Promise.all([
       Match.find({ tournamentId: { $in: tids } })
         .populate('teamA teamB')
         .sort({ scheduledTime: 1, createdAt: 1 })
         .lean(),
       Group.find({ tournamentId: { $in: tids } }).select('_id name tournamentId').lean(),
+      koTids.length
+        ? Match.find({ tournamentId: { $in: koTids } })
+            .populate('teamA teamB winnerId')
+            .sort({ scheduledTime: 1, createdAt: 1 })
+            .lean()
+        : Promise.resolve([]),
     ]);
+
     const matches = enrichMatchesForSchedule(matchesRaw, tournaments, groups);
+    const koEnriched = enrichMatchesForSchedule(koMatchesRaw, tournaments, groups);
+    const knockoutMatchesByTournamentId = new Map();
+    for (const m of koEnriched) {
+      const tid = String(m.tournamentId);
+      if (!knockoutMatchesByTournamentId.has(tid)) knockoutMatchesByTournamentId.set(tid, []);
+      knockoutMatchesByTournamentId.get(tid).push(m);
+    }
 
     const groupStandingsList = await getEventGroupStandings(event._id);
-    const highlightTeam = String(req.query.team || req.query.q || '').trim();
+    const { competitions, orphanKnockouts, podiumsWithResults } = buildEventCompetitions({
+      tournaments,
+      groupStandingsList,
+      matches,
+      knockoutMatchesByTournamentId,
+    });
+
+    const dateGroups = buildEventDateGroups(competitions, orphanKnockouts);
+    const highlightCode = String(req.query.code || req.query.team || req.query.q || '').trim();
+    const compQuery = String(req.query.comp || '').trim();
+    const dateQuery = String(req.query.date || '').trim();
+
+    let activeDateKey = dateQuery;
+    let activeCompKey = compQuery;
+
+    if (compQuery && compQuery !== '__podium__') {
+      const found = findCompInDateGroups(dateGroups, compQuery);
+      if (found) activeDateKey = found.dateKey;
+    }
+
+    if (!activeDateKey && dateGroups.length) {
+      activeDateKey = pickDefaultEventDateKey(dateGroups);
+    }
+
+    if (!activeCompKey && activeDateKey) {
+      const dg = dateGroups.find((d) => d.key === activeDateKey);
+      const first = dg?.competitions[0] || dg?.orphanKnockouts[0];
+      if (first) activeCompKey = first.key;
+    }
 
     res.render('pages/event', {
       title: event.name,
       event,
       tournaments,
-      matches,
+      competitions,
+      orphanKnockouts,
+      dateGroups,
+      podiumsWithResults,
       groupStandingsList,
-      highlightTeam,
+      highlightCode,
+      highlightTeam: highlightCode,
+      activeDateKey,
+      activeCompKey,
       eventIdStr: event._id.toString(),
     });
   } catch (e) {

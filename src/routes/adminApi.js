@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import { Match } from '../models/Match.js';
+import { Team } from '../models/Team.js';
 import { addPointToCurrentGame } from '../lib/scoring.js';
 import { broadcastMatchUpdate } from '../lib/matchSocket.js';
 import { requireStaffApi } from '../middleware/auth.js';
@@ -30,4 +31,24 @@ adminApiRouter.post('/matches/:matchId/point', async (req, res) => {
   const populated = await broadcastMatchUpdate(req.app, match._id);
 
   res.json({ ok: true, result: r, match: populated });
+});
+
+adminApiRouter.post('/teams/:teamId/check-in', async (req, res, next) => {
+  try {
+    const { teamId } = req.params;
+    if (!mongoose.isValidObjectId(teamId)) {
+      return res.status(400).json({ error: 'invalid_id' });
+    }
+
+    const team = await Team.findById(teamId);
+    if (!team || team.isPlaceholder) return res.status(404).json({ error: 'not_found' });
+
+    const raw = req.body?.checkedIn;
+    team.checkedIn = raw === true || raw === 'true' || raw === '1' || raw === 1;
+    await team.save();
+
+    res.json({ ok: true, checkedIn: team.checkedIn });
+  } catch (e) {
+    next(e);
+  }
 });

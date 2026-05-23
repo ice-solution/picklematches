@@ -88,6 +88,53 @@
           <% }); %>
         </select>
       </div>
+
+      <div class="border-t border-slate-800 pt-4">
+        <h3 class="text-sm font-semibold text-slate-200">手動修正比分</h3>
+        <p class="mt-1 text-xs text-slate-500">直接輸入各局分數後按「儲存場次」。上方即時計分（+1）可照常使用，兩邊互不影響。</p>
+        <div class="mt-4 overflow-x-auto">
+          <table class="w-full min-w-[280px] text-left text-sm" id="manual-games-table">
+            <thead>
+              <tr class="border-b border-slate-800 text-xs text-slate-500">
+                <th class="py-2 pr-2 w-16">局</th>
+                <th class="py-2 pr-2"><%= match.teamA && match.teamA.name ? match.teamA.name : 'A' %></th>
+                <th class="py-2"><%= match.teamB && match.teamB.name ? match.teamB.name : 'B' %></th>
+              </tr>
+            </thead>
+            <tbody id="manual-games-body">
+              <% var completed = match.completedGames || []; %>
+              <% if (!completed.length) { %>
+                <tr class="manual-game-row border-b border-slate-800/60">
+                  <td class="py-2 pr-2 text-slate-500">1</td>
+                  <td class="py-2 pr-2"><input name="completedGameA[]" type="number" min="0" value="" class="w-20 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 font-mono" /></td>
+                  <td class="py-2"><input name="completedGameB[]" type="number" min="0" value="" class="w-20 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 font-mono" /></td>
+                </tr>
+              <% } %>
+              <% completed.forEach(function (g, idx) { %>
+                <tr class="manual-game-row border-b border-slate-800/60">
+                  <td class="py-2 pr-2 text-slate-500"><%= idx + 1 %></td>
+                  <td class="py-2 pr-2"><input name="completedGameA[]" type="number" min="0" value="<%= g.a %>" class="w-20 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 font-mono" /></td>
+                  <td class="py-2"><input name="completedGameB[]" type="number" min="0" value="<%= g.b %>" class="w-20 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 font-mono" /></td>
+                </tr>
+              <% }); %>
+            </tbody>
+            <tfoot>
+              <tr class="border-t border-slate-700 bg-slate-950/50">
+                <td class="py-2 pr-2 text-xs font-medium text-amber-300/90">進行中</td>
+                <td class="py-2 pr-2">
+                  <input name="currentPointA" type="number" min="0" value="<%= match.currentPoints?.a ?? 0 %>" class="w-20 rounded border border-amber-800/50 bg-slate-950 px-2 py-1.5 font-mono text-amber-100" />
+                </td>
+                <td class="py-2">
+                  <input name="currentPointB" type="number" min="0" value="<%= match.currentPoints?.b ?? 0 %>" class="w-20 rounded border border-amber-800/50 bg-slate-950 px-2 py-1.5 font-mono text-amber-100" />
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <button type="button" id="btn-add-game-row" class="mt-3 text-xs text-sky-400 underline hover:text-sky-300">＋ 加多一局（已完成）</button>
+        <p class="mt-2 text-xs text-slate-600">完賽時「進行中」分數會併入最後一局。狀態選 finished 會自動判勝方。</p>
+      </div>
+
       <button type="submit" class="rounded bg-emerald-600 px-6 py-2 font-semibold text-white">儲存場次</button>
     </form>
 
@@ -151,6 +198,21 @@
         if (!detail) return main;
         return main + '（' + detail + '）';
       }
+      var gamesBody = document.getElementById('manual-games-body');
+      var addRowBtn = document.getElementById('btn-add-game-row');
+      if (addRowBtn && gamesBody) {
+        addRowBtn.addEventListener('click', function () {
+          var n = gamesBody.querySelectorAll('.manual-game-row').length + 1;
+          var tr = document.createElement('tr');
+          tr.className = 'manual-game-row border-b border-slate-800/60';
+          tr.innerHTML =
+            '<td class="py-2 pr-2 text-slate-500">' + n + '</td>' +
+            '<td class="py-2 pr-2"><input name="completedGameA[]" type="number" min="0" value="" class="w-20 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 font-mono" /></td>' +
+            '<td class="py-2"><input name="completedGameB[]" type="number" min="0" value="" class="w-20 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 font-mono" /></td>';
+          gamesBody.appendChild(tr);
+        });
+      }
+
       document.querySelectorAll('.adm-score-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
           var side = btn.getAttribute('data-side');

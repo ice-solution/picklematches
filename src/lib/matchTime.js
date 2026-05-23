@@ -50,3 +50,14 @@ export function displayMatchTime(m) {
   }
   return '—';
 }
+
+/** 賽程表：日期 + 時間（competitionDate 來自所屬賽事） */
+export function displayMatchSchedule(m) {
+  if (!m) return '—';
+  const time = displayMatchTime(m);
+  const date = m.competitionDate ? String(m.competitionDate).trim() : '';
+  if (date && time !== '—') return `${date} ${time}`;
+  if (date) return date;
+  if (time !== '—') return time;
+  return '—';
+}

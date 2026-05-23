@@ -112,6 +112,50 @@ export function finalizeFinishedMatch(match) {
   return { ok: true, winnerId: null, tied: true };
 }
 
+/** 後台表單手動輸入比分（completedGameA[] / completedGameB[]、currentPointA/B） */
+export function applyManualScoresFromBody(match, body) {
+  if (!match || !body) return;
+
+  const parseNonNeg = (v) => {
+    const n = parseInt(String(v ?? '').trim(), 10);
+    return Number.isNaN(n) || n < 0 ? 0 : n;
+  };
+
+  let as = body.completedGameA;
+  let bs = body.completedGameB;
+  if (as === undefined && bs === undefined) return;
+
+  if (!Array.isArray(as)) as = as != null && String(as).trim() !== '' ? [as] : [];
+  if (!Array.isArray(bs)) bs = bs != null && String(bs).trim() !== '' ? [bs] : [];
+
+  const games = [];
+  const len = Math.max(as.length, bs.length);
+  for (let i = 0; i < len; i++) {
+    const aRaw = as[i];
+    const bRaw = bs[i];
+    const hasInput =
+      String(aRaw ?? '').trim() !== '' ||
+      String(bRaw ?? '').trim() !== '' ||
+      parseNonNeg(aRaw) > 0 ||
+      parseNonNeg(bRaw) > 0;
+    if (hasInput) {
+      games.push({ a: parseNonNeg(aRaw), b: parseNonNeg(bRaw) });
+    }
+  }
+
+  match.completedGames = games;
+  match.currentPoints = {
+    a: parseNonNeg(body.currentPointA),
+    b: parseNonNeg(body.currentPointB),
+  };
+  match.currentGameIndex = games.length;
+
+  if (typeof match.markModified === 'function') {
+    match.markModified('completedGames');
+    match.markModified('currentPoints');
+  }
+}
+
 /** 修正賽事內所有已完賽但未正確記錄勝負的場次 */
 export async function repairFinishedMatchesForTournament(tournamentId) {
   const matches = await Match.find({ tournamentId, status: 'finished' });

@@ -19,7 +19,7 @@ export async function computeGroupStandings(tournamentId) {
   const winPts = tournament?.groupWinPoints ?? 1;
   const lossPts = tournament?.groupLossPoints ?? -1;
   const groups = await Group.find({ tournamentId: tid }).sort({ order: 1, createdAt: 1 }).lean();
-  const teams = await Team.find({ tournamentId: tid }).select('_id name groupId').lean();
+  const teams = await Team.find({ tournamentId: tid }).select('_id name groupId code checkedIn').lean();
   const teamById = new Map(teams.map((t) => [String(t._id), t]));
 
   const statsByTeamId = new Map();
@@ -30,6 +30,8 @@ export async function computeGroupStandings(tournamentId) {
       statsByTeamId.set(key, {
         teamId: key,
         name: t?.name || '—',
+        code: t?.code || '',
+        checkedIn: !!t?.checkedIn,
         groupId: t?.groupId ? String(t.groupId) : '',
         played: 0,
         wins: 0,

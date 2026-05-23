@@ -9,7 +9,7 @@ import { Team } from '../models/Team.js';
 import { Match, MATCH_FORMAT } from '../models/Match.js';
 import { MatchAssignment } from '../models/MatchAssignment.js';
 import { requireStaff } from '../middleware/auth.js';
-import { toDatetimeLocalValue, parseDatetimeLocal } from '../lib/datetime.js';
+import { toDatetimeLocalValue, parseDatetimeLocal, normalizeDateOnly } from '../lib/datetime.js';
 import { normalizeTimeToHHmm, timeInputValueFromMatch } from '../lib/matchTime.js';
 import { uploadMatchXlsx } from '../middleware/uploadMatchXlsx.js';
 import {
@@ -29,11 +29,13 @@ import {
 } from '../lib/tournamentImport.js';
 import { buildKnockoutLadderColumns } from '../lib/knockoutLadder.js';
 import { getEventGroupStandings } from '../lib/groupStandings.js';
-import { finalizeFinishedMatch } from '../lib/matchResult.js';
+import { finalizeFinishedMatch, applyManualScoresFromBody } from '../lib/matchResult.js';
 import { broadcastMatchUpdate } from '../lib/matchSocket.js';
 import { normalizeLoginId, LOGIN_ID_RE } from '../lib/loginId.js';
 import { generateKnockoutFromGroup } from '../lib/knockoutGenerator.js';
+import { syncTeamCodesForTournament } from '../lib/teamCodes.js';
 import { getOrCreateScoreboard } from '../models/LiveScoreboard.js';
+import { LiveScoreboard } from '../models/LiveScoreboard.js';
 
 export const adminRouter = Router();
 
@@ -402,12 +404,14 @@ adminRouter.post('/events/:eventId/tournaments', requireStaff, async (req, res, 
     const maxOrder = await Tournament.findOne({ eventId }).sort({ order: -1 }).select('order').lean();
     const order = (maxOrder?.order ?? -1) + 1;
 
+    const competitionDate = normalizeDateOnly(req.body.competitionDate);
     const t = await Tournament.create({
       eventId,
       name,
       phase,
       advancePerGroup,
       order,
+      competitionDate: competitionDate || '',
     });
     res.redirect(`/admin/tournaments/${t._id}`);
   } catch (e) {
@@ -619,7 +623,7 @@ adminRouter.get('/tournaments/:tournamentId', requireStaff, async (req, res, nex
     const groupTournaments = allTournaments.filter((t) => t.phase === 'group' && String(t._id) !== String(tournament._id));
 
     const groups = await Group.find({ tournamentId }).sort({ order: 1, createdAt: 1 }).lean();
-    const teams = await Team.find({ tournamentId }).sort({ createdAt: 1 }).lean();
+    let teams = await Team.find({ tournamentId }).sort({ createdAt: 1 }).lean();
     const matches = await Match.find({ tournamentId })
       .populate('teamA teamB winnerId')
       .sort({ scheduledTime: 1, createdAt: 1 })
@@ -642,6 +646,11 @@ adminRouter.get('/tournaments/:tournamentId', requireStaff, async (req, res, nex
 
     const knockoutLadderColumns =
       tournament.phase === 'knockout' ? buildKnockoutLadderColumns(matches) : [];
+
+    if (tournament.phase === 'group') {
+      await syncTeamCodesForTournament(tournamentId);
+      teams = await Team.find({ tournamentId }).sort({ createdAt: 1 }).lean();
+    }
 
     let importReport = null;
     if (req.session.importReport) {
@@ -678,6 +687,35 @@ adminRouter.get('/tournaments/:tournamentId', requireStaff, async (req, res, nex
   }
 });
 
+adminRouter.post('/tournaments/:tournamentId/link-group', requireStaff, async (req, res, next) => {
+  try {
+    const { tournamentId } = req.params;
+    if (!mongoose.isValidObjectId(tournamentId)) return res.status(404).send('Not found');
+    const tournament = await Tournament.findById(tournamentId);
+    if (!tournament || tournament.phase !== 'knockout') {
+      return res.redirect(`/admin/tournaments/${tournamentId}`);
+    }
+    const sid = String(req.body.sourceGroupTournamentId || '').trim();
+    if (sid && mongoose.isValidObjectId(sid)) {
+      const src = await Tournament.findOne({
+        _id: sid,
+        eventId: tournament.eventId,
+        phase: 'group',
+      }).lean();
+      if (!src) {
+        return res.redirect(`/admin/tournaments/${tournamentId}?link=invalid`);
+      }
+      tournament.sourceGroupTournamentId = src._id;
+    } else {
+      tournament.sourceGroupTournamentId = undefined;
+    }
+    await tournament.save();
+    res.redirect(`/admin/tournaments/${tournamentId}?link=ok`);
+  } catch (e) {
+    next(e);
+  }
+});
+
 adminRouter.post('/tournaments/:tournamentId/generate-knockout', requireStaff, async (req, res, next) => {
   try {
     const { tournamentId } = req.params;
@@ -696,6 +734,34 @@ adminRouter.post('/tournaments/:tournamentId/generate-knockout', requireStaff, a
     if (r.createdMatches) qs.push(`matches=${r.createdMatches}`);
     if (r.updatedMatches) qs.push(`updated=${r.updatedMatches}`);
     res.redirect(`/admin/tournaments/${tournamentId}?${qs.join('&')}`);
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** 清空本賽事所有場次（保留組別與隊伍，可重新匯入賽程） */
+adminRouter.post('/tournaments/:tournamentId/clear-matches', requireStaff, async (req, res, next) => {
+  try {
+    const { tournamentId } = req.params;
+    if (!mongoose.isValidObjectId(tournamentId)) return res.status(404).send('Not found');
+    const tournament = await Tournament.findById(tournamentId).lean();
+    if (!tournament) return res.status(404).send('Not found');
+
+    const matches = await Match.find({ tournamentId }).select('_id').lean();
+    const matchIds = matches.map((m) => m._id);
+    let removed = 0;
+
+    if (matchIds.length) {
+      await MatchAssignment.deleteMany({ matchId: { $in: matchIds } });
+      await LiveScoreboard.updateMany(
+        { linkedMatchId: { $in: matchIds } },
+        { $set: { linkedMatchId: null, linkedMatchFormat: null } }
+      );
+      const r = await Match.deleteMany({ _id: { $in: matchIds } });
+      removed = r.deletedCount || 0;
+    }
+
+    res.redirect(`/admin/tournaments/${tournamentId}?schedule_cleared=${removed}`);
   } catch (e) {
     next(e);
   }
@@ -735,6 +801,7 @@ adminRouter.post('/tournaments/:tournamentId/update', requireStaff, async (req, 
     if (!name) return res.redirect(`/admin/tournaments/${tournamentId}`);
     doc.name = name;
     doc.advancePerGroup = advancePerGroup;
+    doc.competitionDate = normalizeDateOnly(req.body.competitionDate) || '';
     if (doc.phase === 'group') {
       const winPts = parseInt(String(req.body.groupWinPoints ?? '').trim(), 10);
       const lossPts = parseInt(String(req.body.groupLossPoints ?? '').trim(), 10);
@@ -809,7 +876,35 @@ adminRouter.post('/tournaments/:tournamentId/teams', requireStaff, async (req, r
     }
 
     await Team.create({ tournamentId, groupId, name });
+    await syncTeamCodesForTournament(tournamentId);
     res.redirect(`/admin/tournaments/${tournamentId}`);
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.post('/teams/:teamId/update', requireStaff, async (req, res, next) => {
+  try {
+    const { teamId } = req.params;
+    if (!mongoose.isValidObjectId(teamId)) return res.status(404).send('Not found');
+    const team = await Team.findById(teamId);
+    if (!team || team.isPlaceholder) return res.status(404).send('Not found');
+
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.redirect(`/admin/tournaments/${team.tournamentId}?team_err=empty`);
+
+    const groupIdRaw = String(req.body.groupId || '').trim();
+    let groupId = undefined;
+    if (groupIdRaw && mongoose.isValidObjectId(groupIdRaw)) {
+      const g = await Group.findOne({ _id: groupIdRaw, tournamentId: team.tournamentId });
+      if (g) groupId = g._id;
+    }
+
+    team.name = name;
+    team.groupId = groupId;
+    await team.save();
+    await syncTeamCodesForTournament(team.tournamentId);
+    res.redirect(`/admin/tournaments/${team.tournamentId}?team_saved=1`);
   } catch (e) {
     next(e);
   }
@@ -938,14 +1033,21 @@ adminRouter.post('/matches/:matchId/update', requireStaff, async (req, res, next
     match.court = String(req.body.court || '').trim();
     match.round = String(req.body.round || '').trim();
     match.status = String(req.body.status || 'scheduled');
+
+    applyManualScoresFromBody(match, req.body);
+
     if (match.status === 'finished') {
       finalizeFinishedMatch(match);
+    } else if (
+      (match.completedGames?.length || 0) > 0 ||
+      Number(match.currentPoints?.a) > 0 ||
+      Number(match.currentPoints?.b) > 0
+    ) {
+      if (match.status === 'scheduled') match.status = 'live';
     }
 
     await match.save();
-    if (match.status === 'finished') {
-      await broadcastMatchUpdate(req.app, match._id);
-    }
+    await broadcastMatchUpdate(req.app, match._id);
     res.redirect(`/admin/matches/${matchId}/edit?saved=1`);
   } catch (e) {
     next(e);

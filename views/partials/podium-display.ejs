@@ -1,0 +1,22 @@
+<% if (typeof podium !== 'undefined' && podium) { %>
+<div class="podium-stage mx-auto flex max-w-2xl items-end justify-center gap-1.5 sm:gap-4">
+  <div class="podium-place order-1 flex w-[30%] max-w-[11rem] flex-col items-center">
+    <div class="flex w-full flex-col items-center justify-end rounded-t-lg border border-slate-500/50 bg-gradient-to-b from-slate-700/80 to-slate-900/90 px-2 pb-4 pt-5 sm:px-3 sm:pb-5 sm:pt-6" style="min-height: 5.5rem;">
+      <p class="text-sm font-bold uppercase tracking-wide text-slate-300 sm:text-base">亞軍</p>
+      <p class="mt-2 text-center text-lg font-bold leading-snug text-slate-100 sm:text-xl"><%= podium.silver || '待定' %></p>
+    </div>
+  </div>
+  <div class="podium-place order-2 flex w-[34%] max-w-[12rem] flex-col items-center">
+    <div class="flex w-full flex-col items-center justify-end rounded-t-lg border border-amber-500/60 bg-gradient-to-b from-amber-700/70 to-amber-950/90 px-2 pb-5 pt-7 shadow-lg shadow-amber-900/30 sm:px-3 sm:pb-6 sm:pt-8" style="min-height: 7.5rem;">
+      <p class="text-sm font-bold uppercase tracking-wide text-amber-200 sm:text-base">冠軍</p>
+      <p class="mt-2 text-center text-xl font-bold leading-snug text-amber-50 sm:text-2xl"><%= podium.gold || '待定' %></p>
+    </div>
+  </div>
+  <div class="podium-place order-3 flex w-[30%] max-w-[11rem] flex-col items-center">
+    <div class="flex w-full flex-col items-center justify-end rounded-t-lg border border-orange-600/50 bg-gradient-to-b from-orange-900/50 to-slate-900/90 px-2 pb-3 pt-4 sm:px-3 sm:pb-4 sm:pt-5" style="min-height: 4.5rem;">
+      <p class="text-sm font-bold uppercase tracking-wide text-orange-300/95 sm:text-base">季軍</p>
+      <p class="mt-2 text-center text-lg font-bold leading-snug text-orange-50 sm:text-xl"><%= podium.bronze || '待定' %></p>
+    </div>
+  </div>
+</div>
+<% } %>

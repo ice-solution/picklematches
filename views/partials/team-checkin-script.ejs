@@ -1,0 +1,50 @@
+
+    (function () {
+      function setTeamRowCheckedIn(row, on) {
+        if (!row) return;
+        row.classList.toggle('bg-emerald-950/25', !!on);
+        row.classList.toggle('team-checked-in', !!on);
+        var codeCell = row.querySelector('.team-code-cell');
+        if (codeCell) {
+          codeCell.classList.toggle('text-emerald-400', !!on);
+          codeCell.classList.toggle('text-sky-300', !on);
+        }
+      }
+
+      document.querySelectorAll('.team-checkin').forEach(function (cb) {
+        var row = cb.closest('tr');
+        setTeamRowCheckedIn(row, cb.checked);
+
+        cb.addEventListener('change', function () {
+          var id = cb.getAttribute('data-team-id');
+          var next = cb.checked;
+          var prev = !next;
+          cb.disabled = true;
+
+          fetch('/api/admin/teams/' + id + '/check-in', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ checkedIn: next }),
+          })
+            .then(function (r) {
+              return r.json().then(function (data) {
+                if (!r.ok) throw new Error(data.error || 'failed');
+                return data;
+              });
+            })
+            .then(function (data) {
+              cb.checked = !!data.checkedIn;
+              cb.title = cb.checked ? '已報到' : '點擊標記為已報到';
+              setTeamRowCheckedIn(row, cb.checked);
+            })
+            .catch(function () {
+              cb.checked = prev;
+              alert('報到狀態儲存失敗，請再試一次。');
+            })
+            .finally(function () {
+              cb.disabled = false;
+            });
+        });
+      });
+    })();
