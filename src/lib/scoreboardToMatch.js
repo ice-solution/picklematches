@@ -1,5 +1,6 @@
 import { gamesNeededToWinMatch } from './scoring.js';
 import { isSummaryCompletedGame } from './viewHelpers.js';
+import { finalizeFinishedMatch } from './matchResult.js';
 
 const BOARD_TO_MATCH_STATUS = {
   idle: 'scheduled',
@@ -63,6 +64,15 @@ export function applyScoreboardToMatch(match, board) {
     completed.push({ a: scoreA, b: scoreB });
   }
 
+  if (
+    (board.status === 'finished' || gamesA >= gamesNeededToWinMatch(match.matchFormat) || gamesB >= gamesNeededToWinMatch(match.matchFormat)) &&
+    hasLivePoints &&
+    scoreA !== scoreB &&
+    completed.length === 0
+  ) {
+    completed.push({ a: scoreA, b: scoreB });
+  }
+
   match.completedGames = completed;
   match.currentGameIndex = completed.length;
 
@@ -78,19 +88,17 @@ export function applyScoreboardToMatch(match, board) {
 
   if (gamesA >= need || gamesB >= need) {
     status = 'finished';
-    match.winnerId = gamesA > gamesB ? match.teamA : gamesB > gamesA ? match.teamB : undefined;
   } else if (board.status === 'finished') {
     status = 'finished';
-    if (gamesA !== gamesB) {
-      match.winnerId = gamesA > gamesB ? match.teamA : match.teamB;
-    } else {
-      match.winnerId = undefined;
-      warnings.push('finished_without_winner');
-    }
+  }
+
+  if (status === 'finished') {
+    const fin = finalizeFinishedMatch(match);
+    if (fin.tied) warnings.push('finished_without_winner');
   } else {
+    match.status = status;
     match.winnerId = undefined;
   }
 
-  match.status = status;
   return { ok: true, warnings };
 }

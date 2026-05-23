@@ -3,6 +3,7 @@ import { Group } from '../models/Group.js';
 import { Team } from '../models/Team.js';
 import { Match } from '../models/Match.js';
 import { Tournament } from '../models/Tournament.js';
+import { inferMatchWinnerId, matchPointsTotals, repairFinishedMatchesForTournament } from './matchResult.js';
 
 function cmpNumDesc(a, b) {
   return (b ?? 0) - (a ?? 0);
@@ -45,37 +46,38 @@ export async function computeGroupStandings(tournamentId) {
   const matches = await Match.find({
     tournamentId: tid,
     status: 'finished',
-    groupId: { $exists: true, $ne: null },
   })
-    .select('teamA teamB winnerId completedGames groupId')
+    .select('teamA teamB winnerId completedGames groupId status currentPoints')
     .lean();
 
   for (const m of matches) {
     const aId = String(m.teamA);
     const bId = String(m.teamB);
-    const wId = m.winnerId ? String(m.winnerId) : '';
+    const ta = teamById.get(aId);
+    const tb = teamById.get(bId);
+    const groupId = m.groupId
+      ? String(m.groupId)
+      : ta?.groupId && tb?.groupId && String(ta.groupId) === String(tb.groupId)
+        ? String(ta.groupId)
+        : '';
+    if (!groupId) continue;
+
+    const { ptsA, ptsB } = matchPointsTotals(m);
+    const wId = inferMatchWinnerId(m) || '';
 
     const sa = statFor(aId);
     const sb = statFor(bId);
     sa.played += 1;
     sb.played += 1;
 
-    if (wId && wId === aId) {
+    if (wId === aId) {
       sa.wins += 1;
       sb.losses += 1;
-    } else if (wId && wId === bId) {
+    } else if (wId === bId) {
       sb.wins += 1;
       sa.losses += 1;
     }
 
-    let ptsA = 0;
-    let ptsB = 0;
-    if (Array.isArray(m.completedGames)) {
-      for (const g of m.completedGames) {
-        ptsA += Number(g?.a ?? 0);
-        ptsB += Number(g?.b ?? 0);
-      }
-    }
     sa.pointsFor += ptsA;
     sa.pointsAgainst += ptsB;
     sb.pointsFor += ptsB;
@@ -115,6 +117,7 @@ export async function getEventGroupStandings(eventId) {
 
   const list = [];
   for (const t of tournaments) {
+    await repairFinishedMatchesForTournament(t._id);
     const blocks = await computeGroupStandings(t._id);
     const advanceN = Math.max(1, t.advancePerGroup ?? 2);
     for (const block of blocks) {

@@ -1,4 +1,5 @@
 import { MATCH_FORMAT } from '../models/Match.js';
+import { finalizeFinishedMatch } from './matchResult.js';
 
 export function gamesNeededToWinMatch(matchFormat) {
   switch (matchFormat) {
@@ -49,9 +50,7 @@ export function addPointToCurrentGame(match, side) {
   const need = gamesNeededToWinMatch(match.matchFormat);
 
   if (gamesWonA >= need || gamesWonB >= need) {
-    match.status = 'finished';
-    match.winnerId = gamesWonA > gamesWonB ? match.teamA : match.teamB;
-    match.currentPoints = { a: 0, b: 0 };
+    finalizeFinishedMatch(match);
     return { ok: true, gameEnded: true, matchEnded: true };
   }
 

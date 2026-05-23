@@ -29,6 +29,8 @@ import {
 } from '../lib/tournamentImport.js';
 import { buildKnockoutLadderColumns } from '../lib/knockoutLadder.js';
 import { getEventGroupStandings } from '../lib/groupStandings.js';
+import { finalizeFinishedMatch } from '../lib/matchResult.js';
+import { broadcastMatchUpdate } from '../lib/matchSocket.js';
 import { normalizeLoginId, LOGIN_ID_RE } from '../lib/loginId.js';
 import { generateKnockoutFromGroup } from '../lib/knockoutGenerator.js';
 import { getOrCreateScoreboard } from '../models/LiveScoreboard.js';
@@ -936,8 +938,14 @@ adminRouter.post('/matches/:matchId/update', requireStaff, async (req, res, next
     match.court = String(req.body.court || '').trim();
     match.round = String(req.body.round || '').trim();
     match.status = String(req.body.status || 'scheduled');
+    if (match.status === 'finished') {
+      finalizeFinishedMatch(match);
+    }
 
     await match.save();
+    if (match.status === 'finished') {
+      await broadcastMatchUpdate(req.app, match._id);
+    }
     res.redirect(`/admin/matches/${matchId}/edit?saved=1`);
   } catch (e) {
     next(e);
