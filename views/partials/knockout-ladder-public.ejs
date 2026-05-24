@@ -11,7 +11,7 @@
           <div class="border-b border-amber-800/40 pb-2 text-center text-xs font-semibold uppercase tracking-wide text-amber-300/95"><%= col.label %></div>
           <div class="mt-3 flex flex-col gap-4">
             <% col.matches.forEach(function (m) { %>
-              <div class="knockout-match-card rounded border border-slate-700/80 bg-slate-900/50 px-2 py-3 text-xs">
+              <div class="knockout-match-card rounded border border-slate-700/80 bg-slate-900/50 px-2 py-3 text-xs" data-match-id="<%= m._id %>">
                 <div class="flex items-stretch gap-1">
                   <div class="flex flex-1 flex-col items-end text-right text-slate-200">
                     <%- include('team-display', { team: m.teamA, align: 'right', primaryClass: 'font-medium text-slate-200', secondaryClass: 'block text-[10px] text-slate-500' }) %>

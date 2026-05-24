@@ -94,11 +94,36 @@ async function ensurePlaceholderTeam(tournamentId, name) {
 
 async function ensureTeamInTournament(knockoutTournamentId, sourceTeam) {
   const tid = new mongoose.Types.ObjectId(knockoutTournamentId);
-  const existing = await Team.findOne({ tournamentId: tid, name: sourceTeam.name }).lean();
-  if (existing) return existing._id;
+  const code = String(sourceTeam.code || '').trim().toUpperCase();
+  let existing = await Team.findOne({
+    tournamentId: tid,
+    sourceTeamId: sourceTeam._id,
+    isPlaceholder: { $ne: true },
+  });
+  if (!existing) {
+    existing = await Team.findOne({
+      tournamentId: tid,
+      name: sourceTeam.name,
+      isPlaceholder: { $ne: true },
+    });
+  }
+  if (existing) {
+    let dirty = false;
+    if (code && existing.code !== code) {
+      existing.code = code;
+      dirty = true;
+    }
+    if (!existing.sourceTeamId) {
+      existing.sourceTeamId = sourceTeam._id;
+      dirty = true;
+    }
+    if (dirty) await existing.save();
+    return existing._id;
+  }
   const doc = await Team.create({
     tournamentId: tid,
     name: sourceTeam.name,
+    code,
     sourceTeamId: sourceTeam._id,
   });
   return doc._id;
@@ -168,7 +193,7 @@ export async function generateKnockoutFromGroup({
   });
 
   const sourceTeams = await Team.find({ _id: { $in: qualifiers.map((q) => q.sourceTeamId) } })
-    .select('_id name')
+    .select('_id name code')
     .lean();
   const srcById = new Map(sourceTeams.map((t) => [String(t._id), t]));
 

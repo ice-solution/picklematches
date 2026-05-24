@@ -893,6 +893,19 @@ adminRouter.post('/teams/:teamId/update', requireStaff, async (req, res, next) =
     const name = String(req.body.name || '').trim();
     if (!name) return res.redirect(`/admin/tournaments/${team.tournamentId}?team_err=empty`);
 
+    const code = String(req.body.code ?? '').trim().toUpperCase();
+    if (code) {
+      const dup = await Team.findOne({
+        tournamentId: team.tournamentId,
+        _id: { $ne: team._id },
+        code,
+        isPlaceholder: { $ne: true },
+      }).lean();
+      if (dup) {
+        return res.redirect(`/admin/tournaments/${team.tournamentId}?team_err=code_dup`);
+      }
+    }
+
     const groupIdRaw = String(req.body.groupId || '').trim();
     let groupId = undefined;
     if (groupIdRaw && mongoose.isValidObjectId(groupIdRaw)) {
@@ -901,9 +914,9 @@ adminRouter.post('/teams/:teamId/update', requireStaff, async (req, res, next) =
     }
 
     team.name = name;
+    team.code = code;
     team.groupId = groupId;
     await team.save();
-    await syncTeamCodesForTournament(team.tournamentId);
     res.redirect(`/admin/tournaments/${team.tournamentId}?team_saved=1`);
   } catch (e) {
     next(e);

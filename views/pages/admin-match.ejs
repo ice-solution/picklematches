@@ -57,7 +57,7 @@
           <select name="teamA" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
             <% teams.forEach(function (t) { %>
               <% var aid = (match.teamA && match.teamA._id) ? match.teamA._id : match.teamA; %>
-              <option value="<%= t._id %>" <%= String(aid) === String(t._id) ? 'selected' : '' %>><%= t.name %></option>
+              <option value="<%= t._id %>" <%= String(aid) === String(t._id) ? 'selected' : '' %>><%= typeof formatTeamWithCode === 'function' ? formatTeamWithCode(t) : t.name %></option>
             <% }); %>
           </select>
         </div>
@@ -66,7 +66,7 @@
           <select name="teamB" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
             <% teams.forEach(function (t) { %>
               <% var bid = (match.teamB && match.teamB._id) ? match.teamB._id : match.teamB; %>
-              <option value="<%= t._id %>" <%= String(bid) === String(t._id) ? 'selected' : '' %>><%= t.name %></option>
+              <option value="<%= t._id %>" <%= String(bid) === String(t._id) ? 'selected' : '' %>><%= typeof formatTeamWithCode === 'function' ? formatTeamWithCode(t) : t.name %></option>
             <% }); %>
           </select>
         </div>

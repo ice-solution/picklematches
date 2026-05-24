@@ -158,18 +158,38 @@ export function applyManualScoresFromBody(match, body) {
   }
 }
 
-/** 修正賽事內所有已完賽但未正確記錄勝負的場次 */
+/**
+ * 修正賽事內所有已完賽但未正確記錄勝負的場次。
+ * 僅供後台手動維護；勿在 GET／前台載入時呼叫（與即時改分並發會觸發 VersionError）。
+ */
 export async function repairFinishedMatchesForTournament(tournamentId) {
-  const matches = await Match.find({ tournamentId, status: 'finished' });
+  const ids = await Match.find({ tournamentId, status: 'finished' }).select('_id').lean();
   let repaired = 0;
-  for (const match of matches) {
+  for (const { _id } of ids) {
+    const saved = await repairOneFinishedMatch(_id);
+    if (saved) repaired += 1;
+  }
+  return repaired;
+}
+
+/** 單場完賽修正；遇樂觀鎖衝突時重試（後台改分與 repair 同時進行） */
+export async function repairOneFinishedMatch(matchId, maxAttempts = 3) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const match = await Match.findById(matchId);
+    if (!match || match.status !== 'finished') return false;
+
     const before = match.winnerId ? String(match.winnerId) : '';
     finalizeFinishedMatch(match);
     const after = match.winnerId ? String(match.winnerId) : '';
-    if (after !== before || match.isModified()) {
+    if (after === before && !match.isModified()) return false;
+
+    try {
       await match.save();
-      repaired += 1;
+      return true;
+    } catch (err) {
+      if (err?.name === 'VersionError' && attempt < maxAttempts - 1) continue;
+      throw err;
     }
   }
-  return repaired;
+  return false;
 }

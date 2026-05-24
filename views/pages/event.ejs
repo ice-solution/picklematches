@@ -3,7 +3,7 @@
   <main class="mx-auto max-w-6xl px-3 py-6 sm:px-4 sm:py-10">
     <header class="border-b border-slate-800 pb-4 sm:pb-6">
       <h1 class="text-xl font-bold text-emerald-400 sm:text-2xl"><%= event.name %></h1>
-      <p class="mt-2 text-xs text-slate-400 sm:text-sm">即時更新（比分變更後自動刷新）</p>
+      <p class="mt-2 text-xs text-slate-400 sm:text-sm">即時更新（進行中比分自動更新；完賽後更新積分表與淘汰對位）</p>
       <nav class="mt-4 space-y-3 text-sm" id="event-nav">
         <div class="-mx-3 flex items-center gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
           <% if (typeof podiumsWithResults !== 'undefined' && podiumsWithResults && podiumsWithResults.length) { %>
@@ -101,6 +101,7 @@
     </p>
   </main>
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/public/js/match-score-live.js"></script>
   <script>
     (function () {
       var eventId = <%- JSON.stringify(eventIdStr) %>;
@@ -437,10 +438,40 @@
         if (first) first.scrollIntoView({ behavior: 'smooth' });
       }
 
+      var reloadTimer = null;
+      function scheduleDebouncedReload(ms) {
+        if (reloadTimer) clearTimeout(reloadTimer);
+        reloadTimer = setTimeout(function () {
+          reloadTimer = null;
+          location.reload();
+        }, ms || 2500);
+      }
+
       var socket = io({ transports: ['websocket', 'polling'] });
       socket.emit('join', { eventId: eventId });
-      socket.on('match:update', function () {
-        location.reload();
+      socket.on('match:update', function (payload) {
+        var list = [];
+        if (payload && payload.matches && payload.matches.length) {
+          list = payload.matches;
+        } else if (payload && payload.match) {
+          list = [payload.match];
+        }
+        if (!list.length) {
+          scheduleDebouncedReload(2500);
+          return;
+        }
+        var live = window.MatchScoreLive;
+        var patched = false;
+        if (live) {
+          list.forEach(function (m) {
+            if (live.patchMatchInDom(m)) patched = true;
+          });
+        }
+        if (live && live.needsFullReload(list)) {
+          scheduleDebouncedReload(2500);
+        } else if (!patched) {
+          scheduleDebouncedReload(2500);
+        }
       });
     })();
   </script>

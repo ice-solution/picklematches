@@ -171,9 +171,15 @@
 
     <section class="mt-12">
       <h2 class="text-lg font-semibold text-white">隊伍</h2>
-      <p class="mt-1 text-xs text-slate-500">按組別分表；點「編輯」修改隊名或換組。</p>
+      <p class="mt-1 text-xs text-slate-500">按組別分表；點「編輯」可修改代號、隊名或換組。</p>
       <% if (typeof query !== 'undefined' && query && query.team_saved === '1') { %>
         <p class="mt-2 text-sm text-emerald-300">已更新隊伍。</p>
+      <% } %>
+      <% if (typeof query !== 'undefined' && query && query.team_err === 'code_dup') { %>
+        <p class="mt-2 text-sm text-rose-300">代號與其他隊伍重複，請改用其他代號。</p>
+      <% } %>
+      <% if (typeof query !== 'undefined' && query && query.team_err === 'empty') { %>
+        <p class="mt-2 text-sm text-rose-300">隊伍名稱不可為空。</p>
       <% } %>
 
       <% if (!teams.length) { %>
@@ -212,6 +218,17 @@
                   <tr class="team-edit-row hidden border-b border-slate-800/50 bg-slate-950/50" data-team-id="<%= t._id %>">
                     <td colspan="4" class="px-3 py-3">
                       <form method="post" action="/admin/teams/<%= t._id %>/update" class="flex flex-wrap items-end gap-2">
+                        <div class="w-20">
+                          <label class="text-xs text-slate-500">代號</label>
+                          <input
+                            name="code"
+                            value="<%= t.code || '' %>"
+                            maxlength="16"
+                            pattern="[A-Za-z0-9]*"
+                            title="英數字，例如 A1、B2；留空則不顯示代號"
+                            class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-sm uppercase"
+                          />
+                        </div>
                         <div class="min-w-[12rem] flex-1">
                           <label class="text-xs text-slate-500">隊伍名稱</label>
                           <input name="name" required value="<%= t.name %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm" />

@@ -3,7 +3,7 @@ import { Group } from '../models/Group.js';
 import { Team } from '../models/Team.js';
 import { Match } from '../models/Match.js';
 import { Tournament } from '../models/Tournament.js';
-import { inferMatchWinnerId, matchPointsTotals, repairFinishedMatchesForTournament } from './matchResult.js';
+import { inferMatchWinnerId, matchPointsTotals } from './matchResult.js';
 
 function cmpNumDesc(a, b) {
   return (b ?? 0) - (a ?? 0);
@@ -108,7 +108,7 @@ export async function computeGroupStandings(tournamentId) {
 }
 
 /**
- * 大會底下所有小組賽賽事的報分表（供前台顯示）
+ * 大會底下所有小組賽賽事的報分表（供前台顯示，唯讀計算，不寫入 Match）。
  * @returns {Promise<Array<{ tournament: object, advancePerGroup: number, groups: Array }>>}
  */
 export async function getEventGroupStandings(eventId) {
@@ -117,23 +117,22 @@ export async function getEventGroupStandings(eventId) {
     .sort({ order: 1, createdAt: 1 })
     .lean();
 
-  const list = [];
-  for (const t of tournaments) {
-    await repairFinishedMatchesForTournament(t._id);
-    const blocks = await computeGroupStandings(t._id);
-    const advanceN = Math.max(1, t.advancePerGroup ?? 2);
-    for (const block of blocks) {
-      block.rows.forEach((row, idx) => {
-        row.rank = idx + 1;
-        row.advances = idx < advanceN;
-      });
-    }
-    list.push({
-      tournament: t,
-      advancePerGroup: advanceN,
-      groups: blocks,
-    });
-  }
-  return list;
+  return Promise.all(
+    tournaments.map(async (t) => {
+      const blocks = await computeGroupStandings(t._id);
+      const advanceN = Math.max(1, t.advancePerGroup ?? 2);
+      for (const block of blocks) {
+        block.rows.forEach((row, idx) => {
+          row.rank = idx + 1;
+          row.advances = idx < advanceN;
+        });
+      }
+      return {
+        tournament: t,
+        advancePerGroup: advanceN,
+        groups: blocks,
+      };
+    })
+  );
 }
 

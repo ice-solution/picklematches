@@ -19,16 +19,18 @@ export async function broadcastMatchUpdate(app, matchId) {
   if (io && evt) {
     const eid = evt._id.toString();
     const mid = populated._id.toString();
-    io.to(`event:${eid}`).emit('match:update', { match: populated });
+    const eventMatches = [populated];
     io.to(`match:${mid}`).emit('match:update', { match: populated });
     for (const oid of advance.matchIds || []) {
       const m2 = await Match.findById(oid).populate('teamA teamB winnerId').lean();
       if (m2) {
+        eventMatches.push(m2);
         const m2id = m2._id.toString();
-        io.to(`event:${eid}`).emit('match:update', { match: m2 });
         io.to(`match:${m2id}`).emit('match:update', { match: m2 });
       }
     }
+    // 大會頁只推一次，避免連續觸發多次整頁 reload
+    io.to(`event:${eid}`).emit('match:update', { matches: eventMatches });
   }
   return populated;
 }

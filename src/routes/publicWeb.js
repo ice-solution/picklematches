@@ -13,8 +13,6 @@ import {
   findCompInDateGroups,
   pickDefaultEventDateKey,
 } from '../lib/eventCompetitions.js';
-import { repairFinishedMatchesForTournament } from '../lib/matchResult.js';
-
 export const publicWebRouter = Router({ mergeParams: true });
 
 publicWebRouter.get('/:eventSlug', loadEventBySlug, async (req, res, next) => {
@@ -23,30 +21,19 @@ publicWebRouter.get('/:eventSlug', loadEventBySlug, async (req, res, next) => {
     const tournaments = await Tournament.find({ eventId: event._id }).sort({ order: 1 }).lean();
     const tids = tournaments.map((t) => t._id);
     const koTids = tournaments.filter((t) => t.phase === 'knockout').map((t) => t._id);
-    for (const tid of koTids) {
-      try {
-        await repairFinishedMatchesForTournament(tid);
-      } catch (err) {
-        console.error('repairFinishedMatchesForTournament failed:', tid, err);
-      }
-    }
 
-    const [matchesRaw, groups, koMatchesRaw] = await Promise.all([
+    const koTidSet = new Set(koTids.map((id) => String(id)));
+
+    const [allMatchesRaw, groups] = await Promise.all([
       Match.find({ tournamentId: { $in: tids } })
-        .populate('teamA teamB')
+        .populate('teamA teamB winnerId')
         .sort({ scheduledTime: 1, createdAt: 1 })
         .lean(),
       Group.find({ tournamentId: { $in: tids } }).select('_id name tournamentId').lean(),
-      koTids.length
-        ? Match.find({ tournamentId: { $in: koTids } })
-            .populate('teamA teamB winnerId')
-            .sort({ scheduledTime: 1, createdAt: 1 })
-            .lean()
-        : Promise.resolve([]),
     ]);
 
-    const matches = enrichMatchesForSchedule(matchesRaw, tournaments, groups);
-    const koEnriched = enrichMatchesForSchedule(koMatchesRaw, tournaments, groups);
+    const matches = enrichMatchesForSchedule(allMatchesRaw, tournaments, groups);
+    const koEnriched = matches.filter((m) => koTidSet.has(String(m.tournamentId)));
     const knockoutMatchesByTournamentId = new Map();
     for (const m of koEnriched) {
       const tid = String(m.tournamentId);
