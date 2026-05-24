@@ -1,27 +1,35 @@
 <%
   var ta = typeof teamA !== 'undefined' ? teamA : null;
   var tb = typeof teamB !== 'undefined' ? teamB : null;
-  var vsClass =
-    typeof vsClass !== 'undefined' && vsClass ? vsClass : 'shrink-0 px-3 text-xs font-medium text-slate-500';
+  var layout = typeof layout !== 'undefined' ? layout : 'flex';
+  var nameTruncateClass = 'team-matchup-name';
+%>
+<% if (layout === 'grid') { %>
+<div class="team-matchup-grid">
+  <div class="team-matchup-side team-matchup-side--a">
+    <%- include('team-display', { team: ta, align: 'left', secondaryClass: nameTruncateClass }) %>
+  </div>
+  <span class="team-matchup-vs">vs</span>
+  <div class="team-matchup-side team-matchup-side--b">
+    <%- include('team-display', { team: tb, align: 'right', secondaryClass: nameTruncateClass }) %>
+  </div>
+</div>
+<% } else { %>
+<%
   var wrapClass =
     typeof wrapClass !== 'undefined' && wrapClass
       ? wrapClass
-      : 'team-matchup flex w-full min-w-0 items-center justify-between gap-2';
+      : 'team-matchup team-matchup--flex';
+  var vsClass =
+    typeof vsClass !== 'undefined' && vsClass ? vsClass : 'team-matchup-vs';
 %>
 <div class="<%= wrapClass %>">
-  <div class="min-w-0 flex-1 pr-1">
-    <%- include('team-display', {
-      team: ta,
-      align: 'left',
-      secondaryClass: 'block max-w-[11rem] truncate text-xs text-slate-500',
-    }) %>
+  <div class="team-matchup-side team-matchup-side--a">
+    <%- include('team-display', { team: ta, align: 'left', secondaryClass: nameTruncateClass }) %>
   </div>
   <span class="<%= vsClass %>">vs</span>
-  <div class="min-w-0 flex-1 pl-1 text-right">
-    <%- include('team-display', {
-      team: tb,
-      align: 'right',
-      secondaryClass: 'block max-w-[11rem] truncate text-xs text-slate-500 ml-auto',
-    }) %>
+  <div class="team-matchup-side team-matchup-side--b">
+    <%- include('team-display', { team: tb, align: 'right', secondaryClass: nameTruncateClass }) %>
   </div>
 </div>
+<% } %>

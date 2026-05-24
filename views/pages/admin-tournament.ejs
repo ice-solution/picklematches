@@ -336,38 +336,28 @@
       <% } %>
       <%- include('../partials/knockout-ladder', { tournament, knockoutLadderColumns }) %>
       <p class="mt-1 text-sm text-slate-500">每場可選五局三勝、三局兩勝或一局過；可設定日期時間與場地。</p>
-      <div class="mt-4 overflow-x-auto">
-        <table class="admin-matches-table w-full min-w-[960px] table-fixed text-left text-sm">
-          <colgroup>
-            <col style="width:34%" />
-            <col style="width:9%" />
-            <col style="width:10%" />
-            <col style="width:8%" />
-            <col style="width:11%" />
-            <col style="width:8%" />
-            <col style="width:24%" />
-            <col style="width:6%" />
-          </colgroup>
+      <div class="mt-4 max-w-full overflow-x-auto">
+        <table class="admin-matches-table">
           <thead>
             <tr class="border-b border-slate-800 text-slate-400">
-              <th class="px-3 py-2 font-medium">對戰</th>
-              <th class="px-2 py-2 font-medium">賽制</th>
-              <th class="px-2 py-2 font-medium">開賽時間</th>
-              <th class="px-2 py-2 font-medium">場地</th>
-              <th class="px-2 py-2 font-medium">比分</th>
-              <th class="px-2 py-2 font-medium">狀態</th>
-              <th class="px-2 py-2 font-medium">球證</th>
-              <th class="px-2 py-2 text-right font-medium">操作</th>
+              <th class="px-2 py-2 font-medium">對戰</th>
+              <th class="whitespace-nowrap px-2 py-2 font-medium">賽制</th>
+              <th class="whitespace-nowrap px-2 py-2 font-medium">時間</th>
+              <th class="whitespace-nowrap px-2 py-2 font-medium">場地</th>
+              <th class="whitespace-nowrap px-2 py-2 font-medium">比分</th>
+              <th class="whitespace-nowrap px-2 py-2 font-medium">狀態</th>
+              <th class="whitespace-nowrap px-2 py-2 font-medium">球證</th>
+              <th class="whitespace-nowrap px-2 py-2 text-right font-medium">操作</th>
             </tr>
           </thead>
           <tbody>
             <% matches.forEach(function (m) { %>
               <% var mid = String(m._id); var refs = (typeof assignmentByMatchId !== 'undefined' && assignmentByMatchId[mid]) ? assignmentByMatchId[mid] : []; %>
               <tr class="border-b border-slate-800/80">
-                <td class="px-3 py-2 align-middle">
-                  <%- include('../partials/team-matchup', { teamA: m.teamA, teamB: m.teamB, wrapClass: 'team-matchup flex w-full items-center justify-between gap-2' }) %>
+                <td class="px-2 py-2.5">
+                  <%- include('../partials/team-matchup', { teamA: m.teamA, teamB: m.teamB, layout: 'grid' }) %>
                 </td>
-                <td class="whitespace-nowrap px-2 py-2 align-middle text-slate-300"><%= formatLabel(m.matchFormat) %></td>
+                <td class="whitespace-nowrap px-2 py-2 text-slate-300"><%= formatLabel(m.matchFormat) %></td>
                 <td class="whitespace-nowrap px-2 py-2 align-middle font-mono text-xs text-slate-400"><%= displayMatchTime(m) %></td>
                 <td class="whitespace-nowrap px-2 py-2 align-middle"><%= m.court || '—' %></td>
                 <td class="px-2 py-2 align-middle"><%- include('../partials/score-display', { m: m, scoreMainClass: 'font-mono text-xs font-semibold text-emerald-300/90', scoreDetailClass: 'mt-0.5 block font-mono text-[10px] text-slate-400' }) %></td>
@@ -388,7 +378,7 @@
                     </ul>
                   <% } %>
                   <% if (typeof refereeUsers !== 'undefined' && refereeUsers && refereeUsers.length) { %>
-                    <form method="post" action="/admin/matches/<%= m._id %>/assign" class="flex flex-col gap-1 sm:flex-row sm:items-stretch">
+                    <form method="post" action="/admin/matches/<%= m._id %>/assign" class="flex max-w-[13rem] flex-col gap-1 sm:flex-row sm:items-stretch">
                       <input type="hidden" name="redirect" value="/admin/tournaments/<%= tournament._id %>" />
                       <select name="refereeId" required class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs">
                         <option value="" disabled selected hidden>選擇球證…</option>

@@ -17,4 +17,77 @@
   .admin-main {
     @apply min-w-0 flex-1 overflow-auto p-6 md:p-8 lg:pl-10 lg:pr-12 lg:py-10;
   }
+
+  /* 後台場次表：寬度隨內容，唔強制 min-width 橫向捲動 */
+  .admin-matches-table {
+    @apply w-full border-collapse text-left text-sm;
+    table-layout: auto;
+  }
+
+  .admin-matches-table th,
+  .admin-matches-table td {
+    @apply align-middle;
+  }
+
+  .admin-matches-table th:first-child,
+  .admin-matches-table td:first-child {
+    width: 38%;
+    min-width: 14rem;
+  }
+
+  .admin-matches-table th:nth-child(7),
+  .admin-matches-table td:nth-child(7) {
+    width: 14rem;
+  }
+
+  /* 對戰欄：左 | vs | 右，名字可換行唔截斷 */
+  .team-matchup-grid,
+  .team-matchup--flex {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 1fr) 1.75rem minmax(6.5rem, 1fr);
+    align-items: start;
+    column-gap: 0.5rem;
+    row-gap: 0.15rem;
+    width: 100%;
+  }
+
+  .team-matchup-side {
+    min-width: 0;
+  }
+
+  .team-matchup-side--b {
+    text-align: right;
+  }
+
+  .team-matchup-vs {
+    padding-top: 0.15rem;
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: rgb(100 116 139);
+  }
+
+  .team-matchup-name {
+    display: block;
+    margin-top: 0.125rem;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: rgb(148 163 184);
+    white-space: normal;
+    word-break: break-word;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .team-matchup-side--b .team-matchup-name {
+    margin-left: auto;
+    text-align: right;
+  }
+
+  .team-matchup-side .team-code-label {
+    font-family: ui-monospace, monospace;
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.25;
+  }
 }
