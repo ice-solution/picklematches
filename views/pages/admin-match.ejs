@@ -18,13 +18,29 @@
       <p class="mt-1 text-sm text-slate-400">無須球證指派亦可操作；前台與大螢幕會即時更新。</p>
       <div class="mt-6 grid grid-cols-2 gap-4">
         <div>
-          <p class="text-center text-sm text-emerald-400"><%= match.teamA && match.teamA.name ? match.teamA.name : 'A' %></p>
-          <p id="adm-disp-a" class="text-center text-4xl font-bold tabular-nums"><%= match.currentPoints?.a ?? 0 %></p>
+          <div class="text-center">
+            <%- include('../partials/team-display', {
+              team: match.teamA,
+              align: 'center',
+              showCodeBelowName: true,
+              primaryClass: 'text-sm font-medium text-emerald-400',
+              secondaryClass: 'block text-xs font-mono text-sky-300/90',
+            }) %>
+          </div>
+          <p id="adm-disp-a" class="mt-2 text-center text-4xl font-bold tabular-nums"><%= match.currentPoints?.a ?? 0 %></p>
           <button type="button" data-side="a" class="adm-score-btn mt-3 w-full rounded-lg bg-emerald-700 py-3 text-sm font-semibold text-white active:bg-emerald-600">A +1</button>
         </div>
         <div>
-          <p class="text-center text-sm text-sky-400"><%= match.teamB && match.teamB.name ? match.teamB.name : 'B' %></p>
-          <p id="adm-disp-b" class="text-center text-4xl font-bold tabular-nums"><%= match.currentPoints?.b ?? 0 %></p>
+          <div class="text-center">
+            <%- include('../partials/team-display', {
+              team: match.teamB,
+              align: 'center',
+              showCodeBelowName: true,
+              primaryClass: 'text-sm font-medium text-sky-400',
+              secondaryClass: 'block text-xs font-mono text-sky-300/90',
+            }) %>
+          </div>
+          <p id="adm-disp-b" class="mt-2 text-center text-4xl font-bold tabular-nums"><%= match.currentPoints?.b ?? 0 %></p>
           <button type="button" data-side="b" class="adm-score-btn mt-3 w-full rounded-lg bg-sky-700 py-3 text-sm font-semibold text-white active:bg-sky-600">B +1</button>
         </div>
       </div>
@@ -97,8 +113,14 @@
             <thead>
               <tr class="border-b border-slate-800 text-xs text-slate-500">
                 <th class="py-2 pr-2 w-16">局</th>
-                <th class="py-2 pr-2"><%= match.teamA && match.teamA.name ? match.teamA.name : 'A' %></th>
-                <th class="py-2"><%= match.teamB && match.teamB.name ? match.teamB.name : 'B' %></th>
+                <th class="py-2 pr-2">
+                  <span class="block"><%= match.teamA && match.teamA.name ? match.teamA.name : 'A' %></span>
+                  <% if (match.teamA && match.teamA.code) { %><span class="mt-0.5 block font-mono text-xs font-normal text-sky-300/90"><%= match.teamA.code %></span><% } %>
+                </th>
+                <th class="py-2">
+                  <span class="block"><%= match.teamB && match.teamB.name ? match.teamB.name : 'B' %></span>
+                  <% if (match.teamB && match.teamB.code) { %><span class="mt-0.5 block font-mono text-xs font-normal text-sky-300/90"><%= match.teamB.code %></span><% } %>
+                </th>
               </tr>
             </thead>
             <tbody id="manual-games-body">

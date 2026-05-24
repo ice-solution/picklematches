@@ -5,7 +5,12 @@ import { advanceKnockoutFromFinishedMatch } from './knockoutAdvance.js';
 
 /** 比分更新後推播至 Socket.io（前台／大螢幕） */
 export async function broadcastMatchUpdate(app, matchId) {
-  const advance = await advanceKnockoutFromFinishedMatch(matchId);
+  let advance = { matchIds: [] };
+  try {
+    advance = await advanceKnockoutFromFinishedMatch(matchId);
+  } catch (err) {
+    console.error('advanceKnockoutFromFinishedMatch failed:', err);
+  }
   const populated = await Match.findById(matchId).populate('teamA teamB winnerId').lean();
   if (!populated) return null;
   const tournament = await Tournament.findById(populated.tournamentId).lean();

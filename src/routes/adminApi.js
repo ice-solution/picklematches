@@ -9,28 +9,38 @@ import { requireStaffApi } from '../middleware/auth.js';
 export const adminApiRouter = Router();
 adminApiRouter.use(requireStaffApi);
 
-adminApiRouter.post('/matches/:matchId/point', async (req, res) => {
-  const { matchId } = req.params;
-  const side = req.body?.side;
-  if (!mongoose.isValidObjectId(matchId)) {
-    return res.status(400).json({ error: 'invalid_id' });
+adminApiRouter.post('/matches/:matchId/point', async (req, res, next) => {
+  try {
+    const { matchId } = req.params;
+    const side = req.body?.side;
+    if (!mongoose.isValidObjectId(matchId)) {
+      return res.status(400).json({ error: 'invalid_id' });
+    }
+    if (side !== 'a' && side !== 'b') {
+      return res.status(400).json({ error: 'invalid_side' });
+    }
+
+    const match = await Match.findById(matchId);
+    if (!match) return res.status(404).json({ error: 'not_found' });
+
+    const r = addPointToCurrentGame(match, side);
+    if (!r.ok) {
+      return res.status(400).json({ error: r.error });
+    }
+
+    await match.save();
+    let populated = null;
+    try {
+      populated = await broadcastMatchUpdate(req.app, match._id);
+    } catch (err) {
+      console.error('broadcastMatchUpdate failed:', err);
+      populated = await Match.findById(match._id).populate('teamA teamB winnerId').lean();
+    }
+
+    res.json({ ok: true, result: r, match: populated });
+  } catch (e) {
+    next(e);
   }
-  if (side !== 'a' && side !== 'b') {
-    return res.status(400).json({ error: 'invalid_side' });
-  }
-
-  const match = await Match.findById(matchId);
-  if (!match) return res.status(404).json({ error: 'not_found' });
-
-  const r = addPointToCurrentGame(match, side);
-  if (!r.ok) {
-    return res.status(400).json({ error: r.error });
-  }
-
-  await match.save();
-  const populated = await broadcastMatchUpdate(req.app, match._id);
-
-  res.json({ ok: true, result: r, match: populated });
 });
 
 adminApiRouter.post('/teams/:teamId/check-in', async (req, res, next) => {

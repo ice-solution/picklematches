@@ -24,7 +24,11 @@ publicWebRouter.get('/:eventSlug', loadEventBySlug, async (req, res, next) => {
     const tids = tournaments.map((t) => t._id);
     const koTids = tournaments.filter((t) => t.phase === 'knockout').map((t) => t._id);
     for (const tid of koTids) {
-      await repairFinishedMatchesForTournament(tid);
+      try {
+        await repairFinishedMatchesForTournament(tid);
+      } catch (err) {
+        console.error('repairFinishedMatchesForTournament failed:', tid, err);
+      }
     }
 
     const [matchesRaw, groups, koMatchesRaw] = await Promise.all([

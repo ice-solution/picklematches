@@ -6,6 +6,7 @@
   var alignClass =
     align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left';
   var checkedIn = !!(t && t.checkedIn);
+  var codeBelowName = typeof showCodeBelowName !== 'undefined' && !!showCodeBelowName;
   var _primaryClass =
     typeof primaryClass !== 'undefined' && primaryClass
       ? primaryClass
@@ -21,8 +22,13 @@
   <span class="team-display inline-block leading-snug <%= alignClass %> text-slate-500">—</span>
 <% } else if (code) { %>
   <span class="team-display inline-block leading-snug <%= alignClass %>">
-    <span class="team-code-label <%= _primaryClass %>" data-team-code="<%= code %>"><%= code %></span>
-    <% if (name) { %><span class="<%= _secondaryClass %>"><%= name %></span><% } %>
+    <% if (codeBelowName && name) { %>
+      <span class="<%= _primaryClass %>"><%= name %></span>
+      <span class="team-code-label <%= _secondaryClass %>" data-team-code="<%= code %>"><%= code %></span>
+    <% } else { %>
+      <span class="team-code-label <%= _primaryClass %>" data-team-code="<%= code %>"><%= code %></span>
+      <% if (name) { %><span class="<%= _secondaryClass %>"><%= name %></span><% } %>
+    <% } %>
   </span>
 <% } else { %>
   <span class="team-display inline-block leading-snug <%= alignClass %>">

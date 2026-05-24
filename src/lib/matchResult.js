@@ -108,7 +108,7 @@ export function finalizeFinishedMatch(match) {
     return { ok: true, winnerId: winner };
   }
 
-  match.winnerId = undefined;
+  match.winnerId = null;
   return { ok: true, winnerId: null, tied: true };
 }
 
@@ -143,11 +143,13 @@ export function applyManualScoresFromBody(match, body) {
     }
   }
 
+  const curA = parseNonNeg(body.currentPointA);
+  const curB = parseNonNeg(body.currentPointB);
+  const hasCurrent = curA > 0 || curB > 0;
+  if (!games.length && !hasCurrent) return;
+
   match.completedGames = games;
-  match.currentPoints = {
-    a: parseNonNeg(body.currentPointA),
-    b: parseNonNeg(body.currentPointB),
-  };
+  match.currentPoints = { a: curA, b: curB };
   match.currentGameIndex = games.length;
 
   if (typeof match.markModified === 'function') {

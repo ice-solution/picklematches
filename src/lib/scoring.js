@@ -26,6 +26,16 @@ function isGameComplete(scoreA, scoreB) {
  * 為目前局加一分。會直接修改 match 文件（Mongoose document）。
  * @returns {{ ok: true, gameEnded?: boolean, matchEnded?: boolean } | { ok: false, error: string }}
  */
+function ensureMatchScoringState(match) {
+  if (!Array.isArray(match.completedGames)) match.completedGames = [];
+  if (!match.currentPoints || typeof match.currentPoints !== 'object') {
+    match.currentPoints = { a: 0, b: 0 };
+  }
+  if (match.currentPoints.a == null) match.currentPoints.a = 0;
+  if (match.currentPoints.b == null) match.currentPoints.b = 0;
+  if (match.currentGameIndex == null) match.currentGameIndex = match.completedGames.length;
+}
+
 export function addPointToCurrentGame(match, side) {
   if (match.status === 'finished' || match.status === 'cancelled') {
     return { ok: false, error: 'match_ended' };
@@ -34,6 +44,7 @@ export function addPointToCurrentGame(match, side) {
     return { ok: false, error: 'invalid_side' };
   }
 
+  ensureMatchScoringState(match);
   match.currentPoints[side] += 1;
   if (match.status === 'scheduled') match.status = 'live';
 

@@ -85,6 +85,9 @@ export function createApp() {
 
   app.use((err, req, res, _next) => {
     console.error(err);
+    if (req.path.startsWith('/api')) {
+      return res.status(500).json({ error: 'server_error' });
+    }
     res.status(500).render('pages/error', { title: '伺服器錯誤', message: '請稍後再試。' });
   });
 
