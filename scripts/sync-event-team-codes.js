@@ -26,7 +26,7 @@ if (!event) {
 
 const tournaments = await Tournament.find({ eventId: event._id, phase: 'group' }).lean();
 for (const t of tournaments) {
-  await syncTeamCodesForTournament(t._id);
+  await syncTeamCodesForTournament(t._id, { onlyIfEmpty: false });
   console.log('已同步:', t.name);
 }
 

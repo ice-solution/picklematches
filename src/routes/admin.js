@@ -33,7 +33,7 @@ import { finalizeFinishedMatch, applyManualScoresFromBody } from '../lib/matchRe
 import { broadcastMatchUpdate } from '../lib/matchSocket.js';
 import { normalizeLoginId, LOGIN_ID_RE } from '../lib/loginId.js';
 import { generateKnockoutFromGroup } from '../lib/knockoutGenerator.js';
-import { syncTeamCodesForTournament } from '../lib/teamCodes.js';
+import { assignTeamCodeIfEmpty } from '../lib/teamCodes.js';
 import { getOrCreateScoreboard } from '../models/LiveScoreboard.js';
 import { LiveScoreboard } from '../models/LiveScoreboard.js';
 
@@ -647,11 +647,6 @@ adminRouter.get('/tournaments/:tournamentId', requireStaff, async (req, res, nex
     const knockoutLadderColumns =
       tournament.phase === 'knockout' ? buildKnockoutLadderColumns(matches) : [];
 
-    if (tournament.phase === 'group') {
-      await syncTeamCodesForTournament(tournamentId);
-      teams = await Team.find({ tournamentId }).sort({ createdAt: 1 }).lean();
-    }
-
     let importReport = null;
     if (req.session.importReport) {
       importReport = req.session.importReport;
@@ -875,8 +870,8 @@ adminRouter.post('/tournaments/:tournamentId/teams', requireStaff, async (req, r
       if (g) groupId = g._id;
     }
 
-    await Team.create({ tournamentId, groupId, name });
-    await syncTeamCodesForTournament(tournamentId);
+    const doc = await Team.create({ tournamentId, groupId, name });
+    await assignTeamCodeIfEmpty(doc);
     res.redirect(`/admin/tournaments/${tournamentId}`);
   } catch (e) {
     next(e);
