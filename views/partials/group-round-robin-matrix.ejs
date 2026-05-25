@@ -1,0 +1,105 @@
+<% var isPublic = typeof publicMode !== 'undefined' && publicMode; %>
+<% if (typeof groupRoundRobinMatrices !== 'undefined' && groupRoundRobinMatrices && groupRoundRobinMatrices.length) { %>
+<section class="<%= isPublic ? 'comp-rr-matrix mt-8' : 'mt-12' %> rounded border border-slate-800 bg-slate-900/40 p-5 sm:p-6" aria-label="小組對戰矩陣">
+  <h2 class="<%= isPublic ? 'text-lg' : 'text-lg' %> font-semibold text-white">小組對戰一覽</h2>
+  <p class="mt-1 text-xs text-slate-500">
+    橫列為「主隊」、直欄為「客隊」；格子顯示該對戰是否已排賽、未打或已完賽比分。<% if (!isPublic) { %>點格子可開啟場次編輯。<% } else if (typeof event !== 'undefined' && event) { %>點已開賽或完賽場次可開直播頁。<% } %>
+  </p>
+  <ul class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+    <li><span class="inline-block h-3 w-3 rounded border border-slate-700 bg-slate-800/80 align-middle"></span> 未排場次</li>
+    <li><span class="inline-block h-3 w-3 rounded border border-slate-600 bg-slate-900 align-middle"></span> 已排／未打</li>
+    <li><span class="inline-block h-3 w-3 rounded border border-amber-700/60 bg-amber-950/40 align-middle"></span> 進行中</li>
+    <li><span class="inline-block h-3 w-3 rounded border border-emerald-700/50 bg-emerald-950/35 align-middle"></span> 已完賽</li>
+  </ul>
+
+  <% groupRoundRobinMatrices.forEach(function (block) { %>
+    <div class="mt-8">
+      <h3 class="text-sm font-semibold text-sky-300"><%= block.group.name %></h3>
+      <% if (block.teams.length < 2) { %>
+        <p class="mt-2 text-sm text-slate-500">此組少於 2 隊，無需對戰表。</p>
+      <% } else { %>
+        <div class="mt-3 overflow-x-auto">
+          <table class="group-rr-matrix w-full min-w-[280px] border-collapse text-center text-xs">
+            <thead>
+              <tr class="border-b border-slate-700 text-slate-400">
+                <th class="sticky left-0 z-[1] bg-slate-900 px-2 py-2 text-left font-medium text-slate-500">比賽</th>
+                <% block.teams.forEach(function (t, colIdx) { %>
+                  <th class="min-w-[3.25rem] px-1 py-2 font-mono font-semibold text-sky-300/95" title="<%= t.name %>">
+                    <%= t.code || (colIdx + 1) %>
+                  </th>
+                <% }); %>
+              </tr>
+            </thead>
+            <tbody>
+              <% block.rows.forEach(function (row, rowIdx) { %>
+                <tr class="border-b border-slate-800/60">
+                  <th class="sticky left-0 z-[1] bg-slate-900 px-2 py-2 text-left font-mono font-semibold text-sky-300/95" title="<%= row.team.name %>">
+                    <%= row.team.code || (rowIdx + 1) %>
+                  </th>
+                  <% row.cells.forEach(function (cell) { %>
+                    <% if (cell.kind === 'self') { %>
+                      <td class="bg-slate-800/50 px-1 py-2 text-slate-600">—</td>
+                    <% } else if (cell.kind === 'none') { %>
+                      <td class="bg-slate-800/40 px-1 py-2 text-slate-600" title="尚未建立此對戰">—</td>
+                    <% } else {
+                      var cls = 'rr-matrix-cell px-1 py-2 ';
+                      if (cell.status === 'finished') cls += 'bg-emerald-950/35 text-emerald-200';
+                      else if (cell.status === 'live') cls += 'bg-amber-950/40 text-amber-200';
+                      else if (cell.status === 'postponed' || cell.status === 'cancelled') cls += 'bg-rose-950/25 text-rose-300/90';
+                      else cls += 'bg-slate-900/80 text-slate-400';
+                    %>
+                      <td
+                        class="<%= cls %>"
+                        data-match-id="<%= cell.matchId %>"
+                        data-row-team-id="<%= row.team._id %>"
+                      >
+                        <% if (isPublic && typeof event !== 'undefined' && event && (cell.status === 'live' || cell.status === 'finished')) { %>
+                          <a
+                            href="/e/<%= event.slug %>/screen/<%= cell.matchId %>"
+                            target="_blank"
+                            rel="noopener"
+                            class="rr-matrix-inner block min-h-[2.25rem] leading-snug hover:underline"
+                            title="<%= cell.label %><% if (cell.score) { %> · <%= cell.score %><% } %>"
+                          >
+                        <% } else if (!isPublic) { %>
+                          <a
+                            href="/admin/matches/<%= cell.matchId %>/edit"
+                            class="rr-matrix-inner block min-h-[2.25rem] leading-snug hover:underline"
+                            title="<%= cell.label %><% if (cell.score) { %> · <%= cell.score %><% } %>"
+                          >
+                        <% } else { %>
+                          <span class="rr-matrix-inner block min-h-[2.25rem] leading-snug" title="<%= cell.label %><% if (cell.score) { %> · <%= cell.score %><% } %>">
+                        <% } %>
+                          <% if (cell.status === 'finished' && cell.score) { %>
+                            <span class="rr-matrix-score font-mono font-semibold"><%= cell.score %></span>
+                          <% } else if (cell.status === 'live') { %>
+                            <span class="rr-matrix-label block text-[10px]">進行</span>
+                            <% if (cell.score) { %><span class="rr-matrix-score font-mono text-[10px]"><%= cell.score %></span><% } %>
+                          <% } else { %>
+                            <span class="rr-matrix-label text-[10px]"><%= cell.label %></span>
+                          <% } %>
+                        <% if (isPublic && typeof event !== 'undefined' && event && (cell.status === 'live' || cell.status === 'finished')) { %>
+                          </a>
+                        <% } else if (!isPublic) { %>
+                          </a>
+                        <% } else { %>
+                          </span>
+                        <% } %>
+                      </td>
+                    <% } %>
+                  <% }); %>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-2 text-[10px] text-slate-600">
+          <% block.teams.forEach(function (t, i) { %>
+            <span class="mr-3"><strong class="font-mono text-slate-500"><%= t.code || (i + 1) %></strong> <%= t.name %></span>
+          <% }); %>
+        </p>
+      <% } %>
+    </div>
+  <% }); %>
+</section>
+<% } %>

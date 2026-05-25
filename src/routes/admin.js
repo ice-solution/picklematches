@@ -34,6 +34,7 @@ import { broadcastMatchUpdate } from '../lib/matchSocket.js';
 import { normalizeLoginId, LOGIN_ID_RE } from '../lib/loginId.js';
 import { generateKnockoutFromGroup } from '../lib/knockoutGenerator.js';
 import { assignTeamCodeIfEmpty } from '../lib/teamCodes.js';
+import { buildGroupRoundRobinMatrices } from '../lib/groupRoundRobinMatrix.js';
 import { getOrCreateScoreboard } from '../models/LiveScoreboard.js';
 import { LiveScoreboard } from '../models/LiveScoreboard.js';
 
@@ -659,6 +660,11 @@ adminRouter.get('/tournaments/:tournamentId', requireStaff, async (req, res, nex
       delete req.session.teamImportReport;
     }
 
+    const groupRoundRobinMatrices =
+      tournament.phase === 'group'
+        ? buildGroupRoundRobinMatrices({ groups, teams, matches })
+        : [];
+
     res.render('pages/admin-tournament', {
       title: `${tournament.name} — 賽程`,
       event,
@@ -675,6 +681,7 @@ adminRouter.get('/tournaments/:tournamentId', requireStaff, async (req, res, nex
       importReport,
       teamImportReport,
       knockoutLadderColumns,
+      groupRoundRobinMatrices,
       query: req.query,
     });
   } catch (e) {

@@ -3,7 +3,9 @@ import mongoose from 'mongoose';
 import { loadEventBySlug } from '../middleware/loadEvent.js';
 import { Match } from '../models/Match.js';
 import { Group } from '../models/Group.js';
+import { Team } from '../models/Team.js';
 import { Tournament } from '../models/Tournament.js';
+import { attachRoundRobinMatricesToCompetitions } from '../lib/groupRoundRobinMatrix.js';
 import { enrichMatchesForSchedule } from '../lib/viewHelpers.js';
 import { getOrCreateScoreboard, normalizeScoreboardSlot } from '../models/LiveScoreboard.js';
 import { getEventGroupStandings } from '../lib/groupStandings.js';
@@ -23,13 +25,19 @@ publicWebRouter.get('/:eventSlug', loadEventBySlug, async (req, res, next) => {
     const koTids = tournaments.filter((t) => t.phase === 'knockout').map((t) => t._id);
 
     const koTidSet = new Set(koTids.map((id) => String(id)));
+    const groupTids = tournaments.filter((t) => t.phase === 'group').map((t) => t._id);
 
-    const [allMatchesRaw, groups] = await Promise.all([
+    const [allMatchesRaw, groups, groupTeams] = await Promise.all([
       Match.find({ tournamentId: { $in: tids } })
         .populate('teamA teamB winnerId')
         .sort({ scheduledTime: 1, createdAt: 1 })
         .lean(),
       Group.find({ tournamentId: { $in: tids } }).select('_id name tournamentId').lean(),
+      groupTids.length
+        ? Team.find({ tournamentId: { $in: groupTids }, isPlaceholder: { $ne: true } })
+            .select('_id name code groupId tournamentId isPlaceholder')
+            .lean()
+        : Promise.resolve([]),
     ]);
 
     const matches = enrichMatchesForSchedule(allMatchesRaw, tournaments, groups);
@@ -47,6 +55,12 @@ publicWebRouter.get('/:eventSlug', loadEventBySlug, async (req, res, next) => {
       groupStandingsList,
       matches,
       knockoutMatchesByTournamentId,
+    });
+
+    attachRoundRobinMatricesToCompetitions(competitions, {
+      groups,
+      teams: groupTeams,
+      matches,
     });
 
     const dateGroups = buildEventDateGroups(competitions, orphanKnockouts);

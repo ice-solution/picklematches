@@ -105,6 +105,7 @@
   <script>
     (function () {
       var eventId = <%- JSON.stringify(eventIdStr) %>;
+      var eventSlug = <%- JSON.stringify(event.slug) %>;
       var initialCode = <%- JSON.stringify(typeof highlightCode !== 'undefined' ? highlightCode : (typeof highlightTeam !== 'undefined' ? highlightTeam : '')) %>;
       var initialComp = <%- JSON.stringify(typeof activeCompKey !== 'undefined' ? activeCompKey : '') %>;
       var initialDate = <%- JSON.stringify(typeof activeDateKey !== 'undefined' ? activeDateKey : '') %>;
@@ -464,7 +465,7 @@
         var patched = false;
         if (live) {
           list.forEach(function (m) {
-            if (live.patchMatchInDom(m)) patched = true;
+            if (live.patchAll(m, { eventSlug: eventSlug })) patched = true;
           });
         }
         if (live && live.needsFullReload(list)) {

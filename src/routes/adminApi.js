@@ -3,8 +3,11 @@ import mongoose from 'mongoose';
 import { Match } from '../models/Match.js';
 import { Team } from '../models/Team.js';
 import { addPointToCurrentGame } from '../lib/scoring.js';
+import { finalizeFinishedMatch } from '../lib/matchResult.js';
 import { broadcastMatchUpdate } from '../lib/matchSocket.js';
 import { requireStaffApi } from '../middleware/auth.js';
+
+const MATCH_STATUSES = ['scheduled', 'live', 'finished', 'postponed', 'cancelled'];
 
 export const adminApiRouter = Router();
 adminApiRouter.use(requireStaffApi);
@@ -38,6 +41,39 @@ adminApiRouter.post('/matches/:matchId/point', async (req, res, next) => {
     }
 
     res.json({ ok: true, result: r, match: populated });
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminApiRouter.post('/matches/:matchId/status', async (req, res, next) => {
+  try {
+    const { matchId } = req.params;
+    const status = String(req.body?.status || '').trim();
+    if (!mongoose.isValidObjectId(matchId)) {
+      return res.status(400).json({ error: 'invalid_id' });
+    }
+    if (!MATCH_STATUSES.includes(status)) {
+      return res.status(400).json({ error: 'invalid_status' });
+    }
+
+    const match = await Match.findById(matchId);
+    if (!match) return res.status(404).json({ error: 'not_found' });
+
+    match.status = status;
+    if (status === 'finished') {
+      finalizeFinishedMatch(match);
+    }
+
+    await match.save();
+    try {
+      await broadcastMatchUpdate(req.app, match._id);
+    } catch (err) {
+      console.error('broadcastMatchUpdate failed:', err);
+    }
+
+    const populated = await Match.findById(match._id).populate('teamA teamB winnerId').lean();
+    res.json({ ok: true, status: populated?.status || status, match: populated });
   } catch (e) {
     next(e);
   }

@@ -32,6 +32,14 @@
   </div>
   <% } %>
 
+  <% if (comp.roundRobinMatrices && comp.roundRobinMatrices.length) { %>
+    <%- include('group-round-robin-matrix', {
+      groupRoundRobinMatrices: comp.roundRobinMatrices,
+      publicMode: true,
+      event: event,
+    }) %>
+  <% } %>
+
   <%- include('knockout-ladder-public', {
     knockoutLadderColumns: comp.knockoutLadderColumns,
     event: event,

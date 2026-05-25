@@ -271,6 +271,10 @@
       </form>
     </section>
 
+    <% if (tournament.phase === 'group') { %>
+      <%- include('../partials/group-round-robin-matrix', { groupRoundRobinMatrices: typeof groupRoundRobinMatrices !== 'undefined' ? groupRoundRobinMatrices : [] }) %>
+    <% } %>
+
     <section class="mt-12">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <h2 class="text-lg font-semibold text-white">場次（賽程／賽制）</h2>
@@ -378,7 +382,18 @@
                 <td class="whitespace-nowrap px-2 py-2 align-middle font-mono text-xs text-slate-400"><%= displayMatchTime(m) %></td>
                 <td class="whitespace-nowrap px-2 py-2 align-middle"><%= m.court || '—' %></td>
                 <td class="px-2 py-2 align-middle"><%- include('../partials/score-display', { m: m, scoreMainClass: 'font-mono text-xs font-semibold text-emerald-300/90', scoreDetailClass: 'mt-0.5 block font-mono text-[10px] text-slate-400' }) %></td>
-                <td class="whitespace-nowrap px-2 py-2 align-middle capitalize"><%= m.status %></td>
+                <td class="whitespace-nowrap px-2 py-2 align-middle">
+                  <select
+                    class="match-status-select w-full min-w-[5.5rem] rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200"
+                    data-match-id="<%= m._id %>"
+                    data-prev="<%= m.status %>"
+                    aria-label="場次狀態"
+                  >
+                    <% ['scheduled', 'live', 'finished', 'postponed', 'cancelled'].forEach(function (s) { %>
+                      <option value="<%= s %>" <%= m.status === s ? 'selected' : '' %>><%= typeof matchStatusLabel === 'function' ? matchStatusLabel(s) : s %></option>
+                    <% }); %>
+                  </select>
+                </td>
                 <td class="px-2 py-2 align-top">
                   <% if (refs.length) { %>
                     <ul class="mb-2 space-y-1 text-xs text-slate-400">
@@ -501,6 +516,48 @@
           var id = btn.getAttribute('data-team-id');
           var row = document.querySelector('.team-edit-row[data-team-id="' + id + '"]');
           if (row) row.classList.add('hidden');
+        });
+      });
+
+      document.querySelectorAll('.match-status-select').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+          var prev = sel.getAttribute('data-prev') || sel.value;
+          var matchId = sel.getAttribute('data-match-id');
+          var next = sel.value;
+          sel.disabled = true;
+          sel.classList.add('opacity-60');
+          fetch('/api/admin/matches/' + matchId + '/status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ status: next }),
+          })
+            .then(function (r) {
+              return r.json().then(function (j) {
+                return { ok: r.ok, j: j };
+              });
+            })
+            .then(function (ref) {
+              if (!ref.ok) {
+                sel.value = prev;
+                alert(typeof ref.j.error === 'string' ? ref.j.error : '更新狀態失敗');
+                return;
+              }
+              sel.setAttribute('data-prev', ref.j.status || next);
+              sel.classList.remove('border-rose-600');
+              sel.classList.add('border-emerald-600/60');
+              setTimeout(function () {
+                sel.classList.remove('border-emerald-600/60');
+              }, 1200);
+            })
+            .catch(function () {
+              sel.value = prev;
+              alert('網路錯誤，請再試');
+            })
+            .finally(function () {
+              sel.disabled = false;
+              sel.classList.remove('opacity-60');
+            });
         });
       });
     })();
