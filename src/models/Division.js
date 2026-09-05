@@ -30,5 +30,10 @@ const divisionSchema = new mongoose.Schema(
 );
 
 divisionSchema.index({ eventId: 1, order: 1 });
+/** 一對一：每個賽事最多綁一個報名組別 */
+divisionSchema.index(
+  { linkedTournamentId: 1 },
+  { unique: true, sparse: true, partialFilterExpression: { linkedTournamentId: { $type: 'objectId' } } }
+);
 
 export const Division = mongoose.model('Division', divisionSchema);

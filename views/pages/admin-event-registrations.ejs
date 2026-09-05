@@ -5,12 +5,36 @@
     <a href="/admin/events/<%= event._id %>" class="text-emerald-400 underline">← <%= event.name %> 設定</a>
   </p>
   <h1 class="mt-4 text-2xl font-bold text-white">報名紀錄</h1>
+  <p class="mt-2 text-sm text-slate-400">已付款（含 $0）可勾選移入連結賽事建隊；取消後不可還原並會移走隊伍。</p>
+
+  <% if (flash) { %>
+    <p class="mt-4 rounded border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200"><%= flash %></p>
+  <% } %>
+  <% if (warning) { %>
+    <p class="mt-4 rounded border border-amber-500/40 bg-amber-950/30 px-3 py-2 text-sm text-amber-100"><%= warning %></p>
+  <% } %>
+  <% if (error) { %>
+    <p class="mt-4 rounded border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"><%= error %></p>
+  <% } %>
+  <% if (promoteDetails && promoteDetails.length) { %>
+    <ul class="mt-2 list-inside list-disc text-xs text-slate-400">
+      <% promoteDetails.forEach(function (d) { %><li><%= d %></li><% }); %>
+    </ul>
+  <% } %>
 
   <section class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
     <% summary.forEach(function (s) { %>
       <div class="rounded border border-slate-800 bg-slate-900/40 p-4 text-sm">
         <p class="font-medium text-white"><%= s.division.name %></p>
-        <p class="mt-2 text-slate-400">已付：<span class="text-emerald-400"><%= s.paid %></span> 隊</p>
+        <p class="mt-1 text-xs text-slate-500">
+          <% if (s.division.linkedTournamentName) { %>
+            連結賽事：<%= s.division.linkedTournamentName %>
+          <% } else { %>
+            <span class="text-amber-400">尚未綁定賽事</span>
+          <% } %>
+        </p>
+        <p class="mt-2 text-slate-400">已付／確認：<span class="text-emerald-400"><%= s.paid %></span> 隊</p>
+        <p class="text-slate-400">已移入：<span class="text-sky-400"><%= s.confirmed %></span> 隊</p>
         <p class="text-slate-400">待付款：<span class="text-amber-400"><%= s.pending %></span> 隊</p>
         <p class="mt-1 text-xs text-slate-500">上限 <%= s.division.maxTeams %> 隊</p>
       </div>
@@ -34,41 +58,91 @@
     <a href="/admin/events/<%= event._id %>/registrations" class="text-sm text-slate-400 underline">清除</a>
   </form>
 
-  <div class="mt-6 overflow-x-auto">
-    <table class="w-full min-w-[48rem] text-left text-sm">
-      <thead>
-        <tr class="border-b border-slate-800 text-slate-400">
-          <th class="px-2 py-2">時間</th>
-          <th class="px-2 py-2">組別</th>
-          <th class="px-2 py-2">隊名／隊員</th>
-          <th class="px-2 py-2">參賽會員</th>
-          <th class="px-2 py-2">狀態</th>
-          <th class="px-2 py-2">金額</th>
-          <th class="px-2 py-2">電郵次數</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% registrations.forEach(function (r) { %>
-          <% var statusLabel = { pending_payment: '待付款', paid: '已付款', confirmed: '已確認', cancelled: '已取消', failed: '失敗' }[r.status] || r.status; %>
-          <tr class="border-b border-slate-800/80">
-            <td class="px-2 py-3 text-xs text-slate-500"><%= r.createdAt ? new Date(r.createdAt).toLocaleString('zh-HK') : '—' %></td>
-            <td class="px-2 py-3"><%= r.division ? r.division.name : '—' %></td>
-            <td class="px-2 py-3"><%= r.teamName || r.playerNames || '—' %></td>
-            <td class="px-2 py-3 text-xs text-slate-400">
-              <% (r.members || []).forEach(function (m, i) { %>
-                <% if (i) { %><br /><% } %><%= m.name %> &lt;<%= m.email %>&gt;
-              <% }); %>
-            </td>
-            <td class="px-2 py-3"><span class="<%= r.status === 'paid' || r.status === 'confirmed' ? 'text-emerald-400' : r.status === 'pending_payment' ? 'text-amber-400' : 'text-slate-400' %>"><%= statusLabel %></span></td>
-            <td class="px-2 py-3 font-mono"><%= r.amountPaid %>/<%= r.amountDue %></td>
-            <td class="px-2 py-3 text-xs text-slate-500"><%= r.paymentEmailSentCount || 0 %><% if (r.paymentDeadline) { %><br />到期 <%= new Date(r.paymentDeadline).toLocaleDateString('zh-HK') %><% } %></td>
+  <form method="post" action="/admin/events/<%= event._id %>/registrations/promote" id="promote-form" class="mt-6">
+    <% if (divFilter) { %><input type="hidden" name="division" value="<%= divFilter %>" /><% } %>
+    <div class="mb-3 flex flex-wrap items-center gap-3">
+      <button
+        type="submit"
+        class="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+        onclick="return confirm('確定將勾選嘅已付款報名移入賽事建隊？\\n（只建隊伍、暫未分組；已移入者不可再移。）');"
+      >
+        移入賽事隊伍
+      </button>
+      <label class="flex items-center gap-2 text-xs text-slate-400">
+        <input type="checkbox" id="select-all-promote" /> 全選可移入
+      </label>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[52rem] text-left text-sm">
+        <thead>
+          <tr class="border-b border-slate-800 text-slate-400">
+            <th class="px-2 py-2 w-10"></th>
+            <th class="px-2 py-2">時間</th>
+            <th class="px-2 py-2">組別</th>
+            <th class="px-2 py-2">隊名／隊員</th>
+            <th class="px-2 py-2">參賽會員</th>
+            <th class="px-2 py-2">狀態</th>
+            <th class="px-2 py-2">金額</th>
+            <th class="px-2 py-2">操作</th>
           </tr>
-        <% }); %>
-        <% if (!registrations.length) { %>
-          <tr><td colspan="7" class="px-2 py-8 text-center text-slate-500">暫無報名紀錄</td></tr>
-        <% } %>
-      </tbody>
-    </table>
-  </div>
+        </thead>
+        <tbody>
+          <% registrations.forEach(function (r) { %>
+            <% var statusLabel = { pending_payment: '待付款', paid: '已付款', confirmed: '已確認（已移入）', cancelled: '已取消', failed: '失敗' }[r.status] || r.status; %>
+            <tr class="border-b border-slate-800/80">
+              <td class="px-2 py-3">
+                <% if (r.canPromote) { %>
+                  <input type="checkbox" name="ids" value="<%= r._id %>" class="promote-cb" />
+                <% } %>
+              </td>
+              <td class="px-2 py-3 text-xs text-slate-500"><%= r.createdAt ? new Date(r.createdAt).toLocaleString('zh-HK') : '—' %></td>
+              <td class="px-2 py-3"><%= r.division ? r.division.name : '—' %></td>
+              <td class="px-2 py-3"><%= r.teamName || r.playerNames || '—' %></td>
+              <td class="px-2 py-3 text-xs text-slate-400">
+                <% (r.members || []).forEach(function (m, i) { %>
+                  <% if (i) { %><br /><% } %><%= m.name %> &lt;<%= m.email %>&gt;
+                <% }); %>
+                <% if (r.partnerEmail) { %>
+                  <br /><span class="text-slate-500">搭檔通知：<%= r.partnerEmail %></span>
+                <% } %>
+              </td>
+              <td class="px-2 py-3">
+                <span class="<%= r.status === 'paid' || r.status === 'confirmed' ? 'text-emerald-400' : r.status === 'pending_payment' ? 'text-amber-400' : r.status === 'cancelled' ? 'text-rose-400' : 'text-slate-400' %>"><%= statusLabel %></span>
+              </td>
+              <td class="px-2 py-3 font-mono"><%= r.amountPaid %>/<%= r.amountDue %></td>
+              <td class="px-2 py-3">
+                <% if (r.canCancel) { %>
+                  <button
+                    type="submit"
+                    formaction="/admin/events/<%= event._id %>/registrations/<%= r._id %>/cancel"
+                    formmethod="post"
+                    class="text-xs text-rose-400 underline"
+                    onclick="return confirm('取消後不可還原，並會移走已建立嘅賽事隊伍。\\n\\n退款須另行處理，並可能扣除手續費。\\n已付金額：HKD <%= r.amountPaid || 0 %>\\n\\n確定取消？');"
+                  >取消</button>
+                <% } else { %>
+                  <span class="text-xs text-slate-600">—</span>
+                <% } %>
+              </td>
+            </tr>
+          <% }); %>
+          <% if (!registrations.length) { %>
+            <tr><td colspan="8" class="px-2 py-8 text-center text-slate-500">暫無報名紀錄</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </form>
 </main>
+<script>
+  (function () {
+    var all = document.getElementById('select-all-promote');
+    if (!all) return;
+    all.addEventListener('change', function () {
+      document.querySelectorAll('.promote-cb').forEach(function (cb) {
+        cb.checked = all.checked;
+      });
+    });
+  })();
+</script>
 <%- include('../partials/admin-frame-end') %>

@@ -6,8 +6,10 @@ const registrationSchema = new mongoose.Schema(
     divisionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Division', required: true },
     /** 提交報名嘅會員 */
     primaryMemberId: { type: mongoose.Schema.Types.ObjectId, ref: 'Member', required: true },
-    /** 參賽會員（單打 1 人、雙打 2 人） */
+    /** 參賽會員（主報名人；搭檔可無帳號） */
     memberIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Member' }],
+    /** 雙打搭檔電郵（通知用；不必有會員帳號） */
+    partnerEmail: { type: String, trim: true, lowercase: true, default: '' },
     teamName: { type: String, trim: true, default: '' },
     playerNames: { type: String, trim: true, default: '' },
     contactPhone: { type: String, trim: true, default: '' },

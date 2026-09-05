@@ -50,26 +50,23 @@ export async function startRegistrationCheckout({
   if (!primary) return { ok: false, error: 'login_required' };
 
   const memberIds = [primary._id];
-  let partner = null;
+  let partnerEmailNorm = '';
 
   if (division.format === 'doubles') {
-    const pe = String(partnerEmail || '')
+    partnerEmailNorm = String(partnerEmail || '')
       .trim()
       .toLowerCase();
-    if (!pe) return { ok: false, error: 'partner_email_required' };
-    partner = await Member.findOne({ email: pe }).lean();
-    if (!partner) return { ok: false, error: 'partner_not_found' };
-    if (String(partner._id) === String(primary._id)) {
+    if (!partnerEmailNorm) return { ok: false, error: 'partner_email_required' };
+    if (partnerEmailNorm === String(primary.email || '').trim().toLowerCase()) {
       return { ok: false, error: 'partner_same_as_self' };
     }
-    memberIds.push(partner._id);
+    // 搭檔電郵僅作通知；若對方已有帳號則一併記入 memberIds（資格仍只驗主報名人）
+    const partner = await Member.findOne({ email: partnerEmailNorm }).lean();
+    if (partner) memberIds.push(partner._id);
   }
 
-  for (const mid of memberIds) {
-    const m = mid.equals(primary._id) ? primary : partner;
-    const check = checkMemberDivisionEligibility(m, division);
-    if (!check.ok) return { ok: false, error: 'eligibility_failed', issues: check.issues };
-  }
+  const check = checkMemberDivisionEligibility(primary, division);
+  if (!check.ok) return { ok: false, error: 'eligibility_failed', issues: check.issues };
 
   const taken = await countDivisionRegistrations(division._id);
   if (taken >= division.maxTeams) return { ok: false, error: 'division_full' };
@@ -80,6 +77,7 @@ export async function startRegistrationCheckout({
     divisionId: division._id,
     primaryMemberId: primary._id,
     memberIds,
+    partnerEmail: partnerEmailNorm,
     teamName: String(teamName || '').trim(),
     playerNames: String(playerNames || '').trim(),
     contactPhone: String(contactPhone || primary.phone || '').trim(),

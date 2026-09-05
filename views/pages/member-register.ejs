@@ -1,5 +1,7 @@
 <%- include('../partials/head', { title }) %>
-<body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
+<body class="home-page">
+  <%- include('../partials/public-header') %>
+
   <main class="mx-auto max-w-lg px-4 py-16">
     <h1 class="text-2xl font-bold text-emerald-400">會員註冊</h1>
     <p class="mt-2 text-sm text-slate-400">報名前請先建立帳號；雙打搭檔亦須各自註冊。</p>
@@ -48,7 +50,6 @@
     <p class="mt-6 text-center text-sm text-slate-400">
       已有帳號？<a href="/member/login<%= typeof next !== 'undefined' && next ? '?next=' + encodeURIComponent(next) : '' %>" class="text-emerald-400 underline">登入</a>
     </p>
-    <p class="mt-4 text-center text-sm text-slate-500"><a class="text-emerald-400 underline" href="/">返回首頁</a></p>
   </main>
 </body>
 </html>

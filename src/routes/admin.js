@@ -39,6 +39,10 @@ import { Division } from '../models/Division.js';
 import { Registration } from '../models/Registration.js';
 import { Member } from '../models/Member.js';
 import { countDivisionRegistrations } from '../lib/registrationEligibility.js';
+import {
+  promoteRegistrationsToTeams,
+  cancelRegistrationAndRemoveTeam,
+} from '../lib/registrationTeamService.js';
 import { Alliance } from '../models/Alliance.js';
 import { approveAlliance, rejectAlliance } from '../lib/allianceService.js';
 import { normalizeEventVenues, parseVenuesFromBody, findVenue } from '../lib/venues.js';
@@ -1360,6 +1364,19 @@ adminRouter.post('/matches/:matchId/update', requireStaff, async (req, res, next
   }
 });
 
+async function resolveLinkedTournamentId(eventId, raw, excludeDivisionId = null) {
+  const tid = String(raw || '').trim();
+  if (!tid) return { ok: true, value: undefined };
+  if (!mongoose.isValidObjectId(tid)) return { ok: false, error: 'tournament_invalid' };
+  const t = await Tournament.findOne({ _id: tid, eventId }).lean();
+  if (!t) return { ok: false, error: 'tournament_invalid' };
+  const clashQuery = { linkedTournamentId: t._id };
+  if (excludeDivisionId) clashQuery._id = { $ne: excludeDivisionId };
+  const clash = await Division.findOne(clashQuery).lean();
+  if (clash) return { ok: false, error: 'tournament_taken' };
+  return { ok: true, value: t._id };
+}
+
 adminRouter.get('/events/:eventId/divisions', requireStaff, async (req, res, next) => {
   try {
     const { eventId } = req.params;
@@ -1367,23 +1384,39 @@ adminRouter.get('/events/:eventId/divisions', requireStaff, async (req, res, nex
     const event = await Event.findById(eventId).lean();
     if (!event) return res.status(404).send('Not found');
     const divisions = await Division.find({ eventId: event._id }).sort({ order: 1, createdAt: 1 }).lean();
+    const tournaments = await Tournament.find({ eventId: event._id }).sort({ order: 1, createdAt: 1 }).lean();
     const counts = await Promise.all(
       divisions.map((d) => countDivisionRegistrations(d._id).then((n) => [String(d._id), n]))
     );
     const countByDiv = Object.fromEntries(counts);
 
+    const errorMap = {
+      '1': '請填寫組別名稱',
+      tournament_taken: '該賽事已綁定其他報名組別（一對一）',
+      tournament_invalid: '連結賽事不屬於此大會',
+    };
+
     res.render('pages/admin-event-divisions', {
       title: `報名組別 — ${event.name}`,
       event,
+      tournaments,
       divisions: divisions.map((d) => ({
         ...d,
         registeredCount: countByDiv[String(d._id)] || 0,
         registrationOpenLocal: toDatetimeLocalValue(d.registrationOpen),
         registrationCloseLocal: toDatetimeLocalValue(d.registrationClose),
+        linkedTournamentId: d.linkedTournamentId ? String(d.linkedTournamentId) : '',
       })),
       userEmail: req.session.email,
-      flash: req.query.saved === '1' ? '已儲存' : req.query.created === '1' ? '已新增組別' : req.query.deleted === '1' ? '已刪除' : null,
-      error: req.query.error === '1' ? '請填寫組別名稱' : null,
+      flash:
+        req.query.saved === '1'
+          ? '已儲存'
+          : req.query.created === '1'
+            ? '已新增組別'
+            : req.query.deleted === '1'
+              ? '已刪除'
+              : null,
+      error: errorMap[String(req.query.error || '')] || null,
     });
   } catch (e) {
     next(e);
@@ -1400,7 +1433,16 @@ adminRouter.post('/events/:eventId/divisions', requireStaff, async (req, res, ne
     const name = String(req.body.name || '').trim();
     if (!name) return res.redirect(`/admin/events/${eventId}/divisions?error=1`);
 
+    const link = await resolveLinkedTournamentId(event._id, req.body.linkedTournamentId);
+    if (!link.ok) return res.redirect(`/admin/events/${eventId}/divisions?error=${link.error}`);
+
     const maxOrder = await Division.findOne({ eventId: event._id }).sort({ order: -1 }).select('order').lean();
+    const orderRaw = req.body.order;
+    const order =
+      orderRaw !== undefined && String(orderRaw).trim() !== ''
+        ? Number(orderRaw) || 0
+        : (maxOrder?.order ?? -1) + 1;
+
     await Division.create({
       eventId: event._id,
       name,
@@ -1410,7 +1452,8 @@ adminRouter.post('/events/:eventId/divisions', requireStaff, async (req, res, ne
       registrationOpen: parseDatetimeLocal(req.body.registrationOpen) || undefined,
       registrationClose: parseDatetimeLocal(req.body.registrationClose) || undefined,
       isPublished: req.body.isPublished === '1',
-      order: (maxOrder?.order ?? -1) + 1,
+      order,
+      linkedTournamentId: link.value,
       restrictions: {
         gender: ['male', 'female', 'mixed', 'open', ''].includes(req.body.gender) ? req.body.gender : 'open',
         minAge: req.body.minAge ? Number(req.body.minAge) : undefined,
@@ -1437,6 +1480,9 @@ adminRouter.post('/divisions/:divisionId/update', requireStaff, async (req, res,
     const name = String(req.body.name || '').trim();
     if (!name) return res.redirect(`/admin/events/${div.eventId}/divisions?error=1`);
 
+    const link = await resolveLinkedTournamentId(div.eventId, req.body.linkedTournamentId, div._id);
+    if (!link.ok) return res.redirect(`/admin/events/${div.eventId}/divisions?error=${link.error}`);
+
     div.name = name;
     div.description = String(req.body.description || '').trim();
     div.format = req.body.format === 'singles' ? 'singles' : 'doubles';
@@ -1446,6 +1492,8 @@ adminRouter.post('/divisions/:divisionId/update', requireStaff, async (req, res,
     div.registrationClose = parseDatetimeLocal(req.body.registrationClose) || undefined;
     div.isPublished = req.body.isPublished === '1';
     div.order = Number(req.body.order) || 0;
+    if (link.value) div.linkedTournamentId = link.value;
+    else div.linkedTournamentId = undefined;
     div.restrictions = {
       gender: ['male', 'female', 'mixed', 'open', ''].includes(req.body.gender) ? req.body.gender : 'open',
       minAge: req.body.minAge ? Number(req.body.minAge) : undefined,
@@ -1455,6 +1503,9 @@ adminRouter.post('/divisions/:divisionId/update', requireStaff, async (req, res,
     };
     div.eligibilityNotes = String(req.body.eligibilityNotes || '').trim();
     await div.save();
+    if (!link.value) {
+      await Division.updateOne({ _id: div._id }, { $unset: { linkedTournamentId: 1 } });
+    }
 
     res.redirect(`/admin/events/${div.eventId}/divisions?saved=1`);
   } catch (e) {
@@ -1484,6 +1535,8 @@ adminRouter.get('/events/:eventId/registrations', requireStaff, async (req, res,
     if (!event) return res.status(404).send('Not found');
 
     const divisions = await Division.find({ eventId: event._id }).sort({ order: 1 }).lean();
+    const tournaments = await Tournament.find({ eventId: event._id }).sort({ order: 1, createdAt: 1 }).lean();
+    const tName = Object.fromEntries(tournaments.map((t) => [String(t._id), t.name]));
     const divFilter = String(req.query.division || '').trim();
     const query = { eventId: event._id };
     if (mongoose.isValidObjectId(divFilter)) query.divisionId = divFilter;
@@ -1496,29 +1549,114 @@ adminRouter.get('/events/:eventId/registrations', requireStaff, async (req, res,
     const memberIds = [...new Set(registrations.flatMap((r) => (r.memberIds || []).map(String)))];
     const members = await Member.find({ _id: { $in: memberIds } }).lean();
     const memberMap = Object.fromEntries(members.map((m) => [String(m._id), m]));
-    const divMap = Object.fromEntries(divisions.map((d) => [String(d._id), d]));
+    const divMap = Object.fromEntries(
+      divisions.map((d) => [
+        String(d._id),
+        {
+          ...d,
+          linkedTournamentName: d.linkedTournamentId ? tName[String(d.linkedTournamentId)] || null : null,
+        },
+      ])
+    );
 
     const summary = await Promise.all(
       divisions.map(async (d) => {
-        const paid = await Registration.countDocuments({ divisionId: d._id, status: { $in: ['paid', 'confirmed'] } });
+        const paid = await Registration.countDocuments({
+          divisionId: d._id,
+          status: { $in: ['paid', 'confirmed'] },
+        });
         const pending = await Registration.countDocuments({ divisionId: d._id, status: 'pending_payment' });
-        return { division: d, paid, pending, total: paid + pending };
+        const confirmed = await Registration.countDocuments({ divisionId: d._id, status: 'confirmed' });
+        return { division: divMap[String(d._id)], paid, pending, confirmed, total: paid + pending };
       })
     );
+
+    const flash =
+      req.query.promoted
+        ? `已移入 ${req.query.promoted} 隊`
+        : req.query.cancelled === '1'
+          ? '已取消報名並移走隊伍（不可還原）。請另行處理退款（可能扣除手續費）。'
+          : null;
+    const warning =
+      req.query.schedule_warn === '1'
+        ? '注意：該賽事已有場次。新增隊伍後請重新安排賽程。'
+        : null;
+    const errorMap = {
+      none_selected: '請先勾選要移入的報名',
+      none_eligible: '沒有可移入的報名（須已付款且尚未移入）',
+      promote_failed: '移入失敗，請檢查組別是否已綁定賽事及名額',
+      not_found: '找不到報名紀錄',
+      already_cancelled: '此報名已取消',
+      cannot_cancel_status: '此狀態不可取消',
+      team_in_matches: '該隊伍已出現在場次中，請先從賽程移除後再取消',
+    };
 
     res.render('pages/admin-event-registrations', {
       title: `報名紀錄 — ${event.name}`,
       event,
-      divisions,
+      divisions: Object.values(divMap),
       divFilter,
       summary,
+      flash,
+      warning,
+      error: errorMap[String(req.query.error || '')] || null,
+      promoteDetails: req.query.details ? String(req.query.details).split('|').filter(Boolean) : [],
       registrations: registrations.map((r) => ({
         ...r,
         division: divMap[String(r.divisionId)],
         members: (r.memberIds || []).map((id) => memberMap[String(id)]).filter(Boolean),
+        canPromote: r.status === 'paid' && !r.teamId,
+        canCancel: ['paid', 'confirmed'].includes(r.status),
       })),
       userEmail: req.session.email,
     });
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.post('/events/:eventId/registrations/promote', requireStaff, async (req, res, next) => {
+  try {
+    const { eventId } = req.params;
+    if (!mongoose.isValidObjectId(eventId)) return res.status(404).send('Not found');
+    const event = await Event.findById(eventId).lean();
+    if (!event) return res.status(404).send('Not found');
+
+    const raw = req.body.ids;
+    const ids = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    const result = await promoteRegistrationsToTeams(ids, { eventId: event._id });
+
+    const q = new URLSearchParams();
+    if (req.body.division) q.set('division', String(req.body.division));
+    if (result.ok) {
+      q.set('promoted', String(result.promoted));
+      if (result.scheduleWarning) q.set('schedule_warn', '1');
+      if (result.details?.length) q.set('details', result.details.slice(0, 8).join('|'));
+    } else {
+      q.set('error', result.error || 'promote_failed');
+      if (result.details?.length) q.set('details', result.details.slice(0, 8).join('|'));
+    }
+    res.redirect(`/admin/events/${eventId}/registrations?${q.toString()}`);
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.post('/events/:eventId/registrations/:registrationId/cancel', requireStaff, async (req, res, next) => {
+  try {
+    const { eventId, registrationId } = req.params;
+    if (!mongoose.isValidObjectId(eventId) || !mongoose.isValidObjectId(registrationId)) {
+      return res.status(404).send('Not found');
+    }
+    const event = await Event.findById(eventId).lean();
+    if (!event) return res.status(404).send('Not found');
+
+    const result = await cancelRegistrationAndRemoveTeam(registrationId, { eventId: event._id });
+    const q = new URLSearchParams();
+    if (req.body.division) q.set('division', String(req.body.division));
+    if (result.ok) q.set('cancelled', '1');
+    else q.set('error', result.error || 'not_found');
+    res.redirect(`/admin/events/${eventId}/registrations?${q.toString()}`);
   } catch (e) {
     next(e);
   }
