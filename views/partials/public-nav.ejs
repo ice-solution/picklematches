@@ -1,13 +1,9 @@
 <nav class="flex flex-wrap items-center gap-1 text-sm sm:gap-2">
   <a href="/events" class="rounded px-2 py-2 text-slate-300 hover:bg-slate-800 hover:text-white sm:px-3">比賽</a>
-  <a href="/alliances" class="rounded px-2 py-2 text-slate-300 hover:bg-slate-800 hover:text-white sm:px-3">聯盟表</a>
-  <a href="/players" class="rounded px-2 py-2 text-slate-300 hover:bg-slate-800 hover:text-white sm:px-3">球員列表</a>
-  <a href="/sessions" class="rounded px-2 py-2 text-slate-300 hover:bg-slate-800 hover:text-white sm:px-3">開場</a>
+  <%# 暫隱：聯盟表 / 球員列表 / 開場 — 稍後再開 %>
   <% if (typeof session !== 'undefined' && session.memberId) { %>
     <a href="/member/profile" class="hidden rounded px-2 py-2 text-slate-300 hover:bg-slate-800 hover:text-white sm:inline sm:px-3">我的資料</a>
     <a href="/member" class="hidden rounded px-2 py-2 text-slate-300 hover:bg-slate-800 hover:text-white sm:inline sm:px-3">我的報名</a>
-    <a href="/member/alliances" class="hidden rounded px-2 py-2 text-slate-300 hover:bg-slate-800 hover:text-white md:inline md:px-3">我的聯盟</a>
-    <a href="/sessions/new" class="home-btn !px-3 !py-2 text-xs sm:text-sm">開場</a>
   <% } else { %>
     <a href="/member/login" class="rounded px-2 py-2 text-slate-300 hover:bg-slate-800 hover:text-white sm:px-3">登入</a>
     <a href="/member/register" class="home-btn !px-3 !py-2 text-xs sm:text-sm">註冊</a>
