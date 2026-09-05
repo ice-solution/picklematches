@@ -1,0 +1,74 @@
+<%- include('../partials/head', { title }) %>
+<%- include('../partials/admin-frame-start') %>
+<main class="mx-auto w-full max-w-6xl pb-12 pt-1">
+  <p class="text-sm text-slate-500">
+    <a href="/admin/events/<%= event._id %>" class="text-emerald-400 underline">← <%= event.name %> 設定</a>
+  </p>
+  <h1 class="mt-4 text-2xl font-bold text-white">報名紀錄</h1>
+
+  <section class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <% summary.forEach(function (s) { %>
+      <div class="rounded border border-slate-800 bg-slate-900/40 p-4 text-sm">
+        <p class="font-medium text-white"><%= s.division.name %></p>
+        <p class="mt-2 text-slate-400">已付：<span class="text-emerald-400"><%= s.paid %></span> 隊</p>
+        <p class="text-slate-400">待付款：<span class="text-amber-400"><%= s.pending %></span> 隊</p>
+        <p class="mt-1 text-xs text-slate-500">上限 <%= s.division.maxTeams %> 隊</p>
+      </div>
+    <% }); %>
+    <% if (!summary.length) { %>
+      <p class="text-slate-500">尚未建立報名組別。</p>
+    <% } %>
+  </section>
+
+  <form method="get" class="mt-8 flex flex-wrap items-end gap-3">
+    <div>
+      <label class="block text-xs text-slate-500">篩選組別</label>
+      <select name="division" class="mt-1 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm">
+        <option value="">全部</option>
+        <% divisions.forEach(function (d) { %>
+          <option value="<%= d._id %>" <%= divFilter === String(d._id) ? 'selected' : '' %>><%= d.name %></option>
+        <% }); %>
+      </select>
+    </div>
+    <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-sm text-white">篩選</button>
+    <a href="/admin/events/<%= event._id %>/registrations" class="text-sm text-slate-400 underline">清除</a>
+  </form>
+
+  <div class="mt-6 overflow-x-auto">
+    <table class="w-full min-w-[48rem] text-left text-sm">
+      <thead>
+        <tr class="border-b border-slate-800 text-slate-400">
+          <th class="px-2 py-2">時間</th>
+          <th class="px-2 py-2">組別</th>
+          <th class="px-2 py-2">隊名／隊員</th>
+          <th class="px-2 py-2">參賽會員</th>
+          <th class="px-2 py-2">狀態</th>
+          <th class="px-2 py-2">金額</th>
+          <th class="px-2 py-2">電郵次數</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% registrations.forEach(function (r) { %>
+          <% var statusLabel = { pending_payment: '待付款', paid: '已付款', confirmed: '已確認', cancelled: '已取消', failed: '失敗' }[r.status] || r.status; %>
+          <tr class="border-b border-slate-800/80">
+            <td class="px-2 py-3 text-xs text-slate-500"><%= r.createdAt ? new Date(r.createdAt).toLocaleString('zh-HK') : '—' %></td>
+            <td class="px-2 py-3"><%= r.division ? r.division.name : '—' %></td>
+            <td class="px-2 py-3"><%= r.teamName || r.playerNames || '—' %></td>
+            <td class="px-2 py-3 text-xs text-slate-400">
+              <% (r.members || []).forEach(function (m, i) { %>
+                <% if (i) { %><br /><% } %><%= m.name %> &lt;<%= m.email %>&gt;
+              <% }); %>
+            </td>
+            <td class="px-2 py-3"><span class="<%= r.status === 'paid' || r.status === 'confirmed' ? 'text-emerald-400' : r.status === 'pending_payment' ? 'text-amber-400' : 'text-slate-400' %>"><%= statusLabel %></span></td>
+            <td class="px-2 py-3 font-mono"><%= r.amountPaid %>/<%= r.amountDue %></td>
+            <td class="px-2 py-3 text-xs text-slate-500"><%= r.paymentEmailSentCount || 0 %><% if (r.paymentDeadline) { %><br />到期 <%= new Date(r.paymentDeadline).toLocaleDateString('zh-HK') %><% } %></td>
+          </tr>
+        <% }); %>
+        <% if (!registrations.length) { %>
+          <tr><td colspan="7" class="px-2 py-8 text-center text-slate-500">暫無報名紀錄</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</main>
+<%- include('../partials/admin-frame-end') %>

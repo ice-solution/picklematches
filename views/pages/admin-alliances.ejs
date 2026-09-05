@@ -1,0 +1,45 @@
+<%- include('../partials/head', { title }) %>
+<%- include('../partials/admin-frame-start') %>
+<main class="mx-auto w-full max-w-5xl pb-12 pt-1">
+  <h1 class="text-2xl font-bold text-white">聯盟審核</h1>
+  <% if (notice) { %>
+    <p class="mt-4 rounded border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200"><%= notice %></p>
+  <% } %>
+
+  <div class="mt-6 flex gap-2 text-sm">
+    <a href="/admin/alliances?status=pending" class="rounded px-3 py-1 <%= status === 'pending' ? 'bg-slate-700 text-white' : 'text-slate-400' %>">待審</a>
+    <a href="/admin/alliances?status=approved" class="rounded px-3 py-1 <%= status === 'approved' ? 'bg-slate-700 text-white' : 'text-slate-400' %>">已通過</a>
+    <a href="/admin/alliances?status=rejected" class="rounded px-3 py-1 <%= status === 'rejected' ? 'bg-slate-700 text-white' : 'text-slate-400' %>">已拒絕</a>
+    <a href="/admin/alliances?status=all" class="rounded px-3 py-1 <%= status === 'all' ? 'bg-slate-700 text-white' : 'text-slate-400' %>">全部</a>
+  </div>
+
+  <ul class="mt-8 space-y-4">
+    <% alliances.forEach(function (a) { %>
+      <li class="rounded border border-slate-800 bg-slate-900/50 p-5">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-semibold text-white"><%= a.name %></h2>
+            <p class="text-xs text-slate-500">slug: <%= a.slug %> · <%= a.status %></p>
+            <p class="mt-2 text-sm text-slate-400"><%= a.description || '—' %></p>
+            <p class="mt-1 text-xs text-slate-500"><%= a.contactEmail %> <%= a.contactPhone %> <%= a.location %></p>
+          </div>
+          <% if (a.status === 'pending') { %>
+            <div class="flex flex-wrap gap-2">
+              <form method="post" action="/admin/alliances/<%= a._id %>/approve">
+                <button type="submit" class="rounded bg-emerald-600 px-4 py-2 text-sm text-white">通過</button>
+              </form>
+              <form method="post" action="/admin/alliances/<%= a._id %>/reject" class="flex gap-2">
+                <input name="reason" placeholder="拒絕原因" class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs" />
+                <button type="submit" class="rounded bg-rose-700 px-3 py-2 text-sm text-white">拒絕</button>
+              </form>
+            </div>
+          <% } %>
+        </div>
+      </li>
+    <% }); %>
+    <% if (!alliances.length) { %>
+      <li class="text-slate-500">沒有紀錄。</li>
+    <% } %>
+  </ul>
+</main>
+<%- include('../partials/admin-frame-end') %>

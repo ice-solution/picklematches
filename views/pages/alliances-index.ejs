@@ -1,0 +1,29 @@
+<%- include('../partials/public-page-start', { title }) %>
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-bold text-white sm:text-3xl">聯盟表</h1>
+        <p class="mt-2 text-sm text-slate-400">已加盟組織；歡迎球會、球場、社群申請加入平台。</p>
+      </div>
+      <a href="/alliances/apply" class="home-btn">申請加盟</a>
+    </div>
+
+    <% if (!alliances.length) { %>
+      <p class="home-card mt-8 text-center text-slate-400">暫無已加盟聯盟。歡迎<a href="/alliances/apply" class="text-emerald-400 underline">提交申請</a>。</p>
+    <% } else { %>
+      <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <% alliances.forEach(function (a) { %>
+          <a href="/alliances/<%= a.slug %>" class="home-card block transition hover:border-emerald-800">
+            <% if (a.logoUrl) { %>
+              <img src="<%= a.logoUrl %>" alt="" class="mb-3 h-12 w-12 rounded object-cover" />
+            <% } else { %>
+              <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-emerald-900/50 text-lg font-bold text-emerald-300"><%= a.name.charAt(0) %></div>
+            <% } %>
+            <h2 class="text-lg font-semibold text-white"><%= a.name %></h2>
+            <% if (a.location) { %><p class="mt-1 text-xs text-slate-500"><%= a.location %></p><% } %>
+            <p class="mt-2 line-clamp-2 text-sm text-slate-400"><%= a.description || '—' %></p>
+            <p class="mt-3 text-xs text-emerald-400"><%= a.memberCount %> 位成員</p>
+          </a>
+        <% }); %>
+      </div>
+    <% } %>
+<%- include('../partials/public-page-end') %>

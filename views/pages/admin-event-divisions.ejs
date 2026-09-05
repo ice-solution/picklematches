@@ -1,0 +1,96 @@
+<%- include('../partials/head', { title }) %>
+<%- include('../partials/admin-frame-start') %>
+<main class="mx-auto w-full max-w-5xl pb-12 pt-1">
+  <p class="text-sm text-slate-500">
+    <a href="/admin/events/<%= event._id %>" class="text-emerald-400 underline">← <%= event.name %> 設定</a>
+  </p>
+  <h1 class="mt-4 text-2xl font-bold text-white">報名組別</h1>
+
+  <% if (flash) { %>
+    <p class="mt-4 rounded border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200"><%= flash %></p>
+  <% } %>
+  <% if (error) { %>
+    <p class="mt-4 rounded border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"><%= error %></p>
+  <% } %>
+
+  <section class="mt-8 space-y-6">
+    <% divisions.forEach(function (d) { %>
+      <form method="post" action="/admin/divisions/<%= d._id %>/update" class="rounded border border-slate-800 bg-slate-900/40 p-5 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h2 class="font-semibold text-emerald-300"><%= d.name %></h2>
+          <span class="text-xs text-slate-500"><%= d.registeredCount %> / <%= d.maxTeams %> 隊已報名</span>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label class="block text-xs text-slate-500">組別名稱</label>
+            <input name="name" required value="<%= d.name %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-500">排序</label>
+            <input name="order" type="number" value="<%= d.order || 0 %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-500">賽制</label>
+            <select name="format" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm">
+              <option value="doubles" <%= d.format === 'doubles' ? 'selected' : '' %>>雙打</option>
+              <option value="singles" <%= d.format === 'singles' ? 'selected' : '' %>>單打</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-500">報名費（HKD／每隊）</label>
+            <input name="fee" type="number" min="0" step="1" value="<%= d.fee %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-500">名額（隊）</label>
+            <input name="maxTeams" type="number" min="1" value="<%= d.maxTeams %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-500">性別限制</label>
+            <select name="gender" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm">
+              <% [['open','開放'],['male','男子'],['female','女子'],['mixed','混雙']].forEach(function (g) { %>
+                <option value="<%= g[0] %>" <%= (d.restrictions && d.restrictions.gender) === g[0] ? 'selected' : '' %>><%= g[1] %></option>
+              <% }); %>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-500">報名開始</label>
+            <input name="registrationOpen" type="datetime-local" value="<%= d.registrationOpenLocal || '' %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-500">報名截止</label>
+            <input name="registrationClose" type="datetime-local" value="<%= d.registrationCloseLocal || '' %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" name="isPublished" value="1" id="pub-<%= d._id %>" <%= d.isPublished ? 'checked' : '' %> />
+          <label for="pub-<%= d._id %>" class="text-sm text-slate-300">前台顯示並接受報名</label>
+        </div>
+        <div class="flex flex-wrap gap-2 pt-2">
+          <button type="submit" class="rounded bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white">儲存</button>
+          <button type="submit" formaction="/admin/divisions/<%= d._id %>/delete" formmethod="post" class="text-sm text-rose-400 underline" onclick="return confirm('確定刪除此組別？');">刪除</button>
+        </div>
+      </form>
+    <% }); %>
+    <% if (!divisions.length) { %>
+      <p class="text-slate-500">尚未建立組別，請於下方新增。</p>
+    <% } %>
+  </section>
+
+  <form method="post" action="/admin/events/<%= event._id %>/divisions" class="mt-10 space-y-3 rounded border border-dashed border-slate-700 p-5">
+    <h2 class="font-semibold text-slate-300">新增組別</h2>
+    <div class="grid gap-3 sm:grid-cols-2">
+      <input name="name" required placeholder="組別名稱" class="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+      <select name="format" class="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm">
+        <option value="doubles">雙打</option>
+        <option value="singles">單打</option>
+      </select>
+      <input name="fee" type="number" min="0" value="0" placeholder="報名費" class="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+      <input name="maxTeams" type="number" min="1" value="32" placeholder="名額" class="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+    </div>
+    <label class="flex items-center gap-2 text-sm text-slate-300">
+      <input type="checkbox" name="isPublished" value="1" checked /> 立即發布
+    </label>
+    <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-600">新增組別</button>
+  </form>
+</main>
+<%- include('../partials/admin-frame-end') %>

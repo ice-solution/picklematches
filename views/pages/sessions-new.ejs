@@ -1,0 +1,72 @@
+<%- include('../partials/public-page-start', { title }) %>
+    <p class="text-sm"><a href="/sessions" class="text-emerald-400 underline">← 開場列表</a></p>
+    <h1 class="mt-4 text-2xl font-bold text-white">開場</h1>
+    <p class="mt-2 text-sm text-slate-400">建立一個場次，邀請球友參加練習或約戰。</p>
+    <% if (error) { %><p class="mt-4 text-sm text-rose-400">請填寫標題與開始時間。</p><% } %>
+
+    <form method="post" action="/sessions/new" class="home-card mt-8 max-w-2xl space-y-4">
+      <div>
+        <label class="block text-sm text-slate-400">標題 <span class="text-rose-400">*</span></label>
+        <input name="title" required placeholder="例：週六早上練波" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+      </div>
+      <div>
+        <label class="block text-sm text-slate-400">說明</label>
+        <textarea name="description" rows="3" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2"></textarea>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="block text-sm text-slate-400">開始時間 <span class="text-rose-400">*</span></label>
+          <input name="sessionDate" type="datetime-local" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400">結束時間</label>
+          <input name="sessionEndDate" type="datetime-local" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="block text-sm text-slate-400">場地</label>
+          <input name="venue" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400">地址</label>
+          <input name="address" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-3">
+        <div>
+          <label class="block text-sm text-slate-400">形式</label>
+          <select name="format" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+            <option value="open">自由配對</option>
+            <option value="doubles">雙打</option>
+            <option value="singles">單打</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400">程度</label>
+          <select name="skillLevel" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+            <option value="all">不限</option>
+            <option value="beginner">初學</option>
+            <option value="intermediate">中級</option>
+            <option value="advanced">進階</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400">名額</label>
+          <input name="maxPlayers" type="number" min="2" value="8" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+      </div>
+      <% if (myAlliances.length) { %>
+        <div>
+          <label class="block text-sm text-slate-400">代表聯盟（選填）</label>
+          <select name="allianceId" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+            <option value="">— 個人開場 —</option>
+            <% myAlliances.forEach(function (a) { %>
+              <option value="<%= a.alliance._id %>"><%= a.alliance.name %></option>
+            <% }); %>
+          </select>
+        </div>
+      <% } %>
+      <button type="submit" class="home-btn">發布開場</button>
+    </form>
+<%- include('../partials/public-page-end') %>

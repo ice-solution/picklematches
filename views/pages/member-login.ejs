@@ -1,0 +1,27 @@
+<%- include('../partials/head', { title }) %>
+<body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
+  <main class="mx-auto flex max-w-md flex-col justify-center px-4 py-20">
+    <h1 class="text-2xl font-bold text-emerald-400">會員登入</h1>
+    <p class="mt-2 text-sm text-slate-400">登入後可報名參賽及查看報名紀錄。</p>
+    <% if (error) { %>
+      <p class="mt-4 rounded border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"><%= error %></p>
+    <% } %>
+    <form method="post" action="/member/login" class="mt-8 space-y-4">
+      <input type="hidden" name="next" value="<%= typeof next !== 'undefined' ? next : '' %>" />
+      <div>
+        <label class="block text-sm text-slate-400">電郵</label>
+        <input name="email" type="email" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" autocomplete="username" />
+      </div>
+      <div>
+        <label class="block text-sm text-slate-400">密碼</label>
+        <input name="password" type="password" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" autocomplete="current-password" />
+      </div>
+      <button type="submit" class="w-full rounded bg-emerald-600 py-2 font-semibold text-white hover:bg-emerald-500">登入</button>
+    </form>
+    <p class="mt-6 text-center text-sm text-slate-400">
+      未有帳號？<a href="/member/register<%= typeof next !== 'undefined' && next ? '?next=' + encodeURIComponent(next) : '' %>" class="text-emerald-400 underline">立即註冊</a>
+    </p>
+    <p class="mt-4 text-center text-sm text-slate-500"><a class="text-emerald-400 underline" href="/">返回首頁</a></p>
+  </main>
+</body>
+</html>

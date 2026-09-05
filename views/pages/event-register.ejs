@@ -1,0 +1,175 @@
+<%- include('../partials/head', { title }) %>
+<body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
+  <header class="border-b border-slate-800">
+    <div class="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
+      <a href="/e/<%= event.slug %>" class="text-sm text-emerald-400 underline">← <%= event.name %> 賽程</a>
+      <a href="/member" class="text-sm text-slate-400 underline">我的報名</a>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-3xl px-4 py-10">
+    <h1 class="text-2xl font-bold text-white"><%= event.name %> — 線上報名</h1>
+    <p class="mt-2 text-sm text-slate-400">登入帳號：<%= member.name %>（<%= member.email %>）</p>
+
+    <% if (event.registrationInfo) { %>
+      <div class="mt-6 rounded border border-sky-900/50 bg-sky-950/30 p-4 text-sm text-slate-300 whitespace-pre-wrap"><%= event.registrationInfo %></div>
+    <% } %>
+    <% if (event.venueDetails) { %>
+      <div class="mt-4 rounded border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">
+        <p class="font-medium text-slate-300">場地詳情</p>
+        <p class="mt-2 whitespace-pre-wrap"><%= event.venueDetails %></p>
+      </div>
+    <% } %>
+    <% if (event.eligibilityNotes) { %>
+      <div class="mt-4 rounded border border-amber-900/40 bg-amber-950/20 p-4 text-sm text-amber-100/90 whitespace-pre-wrap"><%= event.eligibilityNotes %></div>
+    <% } %>
+
+    <% if (error) { %>
+      <p class="mt-6 rounded border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"><%= error %></p>
+    <% } %>
+
+    <div id="form-error" class="mt-6 hidden rounded border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"></div>
+
+    <% if (!divisions.length) { %>
+      <p class="mt-8 text-slate-500">暫無開放報名的組別，請稍後再試。</p>
+    <% } else { %>
+      <form id="register-form" class="mt-8 space-y-6">
+        <div>
+          <label class="block text-sm font-medium text-slate-300">選擇組別 <span class="text-rose-400">*</span></label>
+          <select name="divisionId" id="divisionId" required class="mt-2 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+            <option value="" disabled selected hidden>請選擇組別</option>
+            <% divisions.forEach(function (d) { %>
+              <% var fmt = d.format === 'singles' ? '單打' : '雙打'; var full = !d.isOpen || d.registeredCount >= d.maxTeams; %>
+              <option
+                value="<%= d._id %>"
+                data-format="<%= d.format %>"
+                data-fee="<%= d.fee %>"
+                data-currency="<%= d.currency || 'HKD' %>"
+                <%= full ? 'disabled' : '' %>
+              ><%= d.name %>（<%= fmt %> · HK$<%= d.fee %> · <%= d.registeredCount %>/<%= d.maxTeams %> 隊<%= full ? ' · 已滿或已截止' : '' %>）</option>
+            <% }); %>
+          </select>
+          <p id="division-hint" class="mt-2 text-xs text-slate-500"></p>
+        </div>
+
+        <div>
+          <label class="block text-sm text-slate-400">隊伍／組合名稱</label>
+          <input name="teamName" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="選填" />
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400">隊員姓名（顯示用）</label>
+          <input name="playerNames" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="例：陳大文、李小明" />
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400">聯絡電話</label>
+          <input name="contactPhone" type="tel" value="<%= member.phone || '' %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+
+        <div id="partner-field" class="hidden">
+          <label class="block text-sm text-slate-400">搭檔電郵 <span class="text-rose-400">*</span></label>
+          <input name="partnerEmail" type="email" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="搭檔須已註冊會員" />
+          <p class="mt-1 text-xs text-slate-500">雙打須填寫搭檔已註冊的電郵；雙方均需有會員帳號。</p>
+        </div>
+
+        <div>
+          <label class="block text-sm text-slate-400">備註</label>
+          <textarea name="remarks" rows="2" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2"></textarea>
+        </div>
+
+        <button type="submit" id="submit-btn" class="w-full rounded bg-emerald-600 py-3 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
+          確認報名並付款
+        </button>
+      </form>
+    <% } %>
+  </main>
+
+  <script>
+    (function () {
+      var form = document.getElementById('register-form');
+      if (!form) return;
+      var divisionSelect = document.getElementById('divisionId');
+      var partnerField = document.getElementById('partner-field');
+      var hint = document.getElementById('division-hint');
+      var errBox = document.getElementById('form-error');
+      var submitBtn = document.getElementById('submit-btn');
+      var slug = <%- JSON.stringify(event.slug) %>;
+
+      var errorMessages = {
+        registration_disabled: '此賽事尚未開放報名。',
+        division_not_found: '組別不存在。',
+        registration_closed: '此組別報名已截止或未開始。',
+        partner_email_required: '雙打請填寫搭檔電郵。',
+        partner_not_found: '找不到此搭檔電郵，請確認對方已註冊會員。',
+        partner_same_as_self: '搭檔不能是自己。',
+        eligibility_failed: '不符合組別資格要求。',
+        division_full: '此組別名額已滿。',
+        login_required: '請先登入。'
+      };
+
+      function updateDivisionUi() {
+        var opt = divisionSelect.options[divisionSelect.selectedIndex];
+        if (!opt || !opt.value) {
+          partnerField.classList.add('hidden');
+          hint.textContent = '';
+          return;
+        }
+        var fmt = opt.getAttribute('data-format');
+        var fee = opt.getAttribute('data-fee');
+        var cur = opt.getAttribute('data-currency') || 'HKD';
+        if (fmt === 'doubles') {
+          partnerField.classList.remove('hidden');
+          partnerField.querySelector('input').required = true;
+        } else {
+          partnerField.classList.add('hidden');
+          partnerField.querySelector('input').required = false;
+        }
+        hint.textContent = Number(fee) > 0
+          ? '報名費：' + cur + ' ' + fee + '（每隊一筆，付款後方為完成報名）'
+          : '此組別免費，提交後即完成報名。';
+        submitBtn.textContent = Number(fee) > 0 ? '確認報名並前往付款' : '確認報名（免費）';
+      }
+
+      divisionSelect.addEventListener('change', updateDivisionUi);
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        errBox.classList.add('hidden');
+        submitBtn.disabled = true;
+        var fd = new FormData(form);
+        var body = Object.fromEntries(fd.entries());
+        fetch('/api/public/register/' + encodeURIComponent(slug) + '/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(body)
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (res) {
+            if (!res.ok) {
+              var msg = errorMessages[res.j.error] || res.j.error || '提交失敗';
+              if (res.j.issues && res.j.issues.length) msg += '：' + res.j.issues.join('、');
+              errBox.textContent = msg;
+              errBox.classList.remove('hidden');
+              submitBtn.disabled = false;
+              return;
+            }
+            if (res.j.redirectUrl) {
+              window.location.href = res.j.redirectUrl;
+            } else if (res.j.url) {
+              window.location.href = res.j.url;
+            } else {
+              errBox.textContent = '無法取得付款連結，請聯絡大會。';
+              errBox.classList.remove('hidden');
+              submitBtn.disabled = false;
+            }
+          })
+          .catch(function () {
+            errBox.textContent = '網絡錯誤，請稍後再試。';
+            errBox.classList.remove('hidden');
+            submitBtn.disabled = false;
+          });
+      });
+    })();
+  </script>
+</body>
+</html>

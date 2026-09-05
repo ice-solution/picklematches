@@ -19,7 +19,7 @@
           </p>
           <p class="mt-1 font-mono text-sm text-sky-300/90">
             <%= typeof displayMatchSchedule === 'function' ? displayMatchSchedule(m) : displayMatchTime(m) %>
-            <% if (m.court) { %> · <%= m.court %><% } %>
+            <% if (m.court) { %> · <%= typeof venueLabel === 'function' && event ? venueLabel(event.venues, m.court) : m.court %><% } %>
           </p>
         </div>
         <span class="shrink-0 rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
@@ -82,7 +82,7 @@
           <td class="py-2.5 pr-3 text-slate-300"><%= m.tournamentPhase === 'knockout' ? '淘汰' : '小組' %></td>
           <td class="py-2.5 pr-3 text-slate-400"><%= m.scheduleGroupLabel || '—' %></td>
           <td class="py-2.5 pr-3 font-mono text-xs text-slate-300"><%= typeof displayMatchSchedule === 'function' ? displayMatchSchedule(m) : displayMatchTime(m) %></td>
-          <td class="py-2.5 pr-3 text-slate-300"><%= m.court || '—' %></td>
+          <td class="py-2.5 pr-3 text-slate-300"><%= m.court ? (typeof venueLabel === 'function' && event ? venueLabel(event.venues, m.court) : m.court) : '—' %></td>
           <td class="max-w-[10rem] py-2.5 pr-3 text-sm leading-snug"><%- include('team-display', { team: m.teamA }) %></td>
           <td class="max-w-[10rem] py-2.5 pr-3 text-sm leading-snug"><%- include('team-display', { team: m.teamB }) %></td>
           <td class="py-2.5 pr-3 score-cell"><%- include('score-display', { m: m, scoreMainClass: 'font-mono text-sm font-semibold text-emerald-300', scoreDetailClass: 'mt-0.5 block font-mono text-xs text-slate-400' }) %></td>

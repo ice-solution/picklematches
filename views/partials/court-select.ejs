@@ -1,0 +1,32 @@
+<%#
+  場地 select。locals:
+  - venues: normalizeEventVenues(...)
+  - name: input name (default court)
+  - value: selected court slug/name
+  - className: optional
+  - allowEmpty: default true
+  - emptyLabel: default —
+%>
+<%
+  var _venues = typeof venues !== 'undefined' && venues ? venues : [];
+  var _name = typeof name !== 'undefined' ? name : 'court';
+  var _value = typeof value !== 'undefined' ? String(value || '') : '';
+  var _class = typeof className !== 'undefined' ? className : 'mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2';
+  var _allowEmpty = typeof allowEmpty === 'undefined' ? true : !!allowEmpty;
+  var _emptyLabel = typeof emptyLabel !== 'undefined' ? emptyLabel : '—';
+  var _matched = false;
+%>
+<select name="<%= _name %>" class="<%= _class %>" <%= typeof extraAttrs !== 'undefined' ? extraAttrs : '' %>>
+  <% if (_allowEmpty) { %>
+    <option value=""><%= _emptyLabel %></option>
+  <% } %>
+  <% _venues.forEach(function (v) {
+    var sel = (_value === v.slug || _value === v.name);
+    if (sel) _matched = true;
+  %>
+    <option value="<%= v.slug %>" <%= sel ? 'selected' : '' %>><%= v.name %></option>
+  <% }); %>
+  <% if (_value && !_matched) { %>
+    <option value="<%= _value %>" selected><%= _value %>（舊資料）</option>
+  <% } %>
+</select>

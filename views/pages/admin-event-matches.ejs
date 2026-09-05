@@ -12,10 +12,7 @@
       <a href="#standings" class="font-semibold text-emerald-400 underline">↓ 小組報分表</a>
     <% } %>
     <a href="#schedule" class="text-sky-400 underline">↓ 場次列表</a>
-    <a href="<%= typeof publicEventUrl !== 'undefined' ? publicEventUrl : '/e/' + event.slug %>" target="_blank" rel="noopener" class="text-sky-400 underline">觀眾前台 ↗</a>
-    <% if (typeof groupStandingsList !== 'undefined' && groupStandingsList && groupStandingsList.length) { %>
-      <a href="<%= publicEventUrl %>#standings" target="_blank" rel="noopener" class="text-violet-400 underline">觀眾報分表 ↗</a>
-    <% } %>
+    <a href="<%= typeof publicEventUrl !== 'undefined' ? publicEventUrl : '/e/' + event.slug %>" target="_blank" rel="noopener" class="text-sky-400 underline">開啟前台 ↗</a>
   </p>
 
   <% if (typeof groupStandingsList !== 'undefined' && groupStandingsList && groupStandingsList.length) { %>

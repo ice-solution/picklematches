@@ -1,0 +1,197 @@
+<%- include('../partials/head', { title }) %>
+<style>
+  .court-control-page { background: #070b14; }
+</style>
+<body class="court-control-page min-h-screen text-slate-100 antialiased">
+  <main class="mx-auto max-w-5xl px-4 py-8">
+    <div class="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-semibold text-white">即時控制</h1>
+        <p class="mt-1 text-sm text-slate-500">
+          <%= venue.name %> · <%= event.name %>
+          <span class="mx-1 text-slate-700">·</span>
+          得分後自動換成該隊發球。完賽會存檔並清空 Live。
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-4 text-sm">
+        <a href="/e/<%= event.slug %>/court/<%= venue.slug %>/live" target="_blank" class="text-emerald-400 hover:underline">開啟 Live 畫面</a>
+        <form method="post" action="/e/<%= event.slug %>/court/logout" class="inline">
+          <button type="submit" class="text-slate-500 hover:text-slate-300">登出</button>
+        </form>
+      </div>
+    </div>
+
+    <div id="idle" class="mt-8 <%= match ? 'hidden' : '' %> rounded-xl border border-slate-800 bg-slate-950 p-8 text-center text-slate-500">
+      目前沒有進行中的比賽。<br />
+      <span class="mt-2 block text-xs text-slate-600">請賽務將本場地場次設為「進行中」。</span>
+    </div>
+
+    <div id="panel" class="mt-8 <%= match ? '' : 'hidden' %>">
+      <div class="mb-4 rounded-lg border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-400">
+        <span id="matchMeta"><%= match && match.round ? match.round : '—' %></span>
+        <div class="mt-2 flex flex-wrap gap-4 text-base">
+          <span class="text-emerald-400" id="namesA"><%= match && match.teamA ? match.teamA.name : '—' %></span>
+          <span class="font-semibold text-white" id="scoreText">
+            <%= match ? ((match.currentPoints && match.currentPoints.a) || 0) : 0 %> : <%= match ? ((match.currentPoints && match.currentPoints.b) || 0) : 0 %>
+          </span>
+          <span class="text-sky-400" id="namesB"><%= match && match.teamB ? match.teamB.name : '—' %></span>
+        </div>
+        <p class="mt-2 text-xs text-slate-500">大比分 <span id="gamesLine" class="font-mono text-slate-300"><%= match && typeof gamesLine === 'function' ? gamesLine(match) : '—' %></span></p>
+        <p id="hint" class="mt-1 hidden text-xs text-amber-400"></p>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-2">
+        <section class="rounded-xl border border-slate-800 bg-slate-950 p-4">
+          <p class="text-xs text-slate-500">上列 (A) — 得分後由 A 發球</p>
+          <div class="mt-3 flex gap-2">
+            <button type="button" data-side="a" data-delta="1" class="score-btn flex-1 rounded-lg bg-emerald-700 py-4 text-lg font-semibold text-white hover:bg-emerald-600 active:scale-[0.99]">A +1</button>
+            <button type="button" data-side="a" data-delta="-1" class="score-btn w-16 rounded-lg bg-slate-800 text-white hover:bg-slate-700">-1</button>
+          </div>
+          <button type="button" data-serve="a" class="serve-btn mt-3 w-full rounded-lg border border-emerald-600 py-3 text-emerald-400 hover:bg-emerald-950/50">A 發球</button>
+        </section>
+
+        <section class="rounded-xl border border-slate-800 bg-slate-950 p-4">
+          <p class="text-xs text-slate-500">下列 (B) — 得分後由 B 發球</p>
+          <div class="mt-3 flex gap-2">
+            <button type="button" data-side="b" data-delta="1" class="score-btn flex-1 rounded-lg bg-sky-700 py-4 text-lg font-semibold text-white hover:bg-sky-600 active:scale-[0.99]">B +1</button>
+            <button type="button" data-side="b" data-delta="-1" class="score-btn w-16 rounded-lg bg-slate-800 text-white hover:bg-slate-700">-1</button>
+          </div>
+          <button type="button" data-serve="b" class="serve-btn mt-3 w-full rounded-lg border border-sky-600 py-3 text-sky-400 hover:bg-sky-950/50">B 發球</button>
+        </section>
+      </div>
+
+      <button type="button" id="nextGameBtn" class="mt-4 w-full rounded-xl border border-amber-700/60 bg-amber-950/30 py-3.5 text-base font-semibold text-amber-200 hover:bg-amber-900/40">
+        下一局（結束目前局並重置分數）
+      </button>
+
+      <button type="button" id="finishBtn" class="mt-3 w-full rounded-xl border border-red-800/70 bg-red-950/40 py-4 text-base font-semibold text-red-300 hover:bg-red-900/40">
+        標記完賽（存檔並清空 Live）
+      </button>
+      <p id="msg" class="mt-3 text-center text-sm text-rose-300"></p>
+    </div>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    (function () {
+      var eventSlug = <%- JSON.stringify(event.slug) %>;
+      var venueSlug = <%- JSON.stringify(venue.slug) %>;
+      var eventId = <%- JSON.stringify(eventIdStr) %>;
+      var venueName = <%- JSON.stringify(venue.name) %>;
+      var base = '/api/public/' + encodeURIComponent(eventSlug) + '/court/' + encodeURIComponent(venueSlug);
+
+      function gamesText(m) {
+        if (!m || !m.completedGames || !m.completedGames.length) return '—';
+        return m.completedGames.map(function (g) { return g.a + '-' + g.b; }).join(' · ');
+      }
+
+      function serveLabel(serving) {
+        if (serving === 'a') return '上列 A';
+        if (serving === 'b') return '下列 B';
+        return '—';
+      }
+
+      function render(match) {
+        var idle = document.getElementById('idle');
+        var panel = document.getElementById('panel');
+        var msg = document.getElementById('msg');
+        msg.textContent = '';
+        if (!match || match.status !== 'live') {
+          idle.classList.remove('hidden');
+          panel.classList.add('hidden');
+          return;
+        }
+        idle.classList.add('hidden');
+        panel.classList.remove('hidden');
+        var round = match.round || venueName;
+        document.getElementById('matchMeta').textContent = round + ' · 發球：' + serveLabel(match.serving);
+        document.getElementById('namesA').textContent = (match.teamA && match.teamA.name) || 'A';
+        document.getElementById('namesB').textContent = (match.teamB && match.teamB.name) || 'B';
+        var ca = (match.currentPoints && match.currentPoints.a) || 0;
+        var cb = (match.currentPoints && match.currentPoints.b) || 0;
+        document.getElementById('scoreText').textContent = ca + ' : ' + cb;
+        document.getElementById('gamesLine').textContent = gamesText(match);
+        var hint = document.getElementById('hint');
+        if ((ca >= 15 && ca - cb >= 2) || (cb >= 15 && cb - ca >= 2)) {
+          hint.textContent = '已達局末條件，可按「下一局」或「標記完賽」';
+          hint.classList.remove('hidden');
+        } else {
+          hint.classList.add('hidden');
+        }
+      }
+
+      async function api(path, body) {
+        var res = await fetch(base + path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(body || {}),
+        });
+        var data = await res.json().catch(function () { return {}; });
+        if (!res.ok) {
+          var map = {
+            empty_game: '目前局還沒有分數',
+            tied_game: '平局不能進入下一局',
+            no_live_match: '沒有進行中的比賽',
+            match_ended: '比賽已結束',
+            court_auth_required: '請重新登入',
+          };
+          throw new Error(map[data.error] || data.error || '操作失敗');
+        }
+        return data;
+      }
+
+      document.querySelectorAll('.score-btn').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          try {
+            var data = await api('/point', { side: btn.dataset.side, delta: Number(btn.dataset.delta) });
+            render(data.match);
+          } catch (e) {
+            document.getElementById('msg').textContent = e.message;
+          }
+        });
+      });
+
+      document.querySelectorAll('.serve-btn').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          try {
+            var data = await api('/serve', { side: btn.dataset.serve });
+            render(data.match);
+          } catch (e) {
+            document.getElementById('msg').textContent = e.message;
+          }
+        });
+      });
+
+      document.getElementById('nextGameBtn').addEventListener('click', async function () {
+        try {
+          var data = await api('/next-game', {});
+          render(data.match);
+        } catch (e) {
+          document.getElementById('msg').textContent = e.message;
+        }
+      });
+
+      document.getElementById('finishBtn').addEventListener('click', async function () {
+        if (!confirm('確定完賽？會儲存比分並清空 Live 畫面。')) return;
+        try {
+          await api('/finish', {});
+          render(null);
+        } catch (e) {
+          document.getElementById('msg').textContent = e.message;
+        }
+      });
+
+      var socket = io({ transports: ['websocket', 'polling'] });
+      socket.emit('join', { eventId: eventId, court: { eventId: eventId, venueSlug: venueSlug } });
+      socket.on('court:update', function (payload) {
+        render(payload && payload.match);
+      });
+
+      fetch(base + '/state', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) { render(data.match); })
+        .catch(function () {});
+    })();
+  </script>
+</body>

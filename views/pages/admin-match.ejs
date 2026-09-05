@@ -15,7 +15,7 @@
 
     <section class="mt-8 rounded border border-amber-900/40 bg-amber-950/20 p-6">
       <h2 class="text-lg font-semibold text-amber-200">即時計分（管理員）</h2>
-      <p class="mt-1 text-sm text-slate-400">無須球證指派亦可操作；前台與大螢幕會即時更新。</p>
+      <p class="mt-1 text-sm text-slate-400">管理員可直接操作比分；前台與大螢幕會即時更新。</p>
       <div class="mt-6 grid grid-cols-2 gap-4">
         <div>
           <div class="text-center">
@@ -89,7 +89,13 @@
         </div>
         <div>
           <label class="text-xs text-slate-500">場地</label>
-          <input name="court" value="<%= match.court || '' %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+          <%- include('../partials/court-select', {
+            venues: typeof venues !== 'undefined' ? venues : (event && typeof normalizeEventVenues === 'function' ? normalizeEventVenues(event.venues) : []),
+            name: 'court',
+            value: match.court || '',
+            className: 'mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2',
+            allowEmpty: true
+          }) %>
         </div>
       </div>
       <div>
@@ -159,39 +165,6 @@
 
       <button type="submit" class="rounded bg-emerald-600 px-6 py-2 font-semibold text-white">儲存場次</button>
     </form>
-
-    <section class="mt-12 rounded border border-slate-800 bg-slate-900/40 p-6">
-      <h2 class="text-lg font-semibold text-white">球證指派</h2>
-      <p class="mt-1 text-sm text-slate-500">可指派多位球證；球證僅能更新被指派的場次比分。球證請至 <a href="/referee/login" class="text-sky-400 underline" target="_blank" rel="noopener">球證登入</a>。</p>
-      <ul class="mt-4 space-y-2">
-        <% assignedReferees.forEach(function (r) { %>
-          <li class="flex items-center justify-between rounded border border-slate-800 px-3 py-2 text-sm">
-            <span><%= r.name || r.email %></span>
-            <form method="post" action="/admin/matches/<%= match._id %>/unassign" class="inline">
-              <input type="hidden" name="redirect" value="/admin/matches/<%= match._id %>/edit" />
-              <input type="hidden" name="refereeId" value="<%= r._id %>" />
-              <button type="submit" class="text-rose-400 underline">移除</button>
-            </form>
-          </li>
-        <% }); %>
-        <% if (!assignedReferees.length) { %>
-          <li class="text-sm text-slate-500">尚未指派球證</li>
-        <% } %>
-      </ul>
-      <form method="post" action="/admin/matches/<%= match._id %>/assign" class="mt-4 flex flex-wrap gap-2">
-        <input type="hidden" name="redirect" value="/admin/matches/<%= match._id %>/edit" />
-        <select name="refereeId" required class="min-w-[200px] flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2">
-          <option value="" disabled selected hidden>選擇球證帳號</option>
-          <% refereeUsers.forEach(function (u) { %>
-            <option value="<%= u._id %>"><%= u.loginId ? u.loginId + ' · ' : '' %><%= u.name || u.email %></option>
-          <% }); %>
-        </select>
-        <button type="submit" class="rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-white">指派</button>
-      </form>
-      <% if (!refereeUsers.length) { %>
-        <p class="mt-3 text-sm text-amber-500">尚無球證帳號，請至 <a href="/admin/referees" class="underline">球證管理</a> 新增。</p>
-      <% } %>
-    </section>
   </main>
   <script>
     (function () {

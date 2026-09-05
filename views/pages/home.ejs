@@ -1,13 +1,214 @@
 <%- include('../partials/head', { title }) %>
-<body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
-  <main class="mx-auto max-w-3xl px-4 py-16">
-    <h1 class="text-3xl font-bold text-emerald-400">匹克球比賽平台</h1>
-    <p class="mt-4 text-slate-300">後台、前台與球證端已建立骨架。請先執行 <code class="rounded bg-slate-800 px-1">npm run seed</code> 建立示範大會；球證以登入 ID <code class="rounded bg-slate-800 px-1">referee1</code> 登入。</p>
-    <ul class="mt-8 space-y-3 text-slate-200">
-      <li><a class="text-emerald-400 underline hover:text-emerald-300" href="/admin/login">管理後台登入</a></li>
-      <li><a class="text-emerald-400 underline hover:text-emerald-300" href="/referee/login">球證登入</a></li>
-      <li><span class="text-slate-400">示範大會前台（seed 後）：</span> <a class="text-emerald-400 underline" href="/e/demo-2026">/e/demo-2026</a></li>
-    </ul>
+<body class="home-page">
+  <header class="home-header">
+    <div class="home-container flex items-center justify-between gap-4 py-4">
+      <a href="/" class="flex items-center gap-3">
+        <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600 text-sm font-bold text-white">PB</span>
+        <span class="text-base font-semibold text-white sm:text-lg">匹克球比賽平台</span>
+      </a>
+      <%- include('../partials/public-nav') %>
+    </div>
+  </header>
+
+  <main>
+    <section class="home-section sm:py-20">
+      <div class="home-container">
+        <p class="text-sm font-medium uppercase tracking-wider text-emerald-400">線上報名 · 賽程管理 · 即時比分</p>
+        <h1 class="mt-4 max-w-3xl text-3xl font-bold text-white sm:text-4xl md:text-5xl">一站式匹克球賽事平台</h1>
+        <p class="mt-5 max-w-2xl text-base leading-relaxed text-slate-300 sm:text-lg">
+          協助不同比賽記錄賽事、分配賽程，以及保存參賽者的參賽記錄。大會可集中管理報名與賽程，參賽者亦可隨時查閱自己的報名與賽事資訊。
+        </p>
+
+        <% if (typeof session !== 'undefined' && session.memberId) { %>
+          <div class="mt-8 flex flex-wrap gap-3">
+            <a href="/member" class="home-btn">查看我的報名</a>
+            <a href="#events" class="home-btn--ghost">瀏覽賽事</a>
+          </div>
+        <% } else { %>
+          <div class="mt-8 flex flex-wrap gap-3">
+            <a href="/member/register" class="home-btn">立即註冊會員</a>
+            <a href="/member/login" class="home-btn--ghost">已有帳號？登入</a>
+          </div>
+          <p class="mt-4 text-sm text-slate-500">報名前請先註冊；雙打搭檔亦須各自建立帳號。</p>
+        <% } %>
+      </div>
+    </section>
+
+    <section id="events" class="home-section--alt scroll-mt-24">
+      <div class="home-container">
+        <div class="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-semibold text-white sm:text-2xl">比賽列表</h2>
+            <p class="mt-2 text-sm text-slate-400">選擇賽事查看賽程、比分，或進行線上報名</p>
+          </div>
+          <a href="/events" class="text-sm text-emerald-400 underline">全部比賽 →</a>
+        </div>
+
+        <%- include('../partials/event-list', {
+          events,
+          categoryTitle: '匹克球',
+          emptyMessage: '暫無開放中的賽事，請稍後再來。',
+        }) %>
+      </div>
+    </section>
+
+    <section class="home-section">
+      <div class="home-container">
+        <h2 class="text-xl font-semibold text-white sm:text-2xl">平台主要用途</h2>
+        <p class="mt-2 text-sm text-slate-400 sm:text-base">為賽事主辦方與參賽者提供清晰分工的數位工具</p>
+
+        <div class="home-feature-grid">
+          <article class="home-card">
+            <div class="home-feature-icon" aria-hidden="true">📋</div>
+            <h3 class="mt-4 text-lg font-semibold text-emerald-300">記錄賽事</h3>
+            <p class="mt-2 text-sm leading-relaxed text-slate-400">
+              集中管理多場比賽的資料：組別、隊伍、場次與即時比分，讓不同賽事各有獨立頁面，觀眾與參賽者均可查閱。
+            </p>
+          </article>
+          <article class="home-card">
+            <div class="home-feature-icon" aria-hidden="true">🗓️</div>
+            <h3 class="mt-4 text-lg font-semibold text-sky-300">分配賽程</h3>
+            <p class="mt-2 text-sm leading-relaxed text-slate-400">
+              小組賽、淘汰賽、場地與時間一覽無遺；賽務可於後台編排對戰表，前台自動更新積分與晉級對位。
+            </p>
+          </article>
+          <article class="home-card">
+            <div class="home-feature-icon" aria-hidden="true">👤</div>
+            <h3 class="mt-4 text-lg font-semibold text-amber-300">參賽記錄</h3>
+            <p class="mt-2 text-sm leading-relaxed text-slate-400">
+              參賽者以會員帳號線上報名、付款，並於會員中心查閱自己的報名狀態與歷史參賽紀錄。
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="home-section--alt">
+      <div class="home-container">
+        <div class="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-semibold text-white sm:text-2xl">線上報名流程</h2>
+            <p class="mt-2 text-sm text-slate-400">三步完成報名，再於賽事日查閱賽程與比分</p>
+          </div>
+          <% if (!(typeof session !== 'undefined' && session.memberId)) { %>
+            <a href="/member/register" class="text-sm font-medium text-emerald-400 underline hover:text-emerald-300">前往註冊 →</a>
+          <% } %>
+        </div>
+
+        <ol class="home-steps">
+          <li class="home-card flex gap-4">
+            <span class="home-step-num bg-emerald-600">1</span>
+            <div>
+              <p class="font-semibold text-white">註冊／登入會員</p>
+              <p class="mt-1 text-sm text-slate-400">填寫基本資料與 DUPR；雙打請確保搭檔亦已註冊。</p>
+              <% if (!(typeof session !== 'undefined' && session.memberId)) { %>
+                <p class="mt-3 flex flex-wrap gap-2">
+                  <a href="/member/register" class="home-btn--sm">註冊</a>
+                  <a href="/member/login" class="home-btn--sm-ghost">登入</a>
+                </p>
+              <% } else { %>
+                <p class="mt-3 text-sm text-emerald-400">✓ 已登入</p>
+              <% } %>
+            </div>
+          </li>
+          <li class="home-card flex gap-4">
+            <span class="home-step-num bg-sky-700">2</span>
+            <div>
+              <p class="font-semibold text-white">選擇賽事與組別</p>
+              <p class="mt-1 text-sm text-slate-400">於下方賽事列表進入報名頁，選擇合適組別並填寫隊伍資料。</p>
+            </div>
+          </li>
+          <li class="home-card flex gap-4">
+            <span class="home-step-num bg-amber-700">3</span>
+            <div>
+              <p class="font-semibold text-white">完成付款</p>
+              <p class="mt-1 text-sm text-slate-400">線上付款確認後，可於會員中心查看報名狀態；賽程開放後亦可查閱對戰與比分。</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="alliances" class="home-section--alt scroll-mt-24">
+      <div class="home-container">
+        <div class="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-semibold text-white sm:text-2xl">聯盟表</h2>
+            <p class="mt-2 text-sm text-slate-400">已加盟的球會、球場與社群組織</p>
+          </div>
+          <a href="/alliances/apply" class="text-sm text-emerald-400 underline">申請加盟 →</a>
+        </div>
+        <% if (!alliances || !alliances.length) { %>
+          <p class="home-card mt-6 text-center text-sm text-slate-500">暫無聯盟，歡迎<a href="/alliances/apply" class="text-emerald-400 underline">提交申請</a>。</p>
+        <% } else { %>
+          <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <% alliances.forEach(function (a) { %>
+              <a href="/alliances/<%= a.slug %>" class="home-card block hover:border-emerald-800"><%= a.name %></a>
+            <% }); %>
+          </div>
+          <p class="mt-4 text-center"><a href="/alliances" class="text-sm text-emerald-400 underline">查看全部聯盟</a></p>
+        <% } %>
+      </div>
+    </section>
+
+    <section id="players" class="home-section scroll-mt-24">
+      <div class="home-container">
+        <div class="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-semibold text-white sm:text-2xl">球員列表</h2>
+            <p class="mt-2 text-sm text-slate-400">認識平台上的球員，尋找搭檔</p>
+          </div>
+          <a href="/players" class="text-sm text-emerald-400 underline">全部球員 →</a>
+        </div>
+        <% if (!players || !players.length) { %>
+          <p class="home-card mt-6 text-center text-sm text-slate-500">暫無公開球員資料。</p>
+        <% } else { %>
+          <ul class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <% players.forEach(function (p) { %>
+              <li><a href="/players/<%= p.profileSlug %>" class="home-card block text-white hover:border-emerald-800"><%= p.name %></a></li>
+            <% }); %>
+          </ul>
+        <% } %>
+      </div>
+    </section>
+
+    <section id="sessions" class="home-section--alt scroll-mt-24">
+      <div class="home-container">
+        <div class="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-semibold text-white sm:text-2xl">開場</h2>
+            <p class="mt-2 text-sm text-slate-400">球友發起的練習與約戰</p>
+          </div>
+          <a href="/sessions/new" class="home-btn !px-4 !py-2 text-sm">我要開場</a>
+        </div>
+        <% if (!openSessions || !openSessions.length) { %>
+          <p class="home-card mt-6 text-center text-sm text-slate-500">暫無開放場次。<a href="/sessions/new" class="text-emerald-400 underline">成為第一個開場的人</a></p>
+        <% } else { %>
+          <ul class="mt-6 space-y-3">
+            <% openSessions.forEach(function (s) { %>
+              <li class="home-card">
+                <a href="/sessions/<%= s._id %>" class="font-medium text-white hover:text-emerald-300"><%= s.title %></a>
+                <p class="mt-1 text-xs text-slate-500"><%= s.sessionDate ? new Date(s.sessionDate).toLocaleString('zh-HK') : '' %></p>
+              </li>
+            <% }); %>
+          </ul>
+          <p class="mt-4 text-center"><a href="/sessions" class="text-sm text-emerald-400 underline">查看全部開場</a></p>
+        <% } %>
+      </div>
+    </section>
   </main>
+
+  <footer class="border-t border-slate-800 px-4 py-8 sm:px-6">
+    <div class="home-container flex flex-col items-center justify-between gap-4 text-sm text-slate-500 sm:flex-row">
+      <p>© 匹克球比賽平台</p>
+      <div class="flex flex-wrap items-center justify-center gap-4">
+        <% if (!(typeof session !== 'undefined' && session.memberId)) { %>
+          <a href="/member/register" class="hover:text-slate-300">會員註冊</a>
+          <a href="/member/login" class="hover:text-slate-300">會員登入</a>
+        <% } %>
+        <a href="/admin/login" class="hover:text-slate-300">管理後台</a>
+      </div>
+    </div>
+  </footer>
 </body>
 </html>

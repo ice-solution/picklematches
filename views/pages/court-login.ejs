@@ -1,0 +1,40 @@
+<%- include('../partials/head', { title }) %>
+<body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
+  <main class="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-10">
+    <p class="text-sm text-slate-500"><%= event.name %></p>
+    <h1 class="mt-2 text-2xl font-bold text-white">場地登入</h1>
+    <p class="mt-2 text-sm text-slate-400">輸入本場地 PIN 後即可計分。大螢幕請另開 Live 網址。</p>
+
+    <% if (typeof error !== 'undefined' && error) { %>
+      <p class="mt-4 rounded border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"><%= error %></p>
+    <% } %>
+
+    <% if (!venues.length) { %>
+      <p class="mt-8 text-sm text-amber-400">大會尚未設定場地，請聯絡賽務。</p>
+    <% } else { %>
+      <form method="post" action="/e/<%= event.slug %>/court/login" class="mt-8 space-y-4">
+        <div>
+          <label class="block text-sm text-slate-400">場地</label>
+          <select name="venueSlug" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-3 text-base">
+            <% venues.forEach(function (v) { %>
+              <option value="<%= v.slug %>" <%= preselect === v.slug ? 'selected' : '' %>><%= v.name %>（<%= v.slug %>）</option>
+            <% }); %>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400">PIN</label>
+          <input
+            name="pin"
+            type="password"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            required
+            class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-3 text-center font-mono text-2xl tracking-widest"
+            placeholder="••••"
+          />
+        </div>
+        <button type="submit" class="w-full rounded bg-emerald-600 py-3 text-base font-semibold text-white hover:bg-emerald-500">登入</button>
+      </form>
+    <% } %>
+  </main>
+</body>

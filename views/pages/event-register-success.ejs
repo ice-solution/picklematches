@@ -1,0 +1,32 @@
+<%- include('../partials/head', { title }) %>
+<body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
+  <main class="mx-auto max-w-lg px-4 py-20 text-center">
+    <h1 class="text-2xl font-bold text-emerald-400">報名提交成功</h1>
+    <p class="mt-4 text-slate-300"><%= event.name %></p>
+
+    <% if (registration) { %>
+      <% var div = registration.divisionId; var statusLabel = { pending_payment: '待付款', paid: '已付款', confirmed: '已確認', cancelled: '已取消', failed: '付款失敗' }[registration.status] || registration.status; %>
+      <div class="mt-8 rounded border border-slate-800 bg-slate-900/50 p-6 text-left text-sm">
+        <p><span class="text-slate-500">組別：</span><%= div && div.name ? div.name : '—' %></p>
+        <% if (registration.teamName) { %>
+          <p class="mt-2"><span class="text-slate-500">隊名：</span><%= registration.teamName %></p>
+        <% } %>
+        <p class="mt-2"><span class="text-slate-500">狀態：</span>
+          <span class="<%= registration.status === 'paid' || registration.status === 'confirmed' ? 'text-emerald-400' : registration.status === 'pending_payment' ? 'text-amber-400' : 'text-slate-300' %>"><%= statusLabel %></span>
+        </p>
+        <% if (registration.status === 'pending_payment') { %>
+          <p class="mt-4 text-amber-200/90">如尚未完成付款，請返回報名頁重新提交，或等候付款確認電郵。</p>
+        <% } %>
+      </div>
+    <% } else { %>
+      <p class="mt-6 text-slate-400">付款處理中，請稍後於「我的報名」查看狀態。</p>
+    <% } %>
+
+    <div class="mt-10 flex flex-wrap justify-center gap-4 text-sm">
+      <a href="/member" class="rounded bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-500">我的報名</a>
+      <a href="/e/<%= event.slug %>" class="rounded border border-slate-700 px-4 py-2 text-slate-200 hover:bg-slate-800">返回賽事</a>
+      <a href="/" class="text-slate-400 underline">首頁</a>
+    </div>
+  </main>
+</body>
+</html>

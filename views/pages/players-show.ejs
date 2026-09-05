@@ -1,0 +1,43 @@
+<%- include('../partials/public-page-start', { title }) %>
+    <p class="text-sm"><a href="/players" class="text-emerald-400 underline">← 球員列表</a></p>
+    <h1 class="mt-4 text-2xl font-bold text-white"><%= member.name %></h1>
+    <% if (member.duprRating != null) { %>
+      <p class="mt-1 text-emerald-400">DUPR <%= member.duprRating %></p>
+    <% } %>
+    <% if (member.bio) { %>
+      <p class="mt-4 text-slate-300"><%= member.bio %></p>
+    <% } %>
+
+    <% if (isSelf) { %>
+      <a href="/member/profile" class="mt-4 inline-block text-sm text-sky-400 underline">編輯我的資料</a>
+    <% } %>
+
+    <section class="mt-10">
+      <h2 class="text-lg font-semibold text-emerald-400">所屬聯盟</h2>
+      <% if (!alliances.length) { %>
+        <p class="mt-2 text-sm text-slate-500">尚未加入聯盟。</p>
+      <% } else { %>
+        <ul class="mt-4 flex flex-wrap gap-2">
+          <% alliances.forEach(function (a) { %>
+            <a href="/alliances/<%= a.alliance.slug %>" class="rounded border border-slate-700 bg-slate-800/50 px-3 py-1 text-sm text-slate-200 hover:border-emerald-800"><%= a.alliance.name %></a>
+          <% }); %>
+        </ul>
+      <% } %>
+    </section>
+
+    <section class="mt-10">
+      <h2 class="text-lg font-semibold text-white">過往賽事報名</h2>
+      <% if (!registrations.length) { %>
+        <p class="mt-2 text-sm text-slate-500">暫無紀錄。</p>
+      <% } else { %>
+        <ul class="mt-4 space-y-2 text-sm">
+          <% registrations.forEach(function (r) { %>
+            <li class="home-card">
+              <span class="text-white"><%= r.event ? r.event.name : '—' %></span>
+              <span class="text-slate-500"> · <%= r.division ? r.division.name : '—' %></span>
+            </li>
+          <% }); %>
+        </ul>
+      <% } %>
+    </section>
+<%- include('../partials/public-page-end') %>

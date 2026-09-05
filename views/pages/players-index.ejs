@@ -1,0 +1,29 @@
+<%- include('../partials/public-page-start', { title }) %>
+    <h1 class="text-2xl font-bold text-white sm:text-3xl">球員列表</h1>
+    <p class="mt-2 text-sm text-slate-400">瀏覽公開資料的球員，認識搭檔或對手。</p>
+
+    <form method="get" class="mt-6 flex flex-wrap gap-2">
+      <input name="q" value="<%= q %>" placeholder="搜尋姓名…" class="min-w-[200px] flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+      <button type="submit" class="home-btn--ghost !px-4 !py-2">搜尋</button>
+    </form>
+
+    <% if (!players.length) { %>
+      <p class="home-card mt-8 text-center text-slate-400">找不到球員。</p>
+    <% } else { %>
+      <ul class="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <% players.forEach(function (p) { %>
+          <li class="home-card">
+            <a href="/players/<%= p.profileSlug %>" class="block">
+              <p class="font-semibold text-white"><%= p.name %></p>
+              <% if (p.duprRating != null) { %>
+                <p class="mt-1 text-xs text-emerald-400">DUPR <%= p.duprRating %></p>
+              <% } %>
+              <% if (p.bio) { %>
+                <p class="mt-2 line-clamp-2 text-sm text-slate-400"><%= p.bio %></p>
+              <% } %>
+            </a>
+          </li>
+        <% }); %>
+      </ul>
+    <% } %>
+<%- include('../partials/public-page-end') %>

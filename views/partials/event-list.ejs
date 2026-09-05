@@ -1,0 +1,82 @@
+<%
+  const listTitle = typeof categoryTitle !== 'undefined' && categoryTitle ? categoryTitle : '匹克球';
+  const listEvents = typeof events !== 'undefined' && events ? events : [];
+  const emptyMsg = typeof emptyMessage !== 'undefined' && emptyMessage
+    ? emptyMessage
+    : '暫無開放中的賽事，請稍後再來。';
+%>
+<% if (!listEvents.length) { %>
+  <div class="home-card mt-6 p-8 text-center">
+    <p class="text-slate-400"><%= emptyMsg %></p>
+  </div>
+<% } else { %>
+  <div class="comp-list">
+    <div class="comp-list__head">
+      <span class="comp-list__head-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+        </svg>
+      </span>
+      <h3 class="comp-list__head-title"><%= listTitle %></h3>
+    </div>
+    <ul>
+      <% listEvents.forEach(function (ev) {
+        const initial = (ev.name || '?').trim().charAt(0);
+        let desc = (ev.description || '').trim();
+        if (!desc) {
+          const parts = [];
+          if (ev.dateStart) {
+            let d = typeof formatDateDisplayZh === 'function' ? formatDateDisplayZh(ev.dateStart) : String(ev.dateStart);
+            if (ev.dateEnd) {
+              d += ' — ' + (typeof formatDateDisplayZh === 'function' ? formatDateDisplayZh(ev.dateEnd) : String(ev.dateEnd));
+            }
+            parts.push(d);
+          }
+          if (ev.venues && ev.venues.length) {
+            var _vn = typeof normalizeEventVenues === 'function'
+              ? normalizeEventVenues(ev.venues).map(function (v) { return v.name; })
+              : ev.venues;
+            parts.push(_vn.slice(0, 2).join('、'));
+          }
+          if (ev.registrationEnabled) parts.push('開放報名');
+          desc = parts.join(' · ') || ev.name;
+        }
+        const registerHref = (typeof session !== 'undefined' && session.memberId)
+          ? '/e/' + ev.slug + '/register'
+          : '/member/register?next=' + encodeURIComponent('/e/' + ev.slug + '/register');
+      %>
+        <li class="comp-list__item">
+          <a href="/e/<%= ev.slug %>" class="comp-list__thumb" tabindex="-1" aria-hidden="true">
+            <% if (ev.coverImageUrl) { %>
+              <img src="<%= ev.coverImageUrl %>" alt="" class="comp-list__thumb-img" loading="lazy" />
+            <% } else { %>
+              <span class="comp-list__thumb-fallback"><%= initial %></span>
+            <% } %>
+          </a>
+          <div class="comp-list__body">
+            <a href="/e/<%= ev.slug %>" class="comp-list__title"><%= ev.name %></a>
+            <p class="comp-list__cat"><%= listTitle %></p>
+            <p class="comp-list__desc"><%= desc %></p>
+          </div>
+          <div class="comp-list__actions">
+            <% if (ev.registrationEnabled) { %>
+              <a href="<%= registerHref %>" class="comp-list__action" title="報名參賽" aria-label="報名參賽">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5">
+                  <path d="M6 4h10a1 1 0 0 1 1 1v15l-6-3.5L5 20V5a1 1 0 0 1 1-1z" />
+                </svg>
+              </a>
+            <% } %>
+            <a href="/e/<%= ev.slug %>" class="comp-list__action" title="賽程／比分" aria-label="賽程／比分">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5">
+                <path d="M3 12a9 9 0 1 0 9-9" />
+                <path d="M3 4v5h5" />
+                <path d="M12 7v5l3 2" />
+              </svg>
+            </a>
+          </div>
+        </li>
+      <% }); %>
+    </ul>
+  </div>
+<% } %>

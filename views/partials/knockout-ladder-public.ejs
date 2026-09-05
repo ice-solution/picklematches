@@ -1,46 +1,184 @@
-<% if (typeof knockoutLadderColumns !== 'undefined' && knockoutLadderColumns && knockoutLadderColumns.length) { %>
-<section class="knockout-ladder mt-8 rounded border border-amber-900/45 bg-amber-950/15 p-5" aria-label="淘汰賽程表">
+<%
+  const bracket = typeof knockoutBracket !== 'undefined' ? knockoutBracket : null;
+  const hasBracket = bracket && (bracket.rounds?.length || bracket.final || bracket.bronze);
+  function slotName(team) {
+    if (typeof bracketSlotLabel === 'function') return bracketSlotLabel(team);
+    if (!team) return '未產生';
+    const n = String(team.name || '').trim();
+    if (!n) return '未產生';
+    if (team.isPlaceholder) {
+      if (/^BYE$/i.test(n)) return 'BYE';
+      if (/^[A-Za-z]\d{1,2}$/.test(n)) return n.toUpperCase();
+      return '未產生';
+    }
+    if (/^(TBD|W-|L-)/i.test(n)) return '未產生';
+    return n;
+  }
+  function matchWhen(m) {
+    if (!m) return '';
+    if (typeof displayMatchSchedule === 'function') {
+      const s = displayMatchSchedule(m);
+      return s === '—' ? '' : s;
+    }
+    return m.scheduledTime || '';
+  }
+  function isPendingSlot(team) {
+    return slotName(team) === '未產生';
+  }
+%>
+<% if (hasBracket) { %>
+<section class="kb-wrap mt-8" aria-label="淘汰賽程表（畫鬼腳）">
   <h3 class="text-base font-semibold text-amber-200">淘汰賽程</h3>
-  <div class="mt-5 overflow-x-auto pb-2">
-    <div class="flex min-w-min items-stretch">
-      <% knockoutLadderColumns.forEach(function (col, idx) { %>
-        <% if (idx > 0) { %>
-          <div class="flex w-9 shrink-0 items-center justify-center self-stretch text-lg text-slate-600 select-none" aria-hidden="true">→</div>
-        <% } %>
-        <div class="flex w-52 shrink-0 flex-col border border-slate-800/90 bg-slate-950/60 p-3">
-          <div class="border-b border-amber-800/40 pb-2 text-center text-xs font-semibold uppercase tracking-wide text-amber-300/95"><%= col.label %></div>
-          <div class="mt-3 flex flex-col gap-4">
-            <% col.matches.forEach(function (m) { %>
-              <div class="knockout-match-card rounded border border-slate-700/80 bg-slate-900/50 px-2 py-3 text-xs" data-match-id="<%= m._id %>">
-                <div class="flex items-stretch gap-1">
-                  <div class="flex flex-1 flex-col items-end text-right text-slate-200">
-                    <%- include('team-display', { team: m.teamA, align: 'right', primaryClass: 'font-medium text-slate-200', secondaryClass: 'block text-[10px] text-slate-500' }) %>
-                  </div>
-                  <div class="relative flex w-7 shrink-0 flex-col items-center justify-center">
-                    <span class="absolute left-0 right-0 top-1/2 border-t border-slate-600"></span>
-                    <span class="relative z-[1] bg-slate-900/90 px-0.5 text-[10px] text-slate-500">vs</span>
-                  </div>
-                  <div class="flex flex-1 flex-col items-start text-left text-slate-200">
-                    <%- include('team-display', { team: m.teamB, align: 'left', primaryClass: 'font-medium text-slate-200', secondaryClass: 'block text-[10px] text-slate-500' }) %>
-                  </div>
+  <div class="kb-scroll mt-4 overflow-x-auto pb-3">
+    <div class="kb" style="--kb-rounds: <%= Math.max(1, (bracket.rounds || []).length) %>;">
+      <% /* 左側：外圍 → 內圈 */ %>
+      <div class="kb-side kb-side--left">
+        <% (bracket.rounds || []).forEach(function (round, rIdx) { %>
+          <div class="kb-round" data-depth="<%= rIdx %>">
+            <div class="kb-round-title"><%= round.shortLabel %></div>
+            <div class="kb-round-body">
+              <% (round.left || []).forEach(function (m) { %>
+                <div class="kb-match knockout-match-card" data-match-id="<%= m._id %>">
+                  <a href="/e/<%= event.slug %>/screen/<%= m._id %>" class="kb-slot <%= isPendingSlot(m.teamA) ? 'kb-slot--pending' : '' %>" target="_blank" rel="noopener" title="<%= slotName(m.teamA) %>">
+                    <span class="kb-slot-name"><%= slotName(m.teamA) %></span>
+                    <% if (m.status === 'finished' || m.status === 'live') {
+                      var _ga = 0, _gb = 0;
+                      (m.completedGames || []).forEach(function (g) { if (g.a > g.b) _ga++; else if (g.b > g.a) _gb++; });
+                      var _showA = m.status === 'finished' ? _ga : (m.currentPoints && m.currentPoints.a != null ? m.currentPoints.a : '');
+                    %>
+                      <% if (_showA !== '' && _showA != null) { %><span class="kb-slot-score"><%= _showA %></span><% } %>
+                    <% } %>
+                  </a>
+                  <div class="kb-match-meta"><%= matchWhen(m) %></div>
+                  <a href="/e/<%= event.slug %>/screen/<%= m._id %>" class="kb-slot <%= isPendingSlot(m.teamB) ? 'kb-slot--pending' : '' %>" target="_blank" rel="noopener" title="<%= slotName(m.teamB) %>">
+                    <span class="kb-slot-name"><%= slotName(m.teamB) %></span>
+                    <% if (m.status === 'finished' || m.status === 'live') {
+                      var _ga2 = 0, _gb2 = 0;
+                      (m.completedGames || []).forEach(function (g) { if (g.a > g.b) _ga2++; else if (g.b > g.a) _gb2++; });
+                      var _showB = m.status === 'finished' ? _gb2 : (m.currentPoints && m.currentPoints.b != null ? m.currentPoints.b : '');
+                    %>
+                      <% if (_showB !== '' && _showB != null) { %><span class="kb-slot-score"><%= _showB %></span><% } %>
+                    <% } %>
+                  </a>
+                  <div class="kb-connector kb-connector--left" aria-hidden="true"></div>
                 </div>
-                <div class="mt-2">
-                  <%- include('score-display', {
-                    m: m,
-                    scoreMainClass: 'font-mono text-sm font-bold tabular-nums text-emerald-300',
-                    scoreDetailClass: 'mt-0.5 block font-mono text-[10px] text-emerald-300/75',
-                  }) %>
-                </div>
-                <% if (m.status === 'finished' && m.winnerId && (m.winnerId.name || m.winnerId._id)) { %>
-                  <p class="mt-1 text-center text-[10px] text-emerald-500/95">勝：<%- include('team-display', { team: m.winnerId, align: 'center', primaryClass: 'font-medium text-emerald-400/95', secondaryClass: 'block text-[9px] text-emerald-500/70' }) %></p>
-                <% } %>
-                <a href="/e/<%= event.slug %>/screen/<%= m._id %>" class="mt-2 block text-center text-sky-400 underline" target="_blank" rel="noopener">直播</a>
-              </div>
-            <% }); %>
+              <% }); %>
+            </div>
           </div>
-        </div>
-      <% }); %>
+        <% }); %>
+      </div>
+
+      <% /* 中央：決賽 + 季軍 */ %>
+      <div class="kb-center">
+        <div class="kb-round-title">決賽</div>
+        <% if (bracket.final) { %>
+          <div class="kb-match kb-match--final knockout-match-card" data-match-id="<%= bracket.final._id %>">
+            <a href="/e/<%= event.slug %>/screen/<%= bracket.final._id %>" class="kb-slot <%= isPendingSlot(bracket.final.teamA) ? 'kb-slot--pending' : '' %>" target="_blank" rel="noopener">
+              <span class="kb-slot-name"><%= slotName(bracket.final.teamA) %></span>
+            </a>
+            <div class="kb-match-meta"><%= matchWhen(bracket.final) %></div>
+            <a href="/e/<%= event.slug %>/screen/<%= bracket.final._id %>" class="kb-slot <%= isPendingSlot(bracket.final.teamB) ? 'kb-slot--pending' : '' %>" target="_blank" rel="noopener">
+              <span class="kb-slot-name"><%= slotName(bracket.final.teamB) %></span>
+            </a>
+          </div>
+        <% } else { %>
+          <div class="kb-match kb-match--final">
+            <div class="kb-slot kb-slot--pending"><span class="kb-slot-name">未產生</span></div>
+            <div class="kb-match-meta"></div>
+            <div class="kb-slot kb-slot--pending"><span class="kb-slot-name">未產生</span></div>
+          </div>
+        <% } %>
+
+        <% if (bracket.bronze) { %>
+          <div class="kb-bronze">
+            <div class="kb-round-title kb-round-title--sm">三、四名決賽</div>
+            <div class="kb-match kb-match--bronze knockout-match-card" data-match-id="<%= bracket.bronze._id %>">
+              <a href="/e/<%= event.slug %>/screen/<%= bracket.bronze._id %>" class="kb-slot <%= isPendingSlot(bracket.bronze.teamA) ? 'kb-slot--pending' : '' %>" target="_blank" rel="noopener">
+                <span class="kb-slot-name"><%= slotName(bracket.bronze.teamA) %></span>
+              </a>
+              <div class="kb-match-meta"><%= matchWhen(bracket.bronze) %></div>
+              <a href="/e/<%= event.slug %>/screen/<%= bracket.bronze._id %>" class="kb-slot <%= isPendingSlot(bracket.bronze.teamB) ? 'kb-slot--pending' : '' %>" target="_blank" rel="noopener">
+                <span class="kb-slot-name"><%= slotName(bracket.bronze.teamB) %></span>
+              </a>
+            </div>
+          </div>
+        <% } %>
+      </div>
+
+      <% /* 右側：內圈 → 外圍（視覺上由中間向外） */ %>
+      <div class="kb-side kb-side--right">
+        <% (bracket.rounds || []).slice().reverse().forEach(function (round, revIdx) {
+          const rIdx = (bracket.rounds.length - 1) - revIdx;
+        %>
+          <div class="kb-round" data-depth="<%= rIdx %>">
+            <div class="kb-round-title"><%= round.shortLabel %></div>
+            <div class="kb-round-body">
+              <% (round.right || []).forEach(function (m) { %>
+                <div class="kb-match knockout-match-card" data-match-id="<%= m._id %>">
+                  <a href="/e/<%= event.slug %>/screen/<%= m._id %>" class="kb-slot <%= isPendingSlot(m.teamA) ? 'kb-slot--pending' : '' %>" target="_blank" rel="noopener" title="<%= slotName(m.teamA) %>">
+                    <span class="kb-slot-name"><%= slotName(m.teamA) %></span>
+                    <% if (m.status === 'finished' || m.status === 'live') {
+                      var _rga = 0, _rgb = 0;
+                      (m.completedGames || []).forEach(function (g) { if (g.a > g.b) _rga++; else if (g.b > g.a) _rgb++; });
+                      var _rShowA = m.status === 'finished' ? _rga : (m.currentPoints && m.currentPoints.a != null ? m.currentPoints.a : '');
+                    %>
+                      <% if (_rShowA !== '' && _rShowA != null) { %><span class="kb-slot-score"><%= _rShowA %></span><% } %>
+                    <% } %>
+                  </a>
+                  <div class="kb-match-meta"><%= matchWhen(m) %></div>
+                  <a href="/e/<%= event.slug %>/screen/<%= m._id %>" class="kb-slot <%= isPendingSlot(m.teamB) ? 'kb-slot--pending' : '' %>" target="_blank" rel="noopener" title="<%= slotName(m.teamB) %>">
+                    <span class="kb-slot-name"><%= slotName(m.teamB) %></span>
+                    <% if (m.status === 'finished' || m.status === 'live') {
+                      var _rga2 = 0, _rgb2 = 0;
+                      (m.completedGames || []).forEach(function (g) { if (g.a > g.b) _rga2++; else if (g.b > g.a) _rgb2++; });
+                      var _rShowB = m.status === 'finished' ? _rgb2 : (m.currentPoints && m.currentPoints.b != null ? m.currentPoints.b : '');
+                    %>
+                      <% if (_rShowB !== '' && _rShowB != null) { %><span class="kb-slot-score"><%= _rShowB %></span><% } %>
+                    <% } %>
+                  </a>
+                  <div class="kb-connector kb-connector--right" aria-hidden="true"></div>
+                </div>
+              <% }); %>
+            </div>
+          </div>
+        <% }); %>
+      </div>
     </div>
   </div>
 </section>
+<% } else if (typeof knockoutLadderColumns !== 'undefined' && knockoutLadderColumns && knockoutLadderColumns.length) { %>
+  <% /* fallback：舊欄位列表 */ %>
+  <section class="knockout-ladder mt-8 rounded border border-amber-900/45 bg-amber-950/15 p-5" aria-label="淘汰賽程表">
+    <h3 class="text-base font-semibold text-amber-200">淘汰賽程</h3>
+    <div class="mt-5 overflow-x-auto pb-2">
+      <div class="flex min-w-min items-stretch">
+        <% knockoutLadderColumns.forEach(function (col, idx) { %>
+          <% if (idx > 0) { %>
+            <div class="flex w-9 shrink-0 items-center justify-center self-stretch text-lg text-slate-600 select-none" aria-hidden="true">→</div>
+          <% } %>
+          <div class="flex w-52 shrink-0 flex-col border border-slate-800/90 bg-slate-950/60 p-3">
+            <div class="border-b border-amber-800/40 pb-2 text-center text-xs font-semibold uppercase tracking-wide text-amber-300/95"><%= col.label %></div>
+            <div class="mt-3 flex flex-col gap-4">
+              <% col.matches.forEach(function (m) { %>
+                <div class="knockout-match-card rounded border border-slate-700/80 bg-slate-900/50 px-2 py-3 text-xs" data-match-id="<%= m._id %>">
+                  <div class="flex items-stretch gap-1">
+                    <div class="flex flex-1 flex-col items-end text-right text-slate-200">
+                      <%- include('team-display', { team: m.teamA, align: 'right', primaryClass: 'font-medium text-slate-200', secondaryClass: 'block text-[10px] text-slate-500' }) %>
+                    </div>
+                    <div class="relative flex w-7 shrink-0 flex-col items-center justify-center">
+                      <span class="absolute left-0 right-0 top-1/2 border-t border-slate-600"></span>
+                      <span class="relative z-[1] bg-slate-900/90 px-0.5 text-[10px] text-slate-500">vs</span>
+                    </div>
+                    <div class="flex flex-1 flex-col items-start text-left text-slate-200">
+                      <%- include('team-display', { team: m.teamB, align: 'left', primaryClass: 'font-medium text-slate-200', secondaryClass: 'block text-[10px] text-slate-500' }) %>
+                    </div>
+                  </div>
+                </div>
+              <% }); %>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+  </section>
 <% } %>

@@ -8,7 +8,7 @@ import { Group } from '../models/Group.js';
 import { Team } from '../models/Team.js';
 import { Match, MATCH_FORMAT } from '../models/Match.js';
 import { MatchAssignment } from '../models/MatchAssignment.js';
-import { requireStaff } from '../middleware/auth.js';
+import { requireStaff, requireAllianceReview, requireAdmin } from '../middleware/auth.js';
 import { toDatetimeLocalValue, parseDatetimeLocal, normalizeDateOnly } from '../lib/datetime.js';
 import { normalizeTimeToHHmm, timeInputValueFromMatch } from '../lib/matchTime.js';
 import { uploadMatchXlsx } from '../middleware/uploadMatchXlsx.js';
@@ -31,28 +31,123 @@ import { buildKnockoutLadderColumns } from '../lib/knockoutLadder.js';
 import { getEventGroupStandings } from '../lib/groupStandings.js';
 import { finalizeFinishedMatch, applyManualScoresFromBody } from '../lib/matchResult.js';
 import { broadcastMatchUpdate } from '../lib/matchSocket.js';
-import { normalizeLoginId, LOGIN_ID_RE } from '../lib/loginId.js';
-import { generateKnockoutFromGroup } from '../lib/knockoutGenerator.js';
+import { generateKnockoutFromGroup, generateKnockoutFromTeams } from '../lib/knockoutGenerator.js';
+import { generateGroupRoundRobin } from '../lib/groupScheduleGenerator.js';
 import { assignTeamCodeIfEmpty } from '../lib/teamCodes.js';
 import { buildGroupRoundRobinMatrices } from '../lib/groupRoundRobinMatrix.js';
-import { getOrCreateScoreboard } from '../models/LiveScoreboard.js';
-import { LiveScoreboard } from '../models/LiveScoreboard.js';
+import { Division } from '../models/Division.js';
+import { Registration } from '../models/Registration.js';
+import { Member } from '../models/Member.js';
+import { countDivisionRegistrations } from '../lib/registrationEligibility.js';
+import { Alliance } from '../models/Alliance.js';
+import { approveAlliance, rejectAlliance } from '../lib/allianceService.js';
+import { normalizeEventVenues, parseVenuesFromBody, findVenue } from '../lib/venues.js';
+import { demoteOtherLiveOnCourt } from '../lib/courtLive.js';
+import {
+  BACKOFFICE_ROLES,
+  canAccessEventDoc,
+  eventListFilter,
+  findAccessibleMatch,
+  findAccessibleTournament,
+  forbidAccess,
+} from '../lib/eventAccess.js';
 
 export const adminRouter = Router();
 
+function resolveCourtSlug(eventVenues, courtRaw) {
+  const raw = String(courtRaw || '').trim();
+  if (!raw) return '';
+  const v = findVenue(eventVenues, raw);
+  return v ? v.slug : raw;
+}
+
 adminRouter.use((req, res, next) => {
   res.locals.adminPath = req.originalUrl.split('?')[0];
+  res.locals.userRole = req.session?.role || '';
+  res.locals.userEmail = req.session?.email || '';
   next();
 });
 
-const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/** owner 只能存取自己的大會；admin/staff 不限 */
+adminRouter.param('eventId', async (req, res, next, id) => {
+  try {
+    if (!mongoose.isValidObjectId(id)) return res.status(404).send('Not found');
+    const event = await Event.findById(id);
+    if (!event) return res.status(404).send('Not found');
+    if (!canAccessEventDoc(req.session, event)) return forbidAccess(req, res);
+    req.eventDoc = event;
+    next();
+  } catch (e) {
+    next(e);
+  }
+});
 
-/** 指派／取消指派後導回賽事頁等內部路徑 */
-function adminRedirectTarget(raw, fallbackPath) {
-  const u = String(raw || '').trim();
-  if (u.startsWith('/admin/') && !u.includes('\n') && !u.includes('\r')) return u;
-  return fallbackPath;
-}
+adminRouter.param('tournamentId', async (req, res, next, id) => {
+  try {
+    if (!req.session?.userId) return next();
+    const tournament = await findAccessibleTournament(req.session, id);
+    if (!tournament) {
+      if (!mongoose.isValidObjectId(id)) return res.status(404).send('Not found');
+      const exists = await Tournament.exists({ _id: id });
+      if (!exists) return res.status(404).send('Not found');
+      return forbidAccess(req, res);
+    }
+    req.tournamentDoc = tournament;
+    next();
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.param('matchId', async (req, res, next, id) => {
+  try {
+    if (!req.session?.userId) return next();
+    const match = await findAccessibleMatch(req.session, id);
+    if (!match) {
+      if (!mongoose.isValidObjectId(id)) return res.status(404).send('Not found');
+      const exists = await Match.exists({ _id: id });
+      if (!exists) return res.status(404).send('Not found');
+      return forbidAccess(req, res);
+    }
+    req.matchDoc = match;
+    next();
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.param('teamId', async (req, res, next, id) => {
+  try {
+    if (!req.session?.userId) return next();
+    if (!mongoose.isValidObjectId(id)) return res.status(404).send('Not found');
+    const team = await Team.findById(id);
+    if (!team) return res.status(404).send('Not found');
+    const tournament = await findAccessibleTournament(req.session, team.tournamentId);
+    if (!tournament) return forbidAccess(req, res);
+    req.teamDoc = team;
+    next();
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.param('divisionId', async (req, res, next, id) => {
+  try {
+    if (!req.session?.userId) return next();
+    if (!mongoose.isValidObjectId(id)) return res.status(404).send('Not found');
+    const division = await Division.findById(id);
+    if (!division) return res.status(404).send('Not found');
+    const event = await Event.findById(division.eventId);
+    if (!event) return res.status(404).send('Not found');
+    if (!canAccessEventDoc(req.session, event)) return forbidAccess(req, res);
+    req.divisionDoc = division;
+    next();
+  } catch (e) {
+    next(e);
+  }
+});
+
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function normalizeSlug(s) {
   return String(s || '')
@@ -62,7 +157,7 @@ function normalizeSlug(s) {
 }
 
 adminRouter.get('/login', (req, res) => {
-  if (req.session?.userId && ['admin', 'staff'].includes(req.session.role)) {
+  if (req.session?.userId && BACKOFFICE_ROLES.includes(req.session.role)) {
     return res.redirect('/admin');
   }
   res.render('pages/admin-login', { title: '管理後台登入', error: null, next: req.query.next || '' });
@@ -79,7 +174,7 @@ adminRouter.post('/login', async (req, res) => {
       next: req.body.next || '',
     });
   }
-  if (!['admin', 'staff'].includes(user.role)) {
+  if (!BACKOFFICE_ROLES.includes(user.role)) {
     return res.status(403).render('pages/admin-login', {
       title: '管理後台登入',
       error: '此帳號非管理端使用者',
@@ -101,7 +196,7 @@ adminRouter.post('/logout', (req, res) => {
 
 adminRouter.get('/', requireStaff, async (req, res, next) => {
   try {
-    const events = await Event.find().sort({ createdAt: -1 }).lean();
+    const events = await Event.find(eventListFilter(req.session)).sort({ createdAt: -1 }).lean();
     res.render('pages/admin-dashboard', {
       title: '管理後台',
       events,
@@ -113,72 +208,189 @@ adminRouter.get('/', requireStaff, async (req, res, next) => {
   }
 });
 
-adminRouter.get('/referees', requireStaff, async (req, res, next) => {
+adminRouter.get('/alliances', requireAllianceReview, async (req, res, next) => {
   try {
-    const referees = await User.find({ role: 'referee' }).sort({ createdAt: -1 }).lean();
-    const counts = await MatchAssignment.aggregate([
-      { $match: { refereeId: { $exists: true } } },
-      { $group: { _id: '$refereeId', n: { $sum: 1 } } },
-    ]);
-    const nByRef = Object.fromEntries(counts.map((c) => [String(c._id), c.n]));
-    referees.forEach((r) => {
-      r.assignCount = nByRef[String(r._id)] || 0;
-    });
-
-    let notice = null;
-    let pageError = null;
-    if (req.query.created === '1') notice = '已新增球證帳號。';
-    if (req.query.deleted === '1') notice = '已刪除球證帳號。';
-    if (req.query.err === '1') {
-      pageError = '請填寫有效登入 ID（英數小寫開頭，3–32 字，可含 _ -）、信箱與密碼（至少 6 字）。';
-    }
-    if (req.query.err === '2') pageError = '此信箱已被使用。';
-    if (req.query.err === '3') pageError = '此登入 ID 已被使用。';
-    if (req.query.err === 'dup') pageError = '登入 ID 或信箱與現有帳號重複。';
-    if (req.query.err === 'assigned') pageError = '該球證仍有被指派的場次，請先取消指派再刪除。';
-
-    res.render('pages/admin-referees', {
-      title: '球證管理',
-      referees,
+    const status = String(req.query.status || 'pending');
+    const filter = status === 'all' ? {} : { status };
+    const alliances = await Alliance.find(filter).sort({ createdAt: -1 }).limit(200).lean();
+    res.render('pages/admin-alliances', {
+      title: '聯盟審核',
+      alliances,
+      status,
       userEmail: req.session.email,
-      notice,
-      error: pageError,
+      notice: req.query.ok === '1' ? '已更新' : null,
     });
   } catch (e) {
     next(e);
   }
 });
 
-adminRouter.post('/referees', requireStaff, async (req, res, next) => {
+adminRouter.post('/alliances/:allianceId/approve', requireAllianceReview, async (req, res, next) => {
   try {
-    const loginId = normalizeLoginId(req.body.loginId);
-    const email = String(req.body.email || '').toLowerCase().trim();
-    const password = String(req.body.password || '');
-    const name = String(req.body.name || '').trim();
-    if (!LOGIN_ID_RE.test(loginId) || !email || password.length < 6) {
-      return res.redirect('/admin/referees?err=1');
-    }
-    if (await User.findOne({ email })) return res.redirect('/admin/referees?err=2');
-    if (await User.findOne({ loginId })) return res.redirect('/admin/referees?err=3');
-    const passwordHash = await bcrypt.hash(password, 10);
-    await User.create({ email, loginId, passwordHash, role: 'referee', name });
-    res.redirect('/admin/referees?created=1');
+    await approveAlliance(req.params.allianceId, req.session.userId);
+    res.redirect('/admin/alliances?status=pending&ok=1');
   } catch (e) {
-    if (e.code === 11000) return res.redirect('/admin/referees?err=dup');
     next(e);
   }
 });
 
-adminRouter.post('/referees/:userId/delete', requireStaff, async (req, res, next) => {
+adminRouter.post('/alliances/:allianceId/reject', requireAllianceReview, async (req, res, next) => {
+  try {
+    await rejectAlliance(req.params.allianceId, req.session.userId, req.body.reason);
+    res.redirect('/admin/alliances?status=pending&ok=1');
+  } catch (e) {
+    next(e);
+  }
+});
+
+const MANAGEABLE_ROLES = ['admin', 'staff', 'owner'];
+
+function roleLabelZh(role) {
+  if (role === 'admin') return '管理員';
+  if (role === 'staff') return '職員';
+  if (role === 'owner') return '主辦（owner）';
+  if (role === 'referee') return '球證';
+  return role;
+}
+
+adminRouter.get('/users', requireAdmin, async (req, res, next) => {
+  try {
+    const users = await User.find({ role: { $in: MANAGEABLE_ROLES } })
+      .select('email name role createdAt')
+      .sort({ role: 1, createdAt: 1 })
+      .lean();
+    let flash = null;
+    let error = null;
+    if (req.query.created === '1') flash = '已建立帳號';
+    if (req.query.saved === '1') flash = '已儲存';
+    if (req.query.deleted === '1') flash = '已刪除帳號';
+    if (req.query.error === 'email') error = '請填寫有效電子郵件';
+    if (req.query.error === 'password') error = '密碼至少 6 個字元';
+    if (req.query.error === 'role') error = '角色無效';
+    if (req.query.error === 'taken') error = '此電子郵件已被使用';
+    if (req.query.error === 'self') error = '不能刪除或降級自己的管理員帳號';
+    if (req.query.error === 'last_admin') error = '必須至少保留一位管理員';
+    if (req.query.error === 'not_found') error = '找不到帳號';
+
+    res.render('pages/admin-users', {
+      title: '帳號與權限',
+      users,
+      roleLabelZh,
+      manageableRoles: MANAGEABLE_ROLES,
+      currentUserId: req.session.userId,
+      userEmail: req.session.email,
+      flash,
+      error,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.post('/users', requireAdmin, async (req, res, next) => {
+  try {
+    const email = String(req.body.email || '').toLowerCase().trim();
+    const name = String(req.body.name || '').trim();
+    const password = String(req.body.password || '');
+    const role = String(req.body.role || '').trim();
+
+    if (!email || !email.includes('@')) {
+      return res.redirect('/admin/users?error=email');
+    }
+    if (password.length < 6) {
+      return res.redirect('/admin/users?error=password');
+    }
+    if (!MANAGEABLE_ROLES.includes(role)) {
+      return res.redirect('/admin/users?error=role');
+    }
+    const exists = await User.findOne({ email }).select('_id').lean();
+    if (exists) {
+      return res.redirect('/admin/users?error=taken');
+    }
+
+    await User.create({
+      email,
+      name,
+      role,
+      passwordHash: await bcrypt.hash(password, 10),
+    });
+    res.redirect('/admin/users?created=1');
+  } catch (e) {
+    if (e.code === 11000) return res.redirect('/admin/users?error=taken');
+    next(e);
+  }
+});
+
+adminRouter.post('/users/:userId/update', requireAdmin, async (req, res, next) => {
   try {
     const { userId } = req.params;
-    if (!mongoose.isValidObjectId(userId)) return res.redirect('/admin/referees');
+    if (!mongoose.isValidObjectId(userId)) return res.redirect('/admin/users?error=not_found');
+
     const user = await User.findById(userId);
-    if (!user || user.role !== 'referee') return res.redirect('/admin/referees');
-    const n = await MatchAssignment.countDocuments({ refereeId: userId });
-    if (n > 0) return res.redirect('/admin/referees?err=assigned');
-    await User.deleteOne({ _id: userId });
-    res.redirect('/admin/referees?deleted=1');
+    if (!user || !MANAGEABLE_ROLES.includes(user.role)) {
+      return res.redirect('/admin/users?error=not_found');
+    }
+
+    const name = String(req.body.name || '').trim();
+    const role = String(req.body.role || '').trim();
+    const password = String(req.body.password || '');
+
+    if (!MANAGEABLE_ROLES.includes(role)) {
+      return res.redirect('/admin/users?error=role');
+    }
+
+    const isSelf = String(user._id) === String(req.session.userId);
+    if (isSelf && role !== 'admin') {
+      return res.redirect('/admin/users?error=self');
+    }
+
+    if (user.role === 'admin' && role !== 'admin') {
+      const adminCount = await User.countDocuments({ role: 'admin' });
+      if (adminCount <= 1) {
+        return res.redirect('/admin/users?error=last_admin');
+      }
+    }
+
+    user.name = name;
+    user.role = role;
+    if (password) {
+      if (password.length < 6) return res.redirect('/admin/users?error=password');
+      user.passwordHash = await bcrypt.hash(password, 10);
+    }
+    await user.save();
+
+    if (isSelf) {
+      req.session.role = user.role;
+    }
+
+    res.redirect('/admin/users?saved=1');
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.post('/users/:userId/delete', requireAdmin, async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    if (!mongoose.isValidObjectId(userId)) return res.redirect('/admin/users?error=not_found');
+    if (String(userId) === String(req.session.userId)) {
+      return res.redirect('/admin/users?error=self');
+    }
+
+    const user = await User.findById(userId);
+    if (!user || !MANAGEABLE_ROLES.includes(user.role)) {
+      return res.redirect('/admin/users?error=not_found');
+    }
+
+    if (user.role === 'admin') {
+      const adminCount = await User.countDocuments({ role: 'admin' });
+      if (adminCount <= 1) {
+        return res.redirect('/admin/users?error=last_admin');
+      }
+    }
+
+    await User.deleteOne({ _id: user._id });
+    res.redirect('/admin/users?deleted=1');
   } catch (e) {
     next(e);
   }
@@ -210,10 +422,19 @@ adminRouter.post('/events', requireStaff, async (req, res, next) => {
         error: 'slug 僅能使用小寫英文、數字與連字號',
       });
     }
-    const venues = String(req.body.venues || '')
-      .split('\n')
-      .map((v) => v.trim())
-      .filter(Boolean);
+    let venues;
+    try {
+      venues = await parseVenuesFromBody(req.body, []);
+    } catch (ve) {
+      if (ve.message === 'invalid_venue_slug' || ve.message === 'duplicate_venue_slug') {
+        return res.status(400).render('pages/admin-event-new', {
+          title: '新增大會',
+          userEmail: req.session.email,
+          error: '場地 ID 無效或重複（僅限小寫英文、數字、連字號）',
+        });
+      }
+      throw ve;
+    }
     const dateStart = parseDatetimeLocal(req.body.dateStart);
     const dateEnd = parseDatetimeLocal(req.body.dateEnd);
     const event = await Event.create({
@@ -223,6 +444,7 @@ adminRouter.post('/events', requireStaff, async (req, res, next) => {
       dateStart,
       dateEnd,
       isActive: true,
+      ownerId: req.session.userId,
     });
     res.redirect(`/admin/events/${event._id}`);
   } catch (e) {
@@ -282,6 +504,7 @@ adminRouter.get('/events/:eventId', requireStaff, async (req, res, next) => {
     if (req.query.error === 'slug') error = 'slug 僅能使用小寫英文、數字與連字號';
     if (req.query.error === 'taken') error = '此 slug 已被其他大會使用';
     if (req.query.error === '1') error = '請填寫大會名稱';
+    if (req.query.error === 'venue') error = '場地 ID 無效或重複（僅限小寫英文、數字、連字號）';
 
     let flash = null;
     if (req.query.saved === '1') flash = '已儲存';
@@ -293,9 +516,12 @@ adminRouter.get('/events/:eventId', requireStaff, async (req, res, next) => {
       delete req.session.tournamentImportReport;
     }
 
+    const venues = normalizeEventVenues(event.venues);
+
     res.render('pages/admin-event', {
       title: `設定 — ${event.name}`,
-      event,
+      event: { ...event, venues },
+      venues,
       tournaments,
       userEmail: req.session.email,
       flash,
@@ -303,39 +529,6 @@ adminRouter.get('/events/:eventId', requireStaff, async (req, res, next) => {
       dateStartLocal: toDatetimeLocalValue(event.dateStart),
       dateEndLocal: toDatetimeLocalValue(event.dateEnd),
       tournamentImportReport,
-    });
-  } catch (e) {
-    next(e);
-  }
-});
-
-adminRouter.get('/events/:eventId/scoreboard', requireStaff, async (req, res, next) => {
-  try {
-    const { eventId } = req.params;
-    if (!mongoose.isValidObjectId(eventId)) return res.status(404).send('Not found');
-    const event = await Event.findById(eventId).lean();
-    if (!event) return res.status(404).send('Not found');
-    const [board1, board2] = await Promise.all([
-      getOrCreateScoreboard(event._id, 1),
-      getOrCreateScoreboard(event._id, 2),
-    ]);
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const urls = {
-      display1: `${baseUrl}/e/${event.slug}/scoreboard`,
-      obs1: `${baseUrl}/e/${event.slug}/scoreboard?obs=1`,
-      display2: `${baseUrl}/e/${event.slug}/scoreboard/2`,
-      obs2: `${baseUrl}/e/${event.slug}/scoreboard/2?obs=1`,
-      json1: `${baseUrl}/api/public/events/${event.slug}/scoreboard?slot=1`,
-      json2: `${baseUrl}/api/public/events/${event.slug}/scoreboard?slot=2`,
-    };
-
-    res.render('pages/admin-scoreboard', {
-      title: `大會計分牌 — ${event.name}`,
-      event,
-      scoreboard: board1.toObject(),
-      scoreboard2: board2.toObject(),
-      userEmail: req.session.email,
-      urls,
     });
   } catch (e) {
     next(e);
@@ -375,13 +568,38 @@ adminRouter.post('/events/:eventId/update', requireStaff, async (req, res, next)
     doc.name = name;
     doc.dateStart = parseDatetimeLocal(req.body.dateStart) || undefined;
     doc.dateEnd = parseDatetimeLocal(req.body.dateEnd) || undefined;
-    doc.venues = String(req.body.venues || '')
-      .split('\n')
-      .map((v) => v.trim())
-      .filter(Boolean);
+    try {
+      doc.venues = await parseVenuesFromBody(req.body, doc.venues);
+    } catch (ve) {
+      if (ve.message === 'invalid_venue_slug' || ve.message === 'duplicate_venue_slug') {
+        return res.redirect(`/admin/events/${eventId}?error=venue`);
+      }
+      throw ve;
+    }
+    doc.markModified('venues');
+    doc.description = String(req.body.description || '').trim();
+    doc.coverImageUrl = String(req.body.coverImageUrl || '').trim();
     doc.isActive = req.body.isActive === '1';
-
     await doc.save();
+    res.redirect(`/admin/events/${eventId}?saved=1`);
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.post('/events/:eventId/registration', requireStaff, async (req, res, next) => {
+  try {
+    const { eventId } = req.params;
+    if (!mongoose.isValidObjectId(eventId)) return res.status(404).send('Not found');
+    const doc = await Event.findById(eventId);
+    if (!doc) return res.status(404).send('Not found');
+
+    doc.registrationEnabled = req.body.registrationEnabled === '1';
+    doc.registrationInfo = String(req.body.registrationInfo || '').trim();
+    doc.venueDetails = String(req.body.venueDetails || '').trim();
+    doc.eligibilityNotes = String(req.body.eligibilityNotes || '').trim();
+    await doc.save();
+
     res.redirect(`/admin/events/${eventId}?saved=1`);
   } catch (e) {
     next(e);
@@ -630,21 +848,6 @@ adminRouter.get('/tournaments/:tournamentId', requireStaff, async (req, res, nex
       .sort({ scheduledTime: 1, createdAt: 1 })
       .lean();
 
-    const refereeUsers = await User.find({ role: 'referee' }).sort({ email: 1 }).lean();
-    const matchIds = matches.map((m) => m._id);
-    const assignmentByMatchId = Object.fromEntries(matchIds.map((id) => [String(id), []]));
-    if (matchIds.length) {
-      const assigns = await MatchAssignment.find({ matchId: { $in: matchIds } })
-        .populate('refereeId', 'email name')
-        .lean();
-      for (const a of assigns) {
-        const mid = String(a.matchId);
-        if (assignmentByMatchId[mid] !== undefined && a.refereeId) {
-          assignmentByMatchId[mid].push(a.refereeId);
-        }
-      }
-    }
-
     const knockoutLadderColumns =
       tournament.phase === 'knockout' ? buildKnockoutLadderColumns(matches) : [];
 
@@ -665,16 +868,17 @@ adminRouter.get('/tournaments/:tournamentId', requireStaff, async (req, res, nex
         ? buildGroupRoundRobinMatrices({ groups, teams, matches })
         : [];
 
+    const venues = normalizeEventVenues(event.venues);
+
     res.render('pages/admin-tournament', {
       title: `${tournament.name} — 賽程`,
-      event,
+      event: { ...event, venues },
+      venues,
       tournament,
       groupTournaments,
       groups,
       teams,
       matches,
-      refereeUsers,
-      assignmentByMatchId,
       userEmail: req.session.email,
       flash: req.query.saved === '1' ? '已儲存' : null,
       error: null,
@@ -722,6 +926,10 @@ adminRouter.post('/tournaments/:tournamentId/generate-knockout', requireStaff, a
   try {
     const { tournamentId } = req.params;
     const sourceTournamentId = String(req.body.sourceTournamentId || '').trim();
+    if (sourceTournamentId) {
+      const src = await findAccessibleTournament(req.session, sourceTournamentId);
+      if (!src) return forbidAccess(req, res);
+    }
     const advancePerGroup = parseInt(String(req.body.advancePerGroup || '').trim(), 10);
     const r = await generateKnockoutFromGroup({
       sourceTournamentId,
@@ -735,6 +943,87 @@ adminRouter.post('/tournaments/:tournamentId/generate-knockout', requireStaff, a
     const qs = [`gen=ok`, `teams=${r.createdTeams}`];
     if (r.createdMatches) qs.push(`matches=${r.createdMatches}`);
     if (r.updatedMatches) qs.push(`updated=${r.updatedMatches}`);
+    res.redirect(`/admin/tournaments/${tournamentId}?${qs.join('&')}`);
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** 純淘汰賽：由本賽事隊伍直接產生鬼腳籤表 */
+adminRouter.post('/tournaments/:tournamentId/generate-knockout-bracket', requireStaff, async (req, res, next) => {
+  try {
+    const { tournamentId } = req.params;
+    if (!mongoose.isValidObjectId(tournamentId)) return res.status(404).send('Not found');
+
+    const force = req.body.force === '1' || req.body.force === 'true';
+    if (force) {
+      const t = await Tournament.findById(tournamentId).lean();
+      if (!t || t.phase !== 'knockout') {
+        return res.redirect(`/admin/tournaments/${tournamentId}`);
+      }
+      const matches = await Match.find({ tournamentId }).select('_id').lean();
+      const matchIds = matches.map((m) => m._id);
+      if (matchIds.length) {
+        await MatchAssignment.deleteMany({ matchId: { $in: matchIds } });
+        await Match.deleteMany({ _id: { $in: matchIds } });
+      }
+      await Team.deleteMany({
+        tournamentId,
+        $or: [{ isPlaceholder: true }, { sourceTeamId: { $exists: true, $ne: null } }],
+      });
+    }
+
+    const r = await generateKnockoutFromTeams({
+      knockoutTournamentId: tournamentId,
+      matchFormat: req.body.matchFormat,
+      courts: undefined,
+    });
+    if (!r.ok) {
+      const code = r.error || 'error';
+      return res.redirect(`/admin/tournaments/${tournamentId}?gen=${encodeURIComponent(code)}`);
+    }
+    const qs = [`gen=ok`, `teams=${r.createdTeams}`];
+    if (r.createdMatches) qs.push(`matches=${r.createdMatches}`);
+    if (r.matchFormat) qs.push(`fmt=${encodeURIComponent(r.matchFormat)}`);
+    if (r.courtsUsed != null) qs.push(`courts=${r.courtsUsed}`);
+    res.redirect(`/admin/tournaments/${tournamentId}?${qs.join('&')}`);
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** 小組賽：各組單循環一鍵產生賽程 */
+adminRouter.post('/tournaments/:tournamentId/generate-group-schedule', requireStaff, async (req, res, next) => {
+  try {
+    const { tournamentId } = req.params;
+    if (!mongoose.isValidObjectId(tournamentId)) return res.status(404).send('Not found');
+
+    const force = req.body.force === '1' || req.body.force === 'true';
+    if (force) {
+      const t = await Tournament.findById(tournamentId).lean();
+      if (!t || t.phase !== 'group') {
+        return res.redirect(`/admin/tournaments/${tournamentId}`);
+      }
+      const matches = await Match.find({ tournamentId }).select('_id').lean();
+      const matchIds = matches.map((m) => m._id);
+      if (matchIds.length) {
+        await MatchAssignment.deleteMany({ matchId: { $in: matchIds } });
+        await Match.deleteMany({ _id: { $in: matchIds } });
+      }
+    }
+
+    const r = await generateGroupRoundRobin({
+      tournamentId,
+      matchFormat: req.body.matchFormat,
+    });
+    if (!r.ok) {
+      const code = r.error || 'error';
+      return res.redirect(`/admin/tournaments/${tournamentId}?gen=${encodeURIComponent(code)}`);
+    }
+    const qs = [`gen=ok`, `teams=${r.createdTeams}`, `groups=${r.groupsUsed}`, `rounds=${r.rounds}`];
+    if (r.createdMatches) qs.push(`matches=${r.createdMatches}`);
+    if (r.matchFormat) qs.push(`fmt=${encodeURIComponent(r.matchFormat)}`);
+    if (r.courtsUsed != null) qs.push(`courts=${r.courtsUsed}`);
     res.redirect(`/admin/tournaments/${tournamentId}?${qs.join('&')}`);
   } catch (e) {
     next(e);
@@ -755,10 +1044,6 @@ adminRouter.post('/tournaments/:tournamentId/clear-matches', requireStaff, async
 
     if (matchIds.length) {
       await MatchAssignment.deleteMany({ matchId: { $in: matchIds } });
-      await LiveScoreboard.updateMany(
-        { linkedMatchId: { $in: matchIds } },
-        { $set: { linkedMatchId: null, linkedMatchFormat: null } }
-      );
       const r = await Match.deleteMany({ _id: { $in: matchIds } });
       removed = r.deletedCount || 0;
     }
@@ -956,7 +1241,8 @@ adminRouter.post('/tournaments/:tournamentId/matches', requireStaff, async (req,
     }
 
     const round = String(req.body.round || '').trim();
-    const court = String(req.body.court || '').trim();
+    const event = await Event.findById(t.eventId).select('venues').lean();
+    const court = resolveCourtSlug(event?.venues, req.body.court);
     const scheduledTime = normalizeTimeToHHmm(req.body.scheduledTime);
 
     await Match.create({
@@ -992,18 +1278,15 @@ adminRouter.get('/matches/:matchId/edit', requireStaff, async (req, res, next) =
     const event = await Event.findById(tournament.eventId).lean();
 
     const teams = await Team.find({ tournamentId: tournament._id }).sort({ createdAt: 1 }).lean();
-    const refereeUsers = await User.find({ role: 'referee' }).sort({ email: 1 }).lean();
-    const assigns = await MatchAssignment.find({ matchId }).populate('refereeId').lean();
-    const assignedReferees = assigns.map((a) => a.refereeId).filter(Boolean);
+    const venues = normalizeEventVenues(event?.venues);
 
     res.render('pages/admin-match', {
       title: '編輯場次',
-      event,
+      event: event ? { ...event, venues } : null,
+      venues,
       tournament,
       match,
       teams,
-      refereeUsers,
-      assignedReferees,
       userEmail: req.session.email,
       scheduledTimeValue: timeInputValueFromMatch(match),
       flash: req.query.saved === '1' ? '已儲存' : null,
@@ -1045,7 +1328,8 @@ adminRouter.post('/matches/:matchId/update', requireStaff, async (req, res, next
     match.matchFormat = mf;
     match.scheduledTime = normalizeTimeToHHmm(req.body.scheduledTime);
     match.scheduledAt = null;
-    match.court = String(req.body.court || '').trim();
+    const eventDoc = await Event.findById(tournament.eventId).select('venues').lean();
+    match.court = resolveCourtSlug(eventDoc?.venues, req.body.court);
     match.round = String(req.body.round || '').trim();
     match.status = String(req.body.status || 'scheduled');
 
@@ -1062,6 +1346,13 @@ adminRouter.post('/matches/:matchId/update', requireStaff, async (req, res, next
     }
 
     await match.save();
+    if (match.status === 'live') {
+      try {
+        await demoteOtherLiveOnCourt(match);
+      } catch (err) {
+        console.error('demoteOtherLiveOnCourt failed:', err);
+      }
+    }
     await broadcastMatchUpdate(req.app, match._id);
     res.redirect(`/admin/matches/${matchId}/edit?saved=1`);
   } catch (e) {
@@ -1069,41 +1360,165 @@ adminRouter.post('/matches/:matchId/update', requireStaff, async (req, res, next
   }
 });
 
-adminRouter.post('/matches/:matchId/assign', requireStaff, async (req, res, next) => {
+adminRouter.get('/events/:eventId/divisions', requireStaff, async (req, res, next) => {
   try {
-    const { matchId } = req.params;
-    const refereeId = String(req.body.refereeId || '');
-    if (!mongoose.isValidObjectId(matchId) || !mongoose.isValidObjectId(refereeId)) {
-      return res.status(400).send('Bad request');
-    }
-    const match = await Match.findById(matchId);
-    if (!match) return res.status(404).send('Not found');
-    const user = await User.findById(refereeId);
-    if (!user || user.role !== 'referee') return res.redirect(`/admin/matches/${matchId}/edit`);
-
-    await MatchAssignment.findOneAndUpdate(
-      { matchId, refereeId },
-      { matchId, refereeId },
-      { upsert: true }
+    const { eventId } = req.params;
+    if (!mongoose.isValidObjectId(eventId)) return res.status(404).send('Not found');
+    const event = await Event.findById(eventId).lean();
+    if (!event) return res.status(404).send('Not found');
+    const divisions = await Division.find({ eventId: event._id }).sort({ order: 1, createdAt: 1 }).lean();
+    const counts = await Promise.all(
+      divisions.map((d) => countDivisionRegistrations(d._id).then((n) => [String(d._id), n]))
     );
-    res.redirect(adminRedirectTarget(req.body.redirect, `/admin/matches/${matchId}/edit`));
+    const countByDiv = Object.fromEntries(counts);
+
+    res.render('pages/admin-event-divisions', {
+      title: `報名組別 — ${event.name}`,
+      event,
+      divisions: divisions.map((d) => ({
+        ...d,
+        registeredCount: countByDiv[String(d._id)] || 0,
+        registrationOpenLocal: toDatetimeLocalValue(d.registrationOpen),
+        registrationCloseLocal: toDatetimeLocalValue(d.registrationClose),
+      })),
+      userEmail: req.session.email,
+      flash: req.query.saved === '1' ? '已儲存' : req.query.created === '1' ? '已新增組別' : req.query.deleted === '1' ? '已刪除' : null,
+      error: req.query.error === '1' ? '請填寫組別名稱' : null,
+    });
   } catch (e) {
-    if (e.code === 11000) {
-      return res.redirect(adminRedirectTarget(req.body.redirect, `/admin/matches/${req.params.matchId}/edit`));
-    }
     next(e);
   }
 });
 
-adminRouter.post('/matches/:matchId/unassign', requireStaff, async (req, res, next) => {
+adminRouter.post('/events/:eventId/divisions', requireStaff, async (req, res, next) => {
   try {
-    const { matchId } = req.params;
-    const refereeId = String(req.body.refereeId || '');
-    if (!mongoose.isValidObjectId(matchId) || !mongoose.isValidObjectId(refereeId)) {
-      return res.status(400).send('Bad request');
-    }
-    await MatchAssignment.deleteOne({ matchId, refereeId });
-    res.redirect(adminRedirectTarget(req.body.redirect, `/admin/matches/${matchId}/edit`));
+    const { eventId } = req.params;
+    if (!mongoose.isValidObjectId(eventId)) return res.status(404).send('Not found');
+    const event = await Event.findById(eventId);
+    if (!event) return res.status(404).send('Not found');
+
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.redirect(`/admin/events/${eventId}/divisions?error=1`);
+
+    const maxOrder = await Division.findOne({ eventId: event._id }).sort({ order: -1 }).select('order').lean();
+    await Division.create({
+      eventId: event._id,
+      name,
+      format: req.body.format === 'singles' ? 'singles' : 'doubles',
+      fee: Math.max(0, Number(req.body.fee) || 0),
+      maxTeams: Math.max(1, Number(req.body.maxTeams) || 32),
+      registrationOpen: parseDatetimeLocal(req.body.registrationOpen) || undefined,
+      registrationClose: parseDatetimeLocal(req.body.registrationClose) || undefined,
+      isPublished: req.body.isPublished === '1',
+      order: (maxOrder?.order ?? -1) + 1,
+      restrictions: {
+        gender: ['male', 'female', 'mixed', 'open', ''].includes(req.body.gender) ? req.body.gender : 'open',
+        minAge: req.body.minAge ? Number(req.body.minAge) : undefined,
+        maxAge: req.body.maxAge ? Number(req.body.maxAge) : undefined,
+        minDupr: req.body.minDupr ? Number(req.body.minDupr) : undefined,
+        maxDupr: req.body.maxDupr ? Number(req.body.maxDupr) : undefined,
+      },
+      eligibilityNotes: String(req.body.eligibilityNotes || '').trim(),
+    });
+
+    res.redirect(`/admin/events/${eventId}/divisions?created=1`);
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.post('/divisions/:divisionId/update', requireStaff, async (req, res, next) => {
+  try {
+    const { divisionId } = req.params;
+    if (!mongoose.isValidObjectId(divisionId)) return res.status(404).send('Not found');
+    const div = await Division.findById(divisionId);
+    if (!div) return res.status(404).send('Not found');
+
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.redirect(`/admin/events/${div.eventId}/divisions?error=1`);
+
+    div.name = name;
+    div.description = String(req.body.description || '').trim();
+    div.format = req.body.format === 'singles' ? 'singles' : 'doubles';
+    div.fee = Math.max(0, Number(req.body.fee) || 0);
+    div.maxTeams = Math.max(1, Number(req.body.maxTeams) || 32);
+    div.registrationOpen = parseDatetimeLocal(req.body.registrationOpen) || undefined;
+    div.registrationClose = parseDatetimeLocal(req.body.registrationClose) || undefined;
+    div.isPublished = req.body.isPublished === '1';
+    div.order = Number(req.body.order) || 0;
+    div.restrictions = {
+      gender: ['male', 'female', 'mixed', 'open', ''].includes(req.body.gender) ? req.body.gender : 'open',
+      minAge: req.body.minAge ? Number(req.body.minAge) : undefined,
+      maxAge: req.body.maxAge ? Number(req.body.maxAge) : undefined,
+      minDupr: req.body.minDupr ? Number(req.body.minDupr) : undefined,
+      maxDupr: req.body.maxDupr ? Number(req.body.maxDupr) : undefined,
+    };
+    div.eligibilityNotes = String(req.body.eligibilityNotes || '').trim();
+    await div.save();
+
+    res.redirect(`/admin/events/${div.eventId}/divisions?saved=1`);
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.post('/divisions/:divisionId/delete', requireStaff, async (req, res, next) => {
+  try {
+    const { divisionId } = req.params;
+    if (!mongoose.isValidObjectId(divisionId)) return res.status(404).send('Not found');
+    const div = await Division.findById(divisionId);
+    if (!div) return res.status(404).send('Not found');
+    const eventId = div.eventId;
+    await Division.deleteOne({ _id: divisionId });
+    res.redirect(`/admin/events/${eventId}/divisions?deleted=1`);
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.get('/events/:eventId/registrations', requireStaff, async (req, res, next) => {
+  try {
+    const { eventId } = req.params;
+    if (!mongoose.isValidObjectId(eventId)) return res.status(404).send('Not found');
+    const event = await Event.findById(eventId).lean();
+    if (!event) return res.status(404).send('Not found');
+
+    const divisions = await Division.find({ eventId: event._id }).sort({ order: 1 }).lean();
+    const divFilter = String(req.query.division || '').trim();
+    const query = { eventId: event._id };
+    if (mongoose.isValidObjectId(divFilter)) query.divisionId = divFilter;
+
+    const registrations = await Registration.find(query)
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .lean();
+
+    const memberIds = [...new Set(registrations.flatMap((r) => (r.memberIds || []).map(String)))];
+    const members = await Member.find({ _id: { $in: memberIds } }).lean();
+    const memberMap = Object.fromEntries(members.map((m) => [String(m._id), m]));
+    const divMap = Object.fromEntries(divisions.map((d) => [String(d._id), d]));
+
+    const summary = await Promise.all(
+      divisions.map(async (d) => {
+        const paid = await Registration.countDocuments({ divisionId: d._id, status: { $in: ['paid', 'confirmed'] } });
+        const pending = await Registration.countDocuments({ divisionId: d._id, status: 'pending_payment' });
+        return { division: d, paid, pending, total: paid + pending };
+      })
+    );
+
+    res.render('pages/admin-event-registrations', {
+      title: `報名紀錄 — ${event.name}`,
+      event,
+      divisions,
+      divFilter,
+      summary,
+      registrations: registrations.map((r) => ({
+        ...r,
+        division: divMap[String(r.divisionId)],
+        members: (r.memberIds || []).map((id) => memberMap[String(id)]).filter(Boolean),
+      })),
+      userEmail: req.session.email,
+    });
   } catch (e) {
     next(e);
   }

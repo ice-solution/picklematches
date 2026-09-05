@@ -1,0 +1,51 @@
+<%- include('../partials/head', { title }) %>
+<body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
+  <header class="border-b border-slate-800">
+    <div class="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-4">
+      <span class="text-lg font-bold text-emerald-400">會員中心</span>
+      <nav class="flex flex-wrap gap-3 text-sm">
+        <a href="/member/profile" class="text-slate-300 underline">我的資料</a>
+        <a href="/member/alliances" class="text-slate-300 underline">我的聯盟</a>
+        <a href="/sessions/new" class="text-slate-300 underline">開場</a>
+        <form method="post" action="/member/logout" class="inline">
+          <button type="submit" class="text-slate-400 underline">登出</button>
+        </form>
+      </nav>
+    </div>
+  </header>
+  <main class="mx-auto max-w-4xl px-4 py-10">
+    <h1 class="text-2xl font-bold text-white">我的報名</h1>
+    <p class="mt-2 text-sm text-slate-400">你好，<%= member.name %>（<%= member.email %>）</p>
+
+    <% if (!registrations.length) { %>
+      <p class="mt-8 text-slate-500">尚未有任何報名紀錄。請至<a href="/" class="text-emerald-400 underline">首頁</a>選擇賽事報名。</p>
+    <% } else { %>
+      <div class="mt-8 overflow-x-auto">
+        <table class="w-full min-w-[32rem] text-left text-sm">
+          <thead>
+            <tr class="border-b border-slate-800 text-slate-400">
+              <th class="px-2 py-2">賽事</th>
+              <th class="px-2 py-2">組別</th>
+              <th class="px-2 py-2">隊名</th>
+              <th class="px-2 py-2">狀態</th>
+              <th class="px-2 py-2">金額</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% registrations.forEach(function (r) { %>
+              <% var statusLabel = { pending_payment: '待付款', paid: '已付款', confirmed: '已確認', cancelled: '已取消', failed: '失敗' }[r.status] || r.status; %>
+              <tr class="border-b border-slate-800/80">
+                <td class="px-2 py-3"><%= r.event ? r.event.name : '—' %></td>
+                <td class="px-2 py-3"><%= r.division ? r.division.name : '—' %></td>
+                <td class="px-2 py-3"><%= r.teamName || r.playerNames || '—' %></td>
+                <td class="px-2 py-3"><span class="<%= r.status === 'paid' || r.status === 'confirmed' ? 'text-emerald-400' : r.status === 'pending_payment' ? 'text-amber-400' : 'text-slate-400' %>"><%= statusLabel %></span></td>
+                <td class="px-2 py-3 font-mono"><%= r.amountDue %> <%= r.division && r.division.currency ? r.division.currency : 'HKD' %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </main>
+</body>
+</html>

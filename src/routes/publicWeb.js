@@ -7,7 +7,6 @@ import { Team } from '../models/Team.js';
 import { Tournament } from '../models/Tournament.js';
 import { attachRoundRobinMatricesToCompetitions } from '../lib/groupRoundRobinMatrix.js';
 import { enrichMatchesForSchedule } from '../lib/viewHelpers.js';
-import { getOrCreateScoreboard, normalizeScoreboardSlot } from '../models/LiveScoreboard.js';
 import { getEventGroupStandings } from '../lib/groupStandings.js';
 import {
   buildEventCompetitions,
@@ -134,40 +133,6 @@ publicWebRouter.get('/:eventSlug/screen/:matchId', loadEventBySlug, async (req, 
       match,
       eventIdStr: event._id.toString(),
     });
-  } catch (e) {
-    next(e);
-  }
-});
-
-async function renderScoreboardDisplay(req, res, slot) {
-  const event = req.event;
-  const scoreboard = (await getOrCreateScoreboard(event._id, slot)).toObject();
-  const obsMode = req.query.obs === '1' || req.query.obs === 'true';
-  const transparent = obsMode || req.query.transparent === '1';
-  res.render('pages/scoreboard-display', {
-    title: `${scoreboard.teamAName} vs ${scoreboard.teamBName}`,
-    event,
-    scoreboard,
-    eventIdStr: event._id.toString(),
-    scoreboardSlot: normalizeScoreboardSlot(slot),
-    obsMode,
-    transparent,
-  });
-}
-
-/** 大會計分牌 — 場地 2 */
-publicWebRouter.get('/:eventSlug/scoreboard/2', loadEventBySlug, async (req, res, next) => {
-  try {
-    await renderScoreboardDisplay(req, res, 2);
-  } catch (e) {
-    next(e);
-  }
-});
-
-/** 大會計分牌 — 場地 1（預設） */
-publicWebRouter.get('/:eventSlug/scoreboard', loadEventBySlug, async (req, res, next) => {
-  try {
-    await renderScoreboardDisplay(req, res, 1);
   } catch (e) {
     next(e);
   }

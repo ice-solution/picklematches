@@ -37,6 +37,8 @@ const matchSchema = new mongoose.Schema(
       a: { type: Number, min: 0, default: 0 },
       b: { type: Number, min: 0, default: 0 },
     },
+    /** 目前發球方：a | b；空字串＝未指定 */
+    serving: { type: String, enum: ['a', 'b', ''], default: '' },
     winnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Team' },
     /** 淘汰賽：完賽後勝者／敗者填入對應占位隊名（如 W-SF1、L-SF1） */
     knockoutWinnerSlot: { type: String, trim: true, default: null },

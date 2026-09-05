@@ -1,3 +1,8 @@
+import {
+  BACKOFFICE_ROLES,
+  ALLIANCE_REVIEW_ROLES,
+} from '../lib/eventAccess.js';
+
 export function requireAuth(roleAllow) {
   return (req, res, next) => {
     if (!req.session?.userId) {
@@ -27,12 +32,19 @@ export function requireReferee(req, res, next) {
   next();
 }
 
+/** 後台：admin / staff / owner */
 export function requireStaff(req, res, next) {
-  return requireAuth(['admin', 'staff'])(req, res, next);
+  return requireAuth(BACKOFFICE_ROLES)(req, res, next);
 }
 
+/** 僅系統管理員 */
 export function requireAdmin(req, res, next) {
   return requireAuth(['admin'])(req, res, next);
+}
+
+/** 聯盟審核：admin / staff（owner 不可） */
+export function requireAllianceReview(req, res, next) {
+  return requireAuth(ALLIANCE_REVIEW_ROLES)(req, res, next);
 }
 
 /** 裁判 API：一律 JSON */
@@ -44,7 +56,7 @@ export function requireRefereeApi(req, res, next) {
 }
 
 export function requireStaffApi(req, res, next) {
-  if (!req.session?.userId || !['admin', 'staff'].includes(req.session.role)) {
+  if (!req.session?.userId || !BACKOFFICE_ROLES.includes(req.session.role)) {
     return res.status(401).json({ error: '需管理端登入' });
   }
   next();

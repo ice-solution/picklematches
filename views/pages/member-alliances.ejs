@@ -1,0 +1,57 @@
+<%- include('../partials/head', { title }) %>
+<body class="home-page">
+  <header class="home-header">
+    <div class="home-container flex flex-wrap items-center justify-between gap-3 py-4">
+      <a href="/" class="flex items-center gap-3">
+        <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600 text-sm font-bold text-white">PB</span>
+        <span class="text-base font-semibold text-white">會員中心</span>
+      </a>
+      <%- include('../partials/public-nav') %>
+    </div>
+  </header>
+  <main class="home-container py-10">
+    <h1 class="text-2xl font-bold text-white">我的聯盟</h1>
+    <% if (notice) { %>
+      <p class="mt-4 rounded border border-emerald-800/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200"><%= notice %></p>
+    <% } %>
+
+    <section class="mt-8">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold text-emerald-400">已加入</h2>
+        <a href="/alliances/apply" class="home-btn--sm text-sm">申請新聯盟</a>
+      </div>
+      <% if (!myAlliances.length) { %>
+        <p class="mt-3 text-sm text-slate-500">尚未加入聯盟。可<a href="/alliances" class="text-emerald-400 underline">瀏覽聯盟表</a>或申請加盟。</p>
+      <% } else { %>
+        <ul class="mt-4 space-y-3">
+          <% myAlliances.forEach(function (a) { %>
+            <li class="home-card flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <a href="/alliances/<%= a.alliance.slug %>" class="font-semibold text-white hover:text-emerald-300"><%= a.alliance.name %></a>
+                <p class="text-xs text-slate-500"><%= a.role === 'organizer' ? '發起人' : '成員' %></p>
+              </div>
+            </li>
+          <% }); %>
+        </ul>
+      <% } %>
+    </section>
+
+    <section class="mt-10">
+      <h2 class="text-lg font-semibold text-slate-300">我的申請</h2>
+      <% if (!myApplications.length) { %>
+        <p class="mt-2 text-sm text-slate-500">無申請紀錄。</p>
+      <% } else { %>
+        <ul class="mt-4 space-y-2 text-sm">
+          <% myApplications.forEach(function (a) { %>
+            <% var st = { pending: '待審', approved: '已通過', rejected: '已拒絕' }[a.status] || a.status; %>
+            <li class="home-card">
+              <span class="text-white"><%= a.name %></span>
+              <span class="ml-2 text-xs <%= a.status === 'approved' ? 'text-emerald-400' : a.status === 'pending' ? 'text-amber-400' : 'text-rose-400' %>"><%= st %></span>
+            </li>
+          <% }); %>
+        </ul>
+      <% } %>
+    </section>
+  </main>
+</body>
+</html>

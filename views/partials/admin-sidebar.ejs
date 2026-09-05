@@ -10,14 +10,21 @@
     <p class="px-2 py-1 text-xs font-semibold text-slate-500">功能選單</p>
     <a href="/admin" class="block rounded px-3 py-2 <%= path === '/admin' ? 'bg-slate-800 font-medium text-white' : 'text-slate-300 hover:bg-slate-800/80' %>">大會列表</a>
     <a href="/admin/events/new" class="block rounded px-3 py-2 <%= path === '/admin/events/new' ? 'bg-slate-800 font-medium text-white' : 'text-slate-300 hover:bg-slate-800/80' %>">新增大會</a>
-    <a href="/admin/referees" class="block rounded px-3 py-2 <%= path === '/admin/referees' ? 'bg-slate-800 font-medium text-white' : 'text-slate-300 hover:bg-slate-800/80' %>">球證管理</a>
+    <% if (typeof userRole === 'undefined' || userRole !== 'owner') { %>
+      <a href="/admin/alliances" class="block rounded px-3 py-2 <%= path === '/admin/alliances' ? 'bg-slate-800 font-medium text-white' : 'text-slate-300 hover:bg-slate-800/80' %>">聯盟審核</a>
+    <% } %>
+    <% if (typeof userRole !== 'undefined' && userRole === 'admin') { %>
+      <a href="/admin/users" class="block rounded px-3 py-2 <%= path.indexOf('/admin/users') === 0 ? 'bg-slate-800 font-medium text-white' : 'text-slate-300 hover:bg-slate-800/80' %>">帳號與權限</a>
+    <% } %>
+    <% if (ev && ev._id) { %>
+      <p class="mt-3 px-2 py-1 text-xs font-semibold text-slate-500">報名</p>
+      <a href="/admin/events/<%= ev._id %>/divisions" class="block rounded px-3 py-2 <%= path.indexOf('/admin/events/' + String(ev._id) + '/divisions') === 0 ? 'bg-slate-800 font-medium text-white' : 'text-slate-300 hover:bg-slate-800/80' %>">報名組別</a>
+      <a href="/admin/events/<%= ev._id %>/registrations" class="block rounded px-3 py-2 <%= path.indexOf('/admin/events/' + String(ev._id) + '/registrations') === 0 ? 'bg-slate-800 font-medium text-white' : 'text-slate-300 hover:bg-slate-800/80' %>">報名紀錄</a>
+    <% } %>
     <% if (ev && ev._id) { %>
       <p class="mt-3 px-2 py-1 text-xs font-semibold text-slate-500">目前大會</p>
       <a href="/admin/events/<%= ev._id %>" class="block rounded px-3 py-2 <%= path === '/admin/events/' + String(ev._id) ? 'bg-slate-800 font-medium text-white' : 'text-slate-300 hover:bg-slate-800/80' %>">大會設定</a>
       <a href="/admin/events/<%= ev._id %>/matches-summary" class="block rounded px-3 py-2 <%= path.indexOf('/admin/events/' + String(ev._id) + '/matches-summary') === 0 ? 'bg-slate-800 font-medium text-white' : 'text-slate-300 hover:bg-slate-800/80' %>">賽果／報分表</a>
-      <a href="/e/<%= ev.slug %>#standings" target="_blank" rel="noopener" class="block rounded px-3 py-2 text-slate-400 hover:bg-slate-800/80">觀眾報分表 ↗</a>
-      <a href="/admin/events/<%= ev._id %>/scoreboard" class="block rounded px-3 py-2 <%= path.indexOf('/admin/events/' + String(ev._id) + '/scoreboard') === 0 ? 'bg-slate-800 font-medium text-white' : 'text-slate-300 hover:bg-slate-800/80' %>">大會計分牌</a>
-      <a href="/e/<%= ev.slug %>/scoreboard" target="_blank" rel="noopener" class="block rounded px-3 py-2 text-slate-400 hover:bg-slate-800/80">直播計分牌 ↗</a>
       <a href="/e/<%= ev.slug %>" target="_blank" rel="noopener" class="block rounded px-3 py-2 text-slate-400 hover:bg-slate-800/80">開啟前台 ↗</a>
     <% } %>
     <% if (tn && tn._id) { %>
@@ -30,6 +37,9 @@
   </nav>
   <div class="border-t border-slate-800 p-3 text-xs text-slate-500">
     <p class="truncate" title="<%= typeof userEmail !== 'undefined' ? userEmail : '' %>"><%= typeof userEmail !== 'undefined' ? userEmail : '' %></p>
+    <% if (typeof userRole !== 'undefined' && userRole) { %>
+      <p class="mt-0.5 text-slate-600"><%= userRole === 'owner' ? '主辦（owner）' : userRole === 'admin' ? '管理員' : userRole === 'staff' ? '職員' : userRole %></p>
+    <% } %>
     <form method="post" action="/admin/logout" class="mt-2">
       <button type="submit" class="text-amber-400 underline">登出</button>
     </form>

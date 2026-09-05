@@ -25,8 +25,10 @@
         <input name="dateEnd" type="datetime-local" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
       </div>
       <div>
-        <label class="block text-sm text-slate-400">場地列表（每行一筆，選填）</label>
-        <textarea name="venues" rows="3" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="1 號場&#10;2 號場"></textarea>
+        <label class="block text-sm text-slate-400">場地列表（選填）</label>
+        <div class="mt-1">
+          <%- include('../partials/venue-editor', { venues: [], showPin: true }) %>
+        </div>
       </div>
       <button type="submit" class="rounded bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500">建立</button>
     </form>

@@ -64,17 +64,17 @@ cd /var/www/pickleball-prod && ./deploy/deploy.sh prod
 ./deploy/remote-deploy.sh prod
 ```
 
-## 首頁轉去大會報分表
+## 公開網址與 Wonder 付款
 
-在該環境 `.env` 設定（建議用程式，可帶 `#standings` 錨點）：
+在該環境 `.env` 設定 `SITE_URL`（勿加結尾斜線），例如：
 
 ```bash
-HOME_REDIRECT=/e/match-ap-2026#standings
+SITE_URL=https://match.picklevibes.hk
 ```
 
-改完重啟 Node：`sudo systemctl restart pickleball-prod`
+Wonder webhook：`{SITE_URL}/webhook/wonder`
 
-若只用 Apache `Redirect` / `RewriteRule`，`#` 在設定檔裡是註解符號，通常**無法**可靠轉到 `#standings`；最多轉到 `/e/match-ap-2026`。
+改完重啟 Node：`sudo systemctl restart pickleball-prod`
 
 ## Cloudflare
 

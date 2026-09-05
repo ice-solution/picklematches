@@ -23,10 +23,8 @@ io.on('connection', (socket) => {
   socket.on('join', (payload) => {
     if (payload?.eventId) socket.join(`event:${payload.eventId}`);
     if (payload?.matchId) socket.join(`match:${payload.matchId}`);
-    if (payload?.scoreboardEventId) {
-      const eid = payload.scoreboardEventId;
-      const slot = payload.scoreboardSlot === 2 ? 2 : 1;
-      socket.join(`scoreboard:${eid}:${slot}`);
+    if (payload?.court?.eventId && payload?.court?.venueSlug) {
+      socket.join(`court:${payload.court.eventId}:${payload.court.venueSlug}`);
     }
   });
 });

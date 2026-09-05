@@ -1,4 +1,4 @@
-import { buildKnockoutLadderColumns } from './knockoutLadder.js';
+import { buildKnockoutLadderColumns, buildKnockoutBracket } from './knockoutLadder.js';
 import { getPodiumFromKnockoutMatches } from './knockoutPodium.js';
 import { formatDateDisplayZh, normalizeDateOnly } from './datetime.js';
 
@@ -94,6 +94,7 @@ export function buildEventCompetitions({
       standings: standingsByGroupId.get(gid) || null,
       advancePerGroup: g.advancePerGroup ?? 2,
       knockoutLadderColumns: ko ? buildKnockoutLadderColumns(koPopulated) : [],
+      knockoutBracket: ko ? buildKnockoutBracket(koPopulated) : null,
       podium: ko ? getPodiumFromKnockoutMatches(koPopulated) : null,
       groupMatches: groupMs,
       knockoutMatches: koMs,
@@ -116,6 +117,7 @@ export function buildEventCompetitions({
         competitionDateLabel: label,
         knockoutTournamentId: koId,
         knockoutLadderColumns: buildKnockoutLadderColumns(koMs),
+        knockoutBracket: buildKnockoutBracket(koMs),
         podium: getPodiumFromKnockoutMatches(koMs),
         matches: [...koMs].sort(sortMatches),
       };

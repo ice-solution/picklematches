@@ -1,0 +1,10 @@
+<%- include('../partials/public-page-start', { title }) %>
+    <h1 class="text-2xl font-bold text-white sm:text-3xl">比賽列表</h1>
+    <p class="mt-2 text-sm text-slate-400">瀏覽進行中的大賽，查看賽程、比分或線上報名。</p>
+
+    <%- include('../partials/event-list', {
+      events,
+      categoryTitle: '匹克球',
+      emptyMessage: '暫無開放中的賽事，請稍後再來。',
+    }) %>
+<%- include('../partials/public-page-end') %>

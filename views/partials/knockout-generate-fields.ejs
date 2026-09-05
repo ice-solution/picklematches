@@ -1,0 +1,38 @@
+<%-
+  /* 淘汰賽「產生鬼腳」共用欄位：賽制 + 場地說明
+     預期 locals: event, force (boolean), realTeamCount, buttonLabel, confirmMsg
+  */
+%>
+<% var _venues = (event && typeof normalizeEventVenues === 'function')
+  ? normalizeEventVenues(event.venues)
+  : (event && event.venues ? event.venues : []); %>
+<% if (typeof force !== 'undefined' && force) { %>
+  <input type="hidden" name="force" value="1" />
+<% } %>
+<div class="mt-3 flex flex-wrap items-end gap-3">
+  <div class="min-w-[160px]">
+    <label class="block text-xs text-slate-500">賽制 <span class="text-rose-400">*</span></label>
+    <select name="matchFormat" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm">
+      <option value="bestOf3" selected>三局兩勝</option>
+      <option value="bestOf5">五局三勝</option>
+      <option value="singleGame">一局過</option>
+    </select>
+  </div>
+  <button
+    type="submit"
+    class="rounded bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+    <%= realTeamCount < 2 ? 'disabled' : '' %>
+    onclick="return confirm('<%= confirmMsg %>');"
+  ><%= buttonLabel %></button>
+</div>
+<% if (_venues.length) { %>
+  <p class="mt-2 text-xs text-slate-500">
+    場地會依大會設定平均分配：<%= _venues.map(function (v) { return (v.name || v) + (v.slug ? '（' + v.slug + '）' : ''); }).join('、') %>（同一輪內輪流使用<% if (typeof noteBye !== 'undefined' && noteBye) { %>；BYE 場次不佔場地<% } %>）。
+  </p>
+<% } else { %>
+  <p class="mt-2 text-xs text-amber-400/90">
+    大會尚未設定場地，產生後場地欄會留空。可先到
+    <a href="/admin/events/<%= event._id %>" class="underline">大會設定</a>
+    填寫場地（含 ID／PIN）。
+  </p>
+<% } %>

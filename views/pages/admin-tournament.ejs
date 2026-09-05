@@ -32,7 +32,7 @@
           <form
             method="post"
             action="/admin/tournaments/<%= tournament._id %>/clear-matches"
-            onsubmit="return confirm('確定要清空此賽事全部 <%= matches.length %> 場比賽？\n\n會刪除：場次、球證指派、計分牌連結。\n不會刪除：組別、隊伍。\n\n清空後可重新上傳 Excel 賽程。');"
+            onsubmit="return confirm('確定要清空此賽事全部 <%= matches.length %> 場比賽？\n\n會刪除：場次、球證指派。\n不會刪除：組別、隊伍。\n\n清空後可重新上傳 Excel 賽程。');"
           >
             <button type="submit" class="rounded border border-rose-600/60 bg-rose-950/40 px-4 py-2 text-sm font-semibold text-rose-200 hover:bg-rose-900/50">
               清空賽程（<%= matches.length %> 場）
@@ -269,6 +269,88 @@
         </div>
         <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-sm font-semibold">新增隊伍</button>
       </form>
+
+      <% if (tournament.phase === 'knockout') {
+        var realTeamsForBracket = (teams || []).filter(function (t) { return !t.isPlaceholder; });
+        var realTeamCountTop = realTeamsForBracket.length;
+        var hasMatchesAlready = matches && matches.length;
+      %>
+        <div class="mt-6 rounded border border-emerald-800/60 bg-emerald-950/30 p-4">
+          <p class="text-sm font-semibold text-emerald-300">入完隊伍 → 一鍵產生淘汰賽程</p>
+          <p class="mt-1 text-xs text-slate-400">
+            目前真實隊伍 <strong class="text-slate-200"><%= realTeamCountTop %></strong> 隊。
+            請選擇賽制後產生；場地會按大會場地名單平均分配。
+            <% if (hasMatchesAlready) { %>已有 <%= matches.length %> 場次時會先清空再重畫。<% } %>
+          </p>
+          <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-knockout-bracket" class="mt-1">
+            <%- include('../partials/knockout-generate-fields', {
+              event: event,
+              force: !!hasMatchesAlready,
+              realTeamCount: realTeamCountTop,
+              buttonLabel: hasMatchesAlready ? '清空並重新產生鬼腳' : '產生鬼腳籤表',
+              confirmMsg: hasMatchesAlready
+                ? ('會先清空現有 ' + matches.length + ' 場次，再依目前 ' + realTeamCountTop + ' 隊與所選賽制重新產生。真實隊伍會保留。確定？')
+                : ('確定依目前 ' + realTeamCountTop + ' 支隊伍、所選賽制自動產生淘汰賽程？'),
+              noteBye: true,
+            }) %>
+          </form>
+        </div>
+      <% } else if (tournament.phase === 'group') {
+        var realTeamsForGroup = (teams || []).filter(function (t) { return !t.isPlaceholder && t.groupId; });
+        var realTeamCountGroup = realTeamsForGroup.length;
+        var groupsWithEnough = {};
+        realTeamsForGroup.forEach(function (t) {
+          var gid = String(t.groupId);
+          groupsWithEnough[gid] = (groupsWithEnough[gid] || 0) + 1;
+        });
+        var readyGroupCount = Object.keys(groupsWithEnough).filter(function (k) { return groupsWithEnough[k] >= 2; }).length;
+        var hasGroupMatches = matches && matches.length;
+      %>
+        <div class="mt-6 rounded border border-sky-800/60 bg-sky-950/30 p-4">
+          <p class="text-sm font-semibold text-sky-300">入完隊伍 → 一鍵產生小組循環賽程</p>
+          <p class="mt-1 text-xs text-slate-400">
+            已分組隊伍 <strong class="text-slate-200"><%= realTeamCountGroup %></strong> 隊、
+            可產生循環嘅組別 <strong class="text-slate-200"><%= readyGroupCount %></strong> 組。
+            會喺每組內建立單循環（每兩隊一場），並分「第 N 輪」；同輪跨組平均分配場地。
+            <% if (hasGroupMatches) { %>已有 <%= matches.length %> 場次時會先清空再重畫。<% } %>
+          </p>
+          <% if (typeof query !== 'undefined' && query && query.gen) { %>
+            <% if (query.gen === 'ok') { %>
+              <p class="mt-3 rounded border border-emerald-500/40 bg-emerald-950/25 px-3 py-2 text-sm text-emerald-200">
+                已完成：<%= query.groups || '?' %> 組、<%= query.rounds || '?' %> 輪、
+                <%= query.matches || '?' %> 場
+                <% if (query.fmt) { %>、賽制 <%= typeof formatLabel === 'function' ? formatLabel(query.fmt) : query.fmt %><% } %>
+                <% if (query.courts !== undefined) { %>、場地 <%= query.courts %> 個<% } %>。
+              </p>
+            <% } else if (query.gen !== 'reset') { %>
+              <p class="mt-3 rounded border border-rose-500/50 bg-rose-950/25 px-3 py-2 text-sm text-rose-200">
+                產生失敗：<%
+                  var gErr = {
+                    target_has_matches: '已有場次，請用下方按鈕清空後重產。',
+                    not_enough_teams: '至少要有一組有 2 隊或以上（且已分組）。',
+                    no_groups: '請先建立組別並把隊伍分入組內。',
+                    target_not_group: '此賽事不是小組賽。',
+                    invalid_id: '無效的賽事編號。',
+                    not_found: '找不到賽事。',
+                  };
+                %><%= gErr[query.gen] || query.gen %>
+              </p>
+            <% } %>
+          <% } %>
+          <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-group-schedule" class="mt-1">
+            <%- include('../partials/knockout-generate-fields', {
+              event: event,
+              force: !!hasGroupMatches,
+              realTeamCount: readyGroupCount >= 1 ? realTeamCountGroup : 0,
+              buttonLabel: hasGroupMatches ? '清空並重新產生循環賽程' : '產生小組循環賽程',
+              confirmMsg: hasGroupMatches
+                ? ('會先清空現有 ' + matches.length + ' 場次，再依目前分組與所選賽制重新產生單循環。隊伍／組別會保留。確定？')
+                : ('確定依目前分組、所選賽制自動產生各組單循環賽程？'),
+              noteBye: false,
+            }) %>
+          </form>
+        </div>
+      <% } %>
     </section>
 
     <% if (tournament.phase === 'group') { %>
@@ -290,98 +372,197 @@
         <% } %>
       </div>
       <% if (tournament.phase === 'knockout') { %>
-        <section class="mt-4 rounded border border-sky-900/60 bg-sky-950/20 p-5">
-          <h3 class="text-sm font-semibold text-sky-300">由小組賽產生淘汰賽（出線 → 畫鬼腳）</h3>
+        <%
+          const realTeamCount = (teams || []).filter(function (t) { return !t.isPlaceholder; }).length;
+          const hasGroupSources = groupTournaments && groupTournaments.length;
+          const genErrorLabels = {
+            target_has_matches: '此淘汰賽已有場次，請先清空後再產生。',
+            not_enough_teams: '至少需要 2 支真實隊伍（非 TBD/BYE）才可畫鬼腳。',
+            not_enough_qualifiers: '小組出線隊伍不足 2 隊。',
+            no_groups: '來源小組賽尚未建立組別。',
+            source_not_group: '來源必須是小組賽。',
+            target_not_knockout: '目標必須是淘汰賽。',
+            different_event: '來源與目標不屬於同一大會。',
+            invalid_id: '無效的賽事編號。',
+            not_found: '找不到賽事。',
+          };
+        %>
+        <section id="knockout-generate" class="mt-4 scroll-mt-24 rounded border border-sky-900/60 bg-sky-950/20 p-5">
+          <h3 class="text-sm font-semibold text-sky-300">產生淘汰賽程（畫鬼腳）</h3>
           <p class="mt-1 text-xs text-slate-400">
-            會依小組賽<strong class="text-slate-200">已完賽</strong>場次計算名次，取每組前 N 名出線。
-            <strong class="text-slate-200">4 隊（2 組×前 2）</strong>：自動建立 <strong class="text-slate-200">準決賽 2 場</strong>（A1 對 B2、A2 對 B1）、<strong class="text-slate-200">決賽</strong>與<strong class="text-slate-200">季軍賽</strong>（準決賽敗者對戰）；準決賽完賽後會自動填入決賽／季軍賽隊伍。
-            其他人數則建立首輪及決賽 TBD 占位。
+            純淘汰賽：匯入／新增全部參賽隊伍後，可直接依隊伍名單產生籤表。
+            若先有小組賽，亦可由小組出線結果產生。
+            <strong class="text-slate-200">2 隊</strong>→決賽；
+            <strong class="text-slate-200">4 隊</strong>→準決賽＋決賽＋季軍賽；
+            其他人數會自動加 BYE 並建立後續 TBD 占位。
           </p>
           <% if (typeof query !== 'undefined' && query && query.gen) { %>
             <% if (query.gen === 'ok') { %>
               <p class="mt-3 rounded border border-emerald-500/40 bg-emerald-950/25 px-3 py-2 text-sm text-emerald-200">
-                已完成：新增隊伍 <%= query.teams || '?' %> 隊
+                已完成：隊伍 <%= query.teams || '?' %>
                 <% if (query.matches) { %>、新增場次 <%= query.matches %> 場<% } %>
+                <% if (query.fmt) { %>、賽制 <%= typeof formatLabel === 'function' ? formatLabel(query.fmt) : query.fmt %><% } %>
+                <% if (query.courts !== undefined) { %>、已分配場地 <%= query.courts %> 個<% } %>
                 <% if (query.updated) { %>、填入/更新場次 <%= query.updated %> 場<% } %>。
+              </p>
+            <% } else if (query.gen === 'reset') { %>
+              <p class="mt-3 rounded border border-emerald-500/40 bg-emerald-950/25 px-3 py-2 text-sm text-emerald-200">
+                已清空淘汰賽場次與占位隊伍，可重新產生。
               </p>
             <% } else { %>
               <p class="mt-3 rounded border border-rose-500/50 bg-rose-950/25 px-3 py-2 text-sm text-rose-200">
-                產生失敗：<%= query.gen %>
+                產生失敗：<%= genErrorLabels[query.gen] || query.gen %>
               </p>
               <% if (query.gen === 'target_has_matches') { %>
-                <form method="post" action="/admin/tournaments/<%= tournament._id %>/reset-knockout" class="mt-3" onsubmit="return confirm('確定要清空此淘汰賽所有場次與自動產生的隊伍（含 BYE/TBD）？清空後可重新選來源產生。');">
-                  <button type="submit" class="rounded bg-rose-700 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-600">清空淘汰賽（重新設定來源）</button>
+                <form method="post" action="/admin/tournaments/<%= tournament._id %>/reset-knockout" class="mt-3" onsubmit="return confirm('確定要清空此淘汰賽所有場次與自動產生的占位隊伍（含 BYE/TBD）？真實參賽隊伍會保留。');">
+                  <button type="submit" class="rounded bg-rose-700 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-600">清空場次後重設</button>
                 </form>
               <% } %>
             <% } %>
           <% } %>
-          <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-knockout" class="mt-4 flex flex-wrap items-end gap-3">
-            <div class="min-w-[240px] flex-1">
-              <label class="block text-xs text-slate-500">來源小組賽賽事</label>
-              <select name="sourceTournamentId" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
-                <option value="" disabled selected hidden>選擇小組賽…</option>
-                <% (groupTournaments || []).forEach(function (t) { %>
-                  <option value="<%= t._id %>"><%= typeof formatTeamWithCode === 'function' ? formatTeamWithCode(t) : t.name %></option>
-                <% }); %>
-              </select>
-            </div>
-            <div class="w-36">
-              <label class="block text-xs text-slate-500">每組取前 N 名</label>
-              <input name="advancePerGroup" type="number" min="1" value="2" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
-            </div>
-            <button type="submit" class="rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-600" onclick="return confirm('確定要由小組賽產生淘汰賽？（若此淘汰賽已有場次會失敗）');">產生淘汰賽</button>
-          </form>
-          <form method="post" action="/admin/tournaments/<%= tournament._id %>/link-group" class="mt-6 border-t border-sky-900/50 pt-4">
-            <p class="text-xs font-semibold text-slate-400">前台綁定小組賽</p>
-            <p class="mt-1 text-xs text-slate-500">觀眾前台會將此淘汰賽與所選小組賽顯示在同一「比賽組別」分頁（產生淘汰時會自動綁定）。</p>
-            <% if (typeof query !== 'undefined' && query && query.link === 'ok') { %>
-              <p class="mt-2 text-sm text-emerald-300">已更新綁定。</p>
-            <% } %>
-            <% if (typeof query !== 'undefined' && query && query.link === 'invalid') { %>
-              <p class="mt-2 text-sm text-rose-300">綁定失敗：請選擇有效的小組賽。</p>
-            <% } %>
-            <div class="mt-3 flex flex-wrap items-end gap-3">
-              <div class="min-w-[240px] flex-1">
-                <label class="block text-xs text-slate-500">對應小組賽</label>
-                <select name="sourceGroupTournamentId" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
-                  <option value="">（不綁定）</option>
-                  <% (groupTournaments || []).forEach(function (t) { %>
-                    <option value="<%= t._id %>" <%= String(tournament.sourceGroupTournamentId || '') === String(t._id) ? 'selected' : '' %>><%= t.name %></option>
-                  <% }); %>
-                </select>
+
+          <div class="mt-4 rounded border border-emerald-900/50 bg-emerald-950/20 p-4">
+            <p class="text-xs font-semibold text-emerald-300">方式一：由本賽事隊伍直接畫鬼腳（無需小組賽）</p>
+            <p class="mt-1 text-xs text-slate-500">目前真實隊伍：<%= realTeamCount %> 隊。請先匯入／新增全部參賽隊伍，且尚未有場次（或用 force 清空重畫）。</p>
+            <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-knockout-bracket" class="mt-1">
+              <%- include('../partials/knockout-generate-fields', {
+                event: event,
+                force: !!(matches && matches.length),
+                realTeamCount: realTeamCount,
+                buttonLabel: matches && matches.length ? '清空並重新產生鬼腳' : '產生鬼腳籤表',
+                confirmMsg: matches && matches.length
+                  ? ('會先清空現有場次，再依目前 ' + realTeamCount + ' 隊與所選賽制重新產生。確定？')
+                  : ('確定依目前 ' + realTeamCount + ' 支隊伍、所選賽制產生淘汰籤表？'),
+              }) %>
+            </form>
+          </div>
+
+          <% if (hasGroupSources) { %>
+            <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-knockout" class="mt-4 border-t border-sky-900/50 pt-4">
+              <p class="text-xs font-semibold text-sky-300">方式二：由小組賽出線產生</p>
+              <p class="mt-1 text-xs text-slate-500">依小組賽已完賽場次計算名次，取每組前 N 名出線後畫鬼腳。</p>
+              <div class="mt-3 flex flex-wrap items-end gap-3">
+                <div class="min-w-[240px] flex-1">
+                  <label class="block text-xs text-slate-500">來源小組賽賽事</label>
+                  <select name="sourceTournamentId" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+                    <option value="" disabled selected hidden>選擇小組賽…</option>
+                    <% groupTournaments.forEach(function (t) { %>
+                      <option value="<%= t._id %>"><%= t.name %></option>
+                    <% }); %>
+                  </select>
+                </div>
+                <div class="w-36">
+                  <label class="block text-xs text-slate-500">每組取前 N 名</label>
+                  <input name="advancePerGroup" type="number" min="1" value="2" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+                </div>
+                <button type="submit" class="rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-600" onclick="return confirm('確定要由小組賽產生淘汰賽？（若此淘汰賽已有場次會失敗）');">由小組產生</button>
               </div>
-              <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-600">儲存綁定</button>
-            </div>
-          </form>
+            </form>
+
+            <form method="post" action="/admin/tournaments/<%= tournament._id %>/link-group" class="mt-6 border-t border-sky-900/50 pt-4">
+              <p class="text-xs font-semibold text-slate-400">前台綁定小組賽（選填）</p>
+              <p class="mt-1 text-xs text-slate-500">觀眾前台會將此淘汰賽與所選小組賽顯示在同一「比賽組別」分頁。</p>
+              <% if (typeof query !== 'undefined' && query && query.link === 'ok') { %>
+                <p class="mt-2 text-sm text-emerald-300">已更新綁定。</p>
+              <% } %>
+              <% if (typeof query !== 'undefined' && query && query.link === 'invalid') { %>
+                <p class="mt-2 text-sm text-rose-300">綁定失敗：請選擇有效的小組賽。</p>
+              <% } %>
+              <div class="mt-3 flex flex-wrap items-end gap-3">
+                <div class="min-w-[240px] flex-1">
+                  <label class="block text-xs text-slate-500">對應小組賽</label>
+                  <select name="sourceGroupTournamentId" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+                    <option value="">（不綁定）</option>
+                    <% groupTournaments.forEach(function (t) { %>
+                      <option value="<%= t._id %>" <%= String(tournament.sourceGroupTournamentId || '') === String(t._id) ? 'selected' : '' %>><%= t.name %></option>
+                    <% }); %>
+                  </select>
+                </div>
+                <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-600">儲存綁定</button>
+              </div>
+            </form>
+          <% } else { %>
+            <p class="mt-4 border-t border-sky-900/50 pt-4 text-xs text-slate-500">本大會沒有小組賽，無需綁定來源；請用上方「由本賽事隊伍直接畫鬼腳」。</p>
+          <% } %>
         </section>
       <% } %>
       <%- include('../partials/knockout-ladder', { tournament, knockoutLadderColumns }) %>
-      <p class="mt-1 text-sm text-slate-500">每場可選五局三勝、三局兩勝或一局過；可設定日期時間與場地。</p>
+      <p class="mt-1 text-sm text-slate-500">可直接在表內改時間、場地與各局比分（失焦即儲存）；詳情仍可點「編輯」。</p>
+      <p class="mt-1 text-xs text-slate-500">比分由左至右為第 1 局起（A–B）；未打的局留空。時間請用 24 小時制，例如 <span class="font-mono text-slate-400">14:30</span>。</p>
       <div class="mt-4 max-w-full overflow-x-auto">
         <table class="admin-matches-table">
           <thead>
             <tr class="border-b border-slate-800 text-slate-400">
               <th class="px-2 py-2 font-medium">對戰</th>
-              <th class="whitespace-nowrap px-2 py-2 font-medium">賽制</th>
+              <th class="whitespace-nowrap px-2 py-2 font-medium">輪次</th>
               <th class="whitespace-nowrap px-2 py-2 font-medium">時間</th>
               <th class="whitespace-nowrap px-2 py-2 font-medium">場地</th>
-              <th class="whitespace-nowrap px-2 py-2 font-medium">比分</th>
+              <th class="px-2 py-2 font-medium">比分（第1局 →）</th>
               <th class="whitespace-nowrap px-2 py-2 font-medium">狀態</th>
-              <th class="whitespace-nowrap px-2 py-2 font-medium">球證</th>
               <th class="whitespace-nowrap px-2 py-2 text-right font-medium">操作</th>
             </tr>
           </thead>
           <tbody>
-            <% matches.forEach(function (m) { %>
-              <% var mid = String(m._id); var refs = (typeof assignmentByMatchId !== 'undefined' && assignmentByMatchId[mid]) ? assignmentByMatchId[mid] : []; %>
-              <tr class="border-b border-slate-800/80">
+            <% matches.forEach(function (m) {
+              var gameSlots = m.matchFormat === 'bestOf5' ? 5 : (m.matchFormat === 'singleGame' ? 1 : 3);
+              var completed = m.completedGames || [];
+              var timeVal = '';
+              if (m.scheduledTime) timeVal = String(m.scheduledTime).trim();
+              else if (m.scheduledAt) {
+                var _d = new Date(m.scheduledAt);
+                if (!isNaN(_d.getTime())) {
+                  timeVal = String(_d.getHours()).padStart(2, '0') + ':' + String(_d.getMinutes()).padStart(2, '0');
+                }
+              }
+            %>
+              <tr class="match-quick-row border-b border-slate-800/80" data-match-id="<%= m._id %>">
                 <td class="px-2 py-2.5">
                   <%- include('../partials/team-matchup', { teamA: m.teamA, teamB: m.teamB, layout: 'grid' }) %>
+                  <p class="mt-1 text-[10px] text-slate-500"><%= formatLabel(m.matchFormat) %></p>
                 </td>
-                <td class="whitespace-nowrap px-2 py-2 text-slate-300"><%= formatLabel(m.matchFormat) %></td>
-                <td class="whitespace-nowrap px-2 py-2 align-middle font-mono text-xs text-slate-400"><%= displayMatchTime(m) %></td>
-                <td class="whitespace-nowrap px-2 py-2 align-middle"><%= m.court || '—' %></td>
-                <td class="px-2 py-2 align-middle"><%- include('../partials/score-display', { m: m, scoreMainClass: 'font-mono text-xs font-semibold text-emerald-300/90', scoreDetailClass: 'mt-0.5 block font-mono text-[10px] text-slate-400' }) %></td>
+                <td class="whitespace-nowrap px-2 py-2 align-middle text-xs text-slate-400"><%= m.round || '—' %></td>
+                <td class="whitespace-nowrap px-2 py-2 align-middle">
+                  <input
+                    type="text"
+                    class="mq-time w-[4.75rem] rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-200"
+                    value="<%= timeVal %>"
+                    placeholder="00:00"
+                    maxlength="5"
+                    inputmode="numeric"
+                    pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
+                    title="24 小時制，例如 14:30"
+                    aria-label="開賽時間（24小時）"
+                  />
+                </td>
+                <td class="whitespace-nowrap px-2 py-2 align-middle">
+                  <%- include('../partials/court-select', {
+                    venues: typeof venues !== 'undefined' ? venues : [],
+                    name: '',
+                    value: m.court || '',
+                    className: 'mq-court w-[7.5rem] rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200',
+                    allowEmpty: true,
+                    emptyLabel: '—',
+                    extraAttrs: 'aria-label="場地"'
+                  }) %>
+                </td>
+                <td class="px-2 py-2 align-middle">
+                  <div class="mq-games flex flex-nowrap items-end gap-2">
+                    <% for (var gi = 0; gi < gameSlots; gi++) {
+                      var ga = completed[gi] ? completed[gi].a : '';
+                      var gb = completed[gi] ? completed[gi].b : '';
+                    %>
+                      <div class="mq-game inline-flex shrink-0 flex-col items-center gap-0.5">
+                        <span class="text-[10px] font-medium leading-none text-slate-500">第<%= gi + 1 %>局</span>
+                        <span class="inline-flex items-center gap-0.5 rounded border border-slate-800 bg-slate-950/60 px-1 py-0.5">
+                          <input type="number" min="0" class="mq-ga w-9 rounded border border-slate-700 bg-slate-900 px-0.5 py-1 text-center font-mono text-xs" data-gi="<%= gi %>" value="<%= ga %>" aria-label="第<%= gi + 1 %>局 A" title="A 隊" />
+                          <span class="text-[10px] text-slate-600">–</span>
+                          <input type="number" min="0" class="mq-gb w-9 rounded border border-slate-700 bg-slate-900 px-0.5 py-1 text-center font-mono text-xs" data-gi="<%= gi %>" value="<%= gb %>" aria-label="第<%= gi + 1 %>局 B" title="B 隊" />
+                        </span>
+                      </div>
+                    <% } %>
+                  </div>
+                  <p class="mq-msg mt-1 hidden text-[10px] text-emerald-400">已儲存</p>
+                </td>
                 <td class="whitespace-nowrap px-2 py-2 align-middle">
                   <select
                     class="match-status-select w-full min-w-[5.5rem] rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200"
@@ -394,37 +575,7 @@
                     <% }); %>
                   </select>
                 </td>
-                <td class="px-2 py-2 align-top">
-                  <% if (refs.length) { %>
-                    <ul class="mb-2 space-y-1 text-xs text-slate-400">
-                      <% refs.forEach(function (r) { %>
-                        <li class="flex items-center justify-between gap-2">
-                          <span class="truncate" title="<%= r.email %>"><%= r.name || r.email %></span>
-                          <form method="post" action="/admin/matches/<%= m._id %>/unassign" class="shrink-0">
-                            <input type="hidden" name="redirect" value="/admin/tournaments/<%= tournament._id %>" />
-                            <input type="hidden" name="refereeId" value="<%= r._id %>" />
-                            <button type="submit" class="text-rose-400 underline" title="取消指派">移除</button>
-                          </form>
-                        </li>
-                      <% }); %>
-                    </ul>
-                  <% } %>
-                  <% if (typeof refereeUsers !== 'undefined' && refereeUsers && refereeUsers.length) { %>
-                    <form method="post" action="/admin/matches/<%= m._id %>/assign" class="flex max-w-[13rem] flex-col gap-1 sm:flex-row sm:items-stretch">
-                      <input type="hidden" name="redirect" value="/admin/tournaments/<%= tournament._id %>" />
-                      <select name="refereeId" required class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs">
-                        <option value="" disabled selected hidden>選擇球證…</option>
-                        <% refereeUsers.forEach(function (u) { %>
-                          <option value="<%= u._id %>"><%= u.loginId ? u.loginId + ' · ' : '' %><%= u.name || u.email %></option>
-                        <% }); %>
-                      </select>
-                      <button type="submit" class="shrink-0 rounded bg-sky-800 px-2 py-1.5 text-xs font-semibold text-white hover:bg-sky-700">指派</button>
-                    </form>
-                  <% } else { %>
-                    <p class="text-xs text-amber-500/90"><a href="/admin/referees" class="underline">先新增球證</a></p>
-                  <% } %>
-                </td>
-                <td class="whitespace-nowrap px-2 py-2 text-right align-middle"><a href="/admin/matches/<%= m._id %>/edit" class="text-emerald-400 underline">編輯</a></td>
+                <td class="whitespace-nowrap px-2 py-2 text-right align-middle"><a href="/admin/matches/<%= m._id %>/edit" class="text-emerald-400 underline">詳情</a></td>
               </tr>
             <% }); %>
           </tbody>
@@ -482,7 +633,13 @@
             </div>
             <div>
               <label class="text-xs text-slate-500">場地</label>
-              <input name="court" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="1 號場" />
+              <%- include('../partials/court-select', {
+                venues: typeof venues !== 'undefined' ? venues : [],
+                name: 'court',
+                value: '',
+                className: 'mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2',
+                allowEmpty: true
+              }) %>
             </div>
           </div>
           <button type="submit" class="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">建立場次</button>
@@ -558,6 +715,144 @@
               sel.disabled = false;
               sel.classList.remove('opacity-60');
             });
+        });
+      });
+
+      function collectGames(row) {
+        var slots = {};
+        row.querySelectorAll('.mq-ga').forEach(function (inp) {
+          var gi = inp.getAttribute('data-gi');
+          if (!slots[gi]) slots[gi] = {};
+          slots[gi].a = inp.value;
+        });
+        row.querySelectorAll('.mq-gb').forEach(function (inp) {
+          var gi = inp.getAttribute('data-gi');
+          if (!slots[gi]) slots[gi] = {};
+          slots[gi].b = inp.value;
+        });
+        return Object.keys(slots)
+          .sort(function (a, b) { return Number(a) - Number(b); })
+          .map(function (k) { return { a: slots[k].a, b: slots[k].b }; });
+      }
+
+      function flashRow(row, ok) {
+        var msg = row.querySelector('.mq-msg');
+        row.classList.toggle('bg-emerald-950/20', !!ok);
+        row.classList.toggle('bg-rose-950/20', !ok);
+        if (msg) {
+          msg.textContent = ok ? '已儲存' : '儲存失敗';
+          msg.classList.toggle('text-emerald-400', !!ok);
+          msg.classList.toggle('text-rose-300', !ok);
+          msg.classList.remove('hidden');
+          setTimeout(function () {
+            msg.classList.add('hidden');
+            row.classList.remove('bg-emerald-950/20', 'bg-rose-950/20');
+          }, 1400);
+        }
+      }
+
+      function saveQuick(row, fields) {
+        var matchId = row.getAttribute('data-match-id');
+        if (!matchId) return;
+        var pending = row._mqPending || {};
+        Object.assign(pending, fields || {});
+        row._mqPending = pending;
+        if (row._mqTimer) clearTimeout(row._mqTimer);
+        row._mqTimer = setTimeout(function () {
+          var body = row._mqPending || {};
+          row._mqPending = null;
+          if (body.completedGames === undefined && (body.scheduledTime !== undefined || body.court !== undefined)) {
+            // keep partial updates for time/court only
+          } else if (body.completedGames !== undefined) {
+            body.completedGames = collectGames(row);
+          } else {
+            body = {
+              scheduledTime: (row.querySelector('.mq-time') || {}).value || '',
+              court: (row.querySelector('.mq-court') || {}).value || '',
+              completedGames: collectGames(row),
+            };
+          }
+          fetch('/api/admin/matches/' + matchId + '/quick-update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(body),
+          })
+            .then(function (r) {
+              return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+            })
+            .then(function (ref) {
+              flashRow(row, !!ref.ok);
+              if (ref.ok && ref.j.match) {
+                var sel = row.querySelector('.match-status-select');
+                if (sel && ref.j.match.status) {
+                  sel.value = ref.j.match.status;
+                  sel.setAttribute('data-prev', ref.j.match.status);
+                }
+              }
+            })
+            .catch(function () { flashRow(row, false); });
+        }, 280);
+      }
+
+      document.querySelectorAll('.match-quick-row').forEach(function (row) {
+        var time = row.querySelector('.mq-time');
+        var court = row.querySelector('.mq-court');
+        if (time) {
+          function normalizeTimeInput() {
+            var raw = String(time.value || '').trim();
+            if (!raw) {
+              time.value = '';
+              time.classList.remove('border-rose-600');
+              return '';
+            }
+            var m = raw.match(/^(\d{1,2}):(\d{2})$/);
+            if (!m) {
+              var digits = raw.replace(/\D/g, '');
+              if (digits.length === 3 || digits.length === 4) {
+                if (digits.length === 3) digits = '0' + digits;
+                m = [null, digits.slice(0, 2), digits.slice(2)];
+              }
+            }
+            if (!m) {
+              time.classList.add('border-rose-600');
+              return null;
+            }
+            var h = parseInt(m[1], 10);
+            var min = parseInt(m[2], 10);
+            if (h > 23 || min > 59) {
+              time.classList.add('border-rose-600');
+              return null;
+            }
+            var norm = String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+            time.value = norm;
+            time.classList.remove('border-rose-600');
+            return norm;
+          }
+          time.addEventListener('blur', function () {
+            var norm = normalizeTimeInput();
+            if (norm === null) return;
+            saveQuick(row, { scheduledTime: norm });
+          });
+          time.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              time.blur();
+            }
+          });
+        }
+        if (court) {
+          court.addEventListener('change', function () {
+            saveQuick(row, { court: court.value });
+          });
+          court.addEventListener('blur', function () {
+            saveQuick(row, { court: court.value });
+          });
+        }
+        row.querySelectorAll('.mq-ga, .mq-gb').forEach(function (inp) {
+          inp.addEventListener('change', function () {
+            saveQuick(row, { completedGames: collectGames(row) });
+          });
         });
       });
     })();

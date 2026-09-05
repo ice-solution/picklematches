@@ -1,0 +1,76 @@
+<%- include('../partials/public-page-start', { title }) %>
+    <p class="text-sm"><a href="/sessions" class="text-emerald-400 underline">← 開場列表</a></p>
+
+    <% if (notice) { %>
+      <p class="mt-4 rounded border border-emerald-800/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200"><%= notice %></p>
+    <% } %>
+
+    <h1 class="mt-4 text-2xl font-bold text-white"><%= openSession.title %></h1>
+    <p class="mt-2 text-sm text-slate-400">
+      <%= openSession.sessionDate ? new Date(openSession.sessionDate).toLocaleString('zh-HK') : '—' %>
+      <% if (openSession.venue) { %> · <%= openSession.venue %><% } %>
+    </p>
+    <p class="mt-1 text-xs text-slate-500"><%= formatLabel %> · <%= skillLabel %></p>
+
+    <% if (openSession.description) { %>
+      <p class="mt-4 whitespace-pre-wrap text-slate-300"><%= openSession.description %></p>
+    <% } %>
+    <% if (openSession.address) { %>
+      <p class="mt-2 text-sm text-slate-400">地址：<%= openSession.address %></p>
+    <% } %>
+
+    <div class="mt-6 flex flex-wrap gap-4 text-sm">
+      <span class="text-slate-400">主辦：
+        <% if (host && host.profileSlug) { %>
+          <a href="/players/<%= host.profileSlug %>" class="text-sky-400 underline"><%= host.name %></a>
+        <% } else { %><%= host ? host.name : '—' %><% } %>
+      </span>
+      <% if (alliance) { %>
+        <span class="text-slate-400">聯盟：<a href="/alliances/<%= alliance.slug %>" class="text-emerald-400 underline"><%= alliance.name %></a></span>
+      <% } %>
+      <span class="font-mono text-emerald-400"><%= (openSession.participantIds || []).length %>/<%= openSession.maxPlayers %> 人</span>
+    </div>
+
+    <section class="mt-8">
+      <h2 class="font-semibold text-white">參加者</h2>
+      <ul class="mt-3 flex flex-wrap gap-2">
+        <% participants.forEach(function (p) { %>
+          <li>
+            <% if (p.profileSlug) { %>
+              <a href="/players/<%= p.profileSlug %>" class="rounded border border-slate-700 bg-slate-800/50 px-3 py-1 text-sm text-slate-200 hover:border-emerald-800"><%= p.name %></a>
+            <% } else { %>
+              <span class="rounded border border-slate-700 px-3 py-1 text-sm text-slate-400"><%= p.name %></span>
+            <% } %>
+          </li>
+        <% }); %>
+      </ul>
+    </section>
+
+    <div class="mt-8 flex flex-wrap items-center gap-3">
+      <% if (openSession.status === 'cancelled') { %>
+        <p class="text-rose-400">此場次已取消</p>
+      <% } else if ((openSession.status === 'full' || (openSession.participantIds || []).length >= openSession.maxPlayers) && !isJoined) { %>
+        <p class="text-amber-400">名額已滿</p>
+      <% } else if (openSession.status === 'open' && !isJoined) { %>
+        <% if (typeof session !== 'undefined' && session.memberId) { %>
+          <form method="post" action="/sessions/<%= openSession._id %>/join">
+            <button type="submit" class="home-btn">報名參加</button>
+          </form>
+        <% } else { %>
+          <a href="/member/login?next=<%= encodeURIComponent('/sessions/' + openSession._id) %>" class="home-btn">登入後報名</a>
+        <% } %>
+      <% } %>
+
+      <% if (isJoined && !isHost && openSession.status !== 'cancelled') { %>
+        <form method="post" action="/sessions/<%= openSession._id %>/leave">
+          <button type="submit" class="home-btn--ghost">取消報名</button>
+        </form>
+      <% } %>
+
+      <% if (isHost && openSession.status !== 'cancelled' && openSession.status !== 'completed') { %>
+        <form method="post" action="/sessions/<%= openSession._id %>/cancel" onsubmit="return confirm('確定取消此場次？');">
+          <button type="submit" class="text-sm text-rose-400 underline">取消場次</button>
+        </form>
+      <% } %>
+    </div>
+<%- include('../partials/public-page-end') %>

@@ -1,0 +1,114 @@
+<%- include('../partials/head', { title }) %>
+<%- include('../partials/admin-frame-start') %>
+<main class="mx-auto w-full max-w-5xl pb-12 pt-1">
+  <h1 class="text-2xl font-bold text-white">帳號與權限</h1>
+  <p class="mt-2 text-sm text-slate-400">建立後台帳號並設定角色。僅管理員可進入此頁。</p>
+
+  <% if (typeof flash !== 'undefined' && flash) { %>
+    <p class="mt-4 rounded border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200"><%= flash %></p>
+  <% } %>
+  <% if (typeof error !== 'undefined' && error) { %>
+    <p class="mt-4 rounded border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"><%= error %></p>
+  <% } %>
+
+  <section class="mt-8 rounded border border-slate-800 bg-slate-900/40 p-5 text-sm text-slate-300">
+    <h2 class="font-semibold text-emerald-400">權限說明</h2>
+    <ul class="mt-3 list-disc space-y-1.5 pl-5 text-slate-400">
+      <li><strong class="text-slate-200">管理員（admin）</strong>：全部功能，含聯盟審核、帳號權限。</li>
+      <li><strong class="text-slate-200">職員（staff）</strong>：管理所有大會／賽事，可聯盟審核；不能管理帳號。</li>
+      <li><strong class="text-slate-200">主辦（owner）</strong>：只能建立／管理自己的大會與賽事；看不到聯盟審核與帳號權限。</li>
+    </ul>
+  </section>
+
+  <section class="mt-8 rounded border border-slate-800 bg-slate-900/40 p-5">
+    <h2 class="text-lg font-semibold text-white">新增帳號</h2>
+    <form method="post" action="/admin/users" class="mt-4 grid gap-3 sm:grid-cols-2">
+      <div>
+        <label class="block text-xs text-slate-500">電子郵件</label>
+        <input name="email" type="email" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" placeholder="owner@example.com" />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500">顯示名稱（選填）</label>
+        <input name="name" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" placeholder="例如：屯門主辦" />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500">密碼（至少 6 字）</label>
+        <input name="password" type="password" required minlength="6" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500">角色</label>
+        <select name="role" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm">
+          <option value="owner" selected>主辦（owner）</option>
+          <option value="staff">職員（staff）</option>
+          <option value="admin">管理員（admin）</option>
+        </select>
+      </div>
+      <div class="sm:col-span-2">
+        <button type="submit" class="rounded bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-500">建立帳號</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="mt-10">
+    <h2 class="text-lg font-semibold text-white">現有帳號</h2>
+    <div class="mt-4 overflow-x-auto rounded border border-slate-800">
+      <table class="w-full min-w-[720px] text-left text-sm">
+        <thead>
+          <tr class="border-b border-slate-800 bg-slate-950/80 text-xs text-slate-500">
+            <th class="whitespace-nowrap px-3 py-2.5 font-medium">Email</th>
+            <th class="px-3 py-2.5 font-medium">顯示名稱</th>
+            <th class="whitespace-nowrap px-3 py-2.5 font-medium">角色</th>
+            <th class="px-3 py-2.5 font-medium">重設密碼</th>
+            <th class="whitespace-nowrap px-3 py-2.5 font-medium"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% users.forEach(function (u) {
+            var isSelf = String(u._id) === String(currentUserId);
+          %>
+            <tr class="border-b border-slate-800/80">
+              <td class="whitespace-nowrap px-3 py-2.5 align-middle">
+                <span class="font-mono text-xs text-emerald-300"><%= u.email %></span>
+                <% if (isSelf) { %><span class="ml-1 text-xs text-amber-400">（你）</span><% } %>
+              </td>
+              <td class="px-3 py-2.5 align-middle">
+                <form id="form-<%= u._id %>" method="post" action="/admin/users/<%= u._id %>/update" class="contents">
+                  <input name="name" value="<%= u.name || '' %>" placeholder="顯示名稱" class="w-full min-w-[8rem] max-w-[12rem] rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs" />
+                </form>
+              </td>
+              <td class="whitespace-nowrap px-3 py-2.5 align-middle">
+                <% if (isSelf) { %>
+                  <input type="hidden" form="form-<%= u._id %>" name="role" value="admin" />
+                  <span class="text-xs text-slate-300"><%= roleLabelZh(u.role) %></span>
+                <% } else { %>
+                  <select name="role" form="form-<%= u._id %>" class="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs">
+                    <% manageableRoles.forEach(function (r) { %>
+                      <option value="<%= r %>" <%= u.role === r ? 'selected' : '' %>><%= roleLabelZh(r) %></option>
+                    <% }); %>
+                  </select>
+                <% } %>
+              </td>
+              <td class="px-3 py-2.5 align-middle">
+                <input name="password" form="form-<%= u._id %>" type="password" minlength="6" placeholder="留空＝不改" class="w-full min-w-[7rem] max-w-[10rem] rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs" autocomplete="new-password" />
+              </td>
+              <td class="whitespace-nowrap px-3 py-2.5 align-middle text-right">
+                <button type="submit" form="form-<%= u._id %>" class="rounded bg-slate-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-600">儲存</button>
+                <% if (!isSelf) { %>
+                  <form method="post" action="/admin/users/<%= u._id %>/delete" class="ml-1 inline" onsubmit="return confirm('確定刪除 <%= u.email %>？');">
+                    <button type="submit" class="rounded border border-rose-800 px-3 py-1.5 text-xs text-rose-300 hover:bg-rose-950/40">刪除</button>
+                  </form>
+                <% } %>
+              </td>
+            </tr>
+          <% }); %>
+          <% if (!users.length) { %>
+            <tr>
+              <td colspan="5" class="px-3 py-8 text-center text-slate-500">尚未有帳號</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<%- include('../partials/admin-frame-end') %>

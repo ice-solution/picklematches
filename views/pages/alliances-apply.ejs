@@ -1,0 +1,58 @@
+<%- include('../partials/public-page-start', { title }) %>
+    <p class="text-sm"><a href="/alliances" class="text-emerald-400 underline">← 聯盟表</a></p>
+    <h1 class="mt-4 text-2xl font-bold text-white">申請加盟聯盟</h1>
+    <p class="mt-2 text-sm text-slate-400">填寫組織資料，大會審核通過後會顯示於聯盟表，你將成為該聯盟發起人。</p>
+
+    <% if (pending) { %>
+      <p class="mt-6 rounded border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+        你已有待審申請「<%= pending.name %>」，請等候審核。
+      </p>
+    <% } %>
+
+    <% if (error === 'name') { %>
+      <p class="mt-4 text-sm text-rose-400">請填寫聯盟名稱。</p>
+    <% } %>
+    <% if (error === 'pending') { %>
+      <p class="mt-4 text-sm text-rose-400">你已有待審申請，請勿重複提交。</p>
+    <% } %>
+
+    <form method="post" action="/alliances/apply" class="home-card mt-8 max-w-2xl space-y-4">
+      <div>
+        <label class="block text-sm text-slate-400">聯盟／組織名稱 <span class="text-rose-400">*</span></label>
+        <input name="name" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+      </div>
+      <div>
+        <label class="block text-sm text-slate-400">網址代號（選填，英文小寫）</label>
+        <input name="slug" placeholder="例：hk-pickle-club" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-sm" />
+      </div>
+      <div>
+        <label class="block text-sm text-slate-400">簡介</label>
+        <textarea name="description" rows="4" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2"></textarea>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="block text-sm text-slate-400">地點</label>
+          <input name="location" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400">網站</label>
+          <input name="website" type="url" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="block text-sm text-slate-400">聯絡電郵</label>
+          <input name="contactEmail" type="email" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400">聯絡電話</label>
+          <input name="contactPhone" type="tel" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-400">Logo 圖片網址（選填）</label>
+        <input name="logoUrl" type="url" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+      </div>
+      <button type="submit" class="home-btn" <%= pending ? 'disabled' : '' %>>提交申請</button>
+    </form>
+<%- include('../partials/public-page-end') %>

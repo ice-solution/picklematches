@@ -3,7 +3,9 @@ import { Tournament } from '../models/Tournament.js';
 import { Team } from '../models/Team.js';
 import { Match, MATCH_FORMAT } from '../models/Match.js';
 import { Group } from '../models/Group.js';
+import { Event } from '../models/Event.js';
 import { computeGroupStandings } from './groupStandings.js';
+import { venueSlugList } from './venues.js';
 
 function nextPow2(n) {
   let p = 1;
@@ -129,6 +131,198 @@ async function ensureTeamInTournament(knockoutTournamentId, sourceTeam) {
   return doc._id;
 }
 
+export function parseMatchFormat(raw) {
+  const s = String(raw || '').trim();
+  if (s === MATCH_FORMAT.BEST_OF_5 || s === MATCH_FORMAT.SINGLE_GAME || s === MATCH_FORMAT.BEST_OF_3) {
+    return s;
+  }
+  return MATCH_FORMAT.BEST_OF_3;
+}
+
+/** 每輪內平均分配場地（場1、場2、場3、場1…）；BYE 完賽場次不佔場地 */
+function makeCourtAssigner(slugs) {
+  const list = (slugs || []).map((c) => String(c || '').trim()).filter(Boolean);
+  let idx = 0;
+  return {
+    resetRound() {
+      idx = 0;
+    },
+    next(skip = false) {
+      if (skip || !list.length) return '';
+      const court = list[idx % list.length];
+      idx += 1;
+      return court;
+    },
+  };
+}
+
+function resolveCourtSlugs(courts) {
+  if (!Array.isArray(courts) || !courts.length) return [];
+  if (typeof courts[0] === 'object') return venueSlugList(courts);
+  return courts.map((c) => String(c || '').trim()).filter(Boolean);
+}
+
+/**
+ * 以已在淘汰賽內的隊伍 ID 名單建立籤表場次（含 BYE／後續 TBD 占位）。
+ * @param {{ matchFormat?: string, courts?: string[] }} [options]
+ * @returns {{ createdMatchIds: import('mongoose').Types.ObjectId[] }}
+ */
+async function createBracketFromTeamIds(koTournamentId, koTeamIds, options = {}) {
+  const matchFormat = parseMatchFormat(options.matchFormat);
+  const assignCourt = makeCourtAssigner(options.courts);
+  const createdMatchIds = [];
+  const bracketSize = nextPow2(koTeamIds.length);
+  const byeTeamId = await ensurePlaceholderTeam(koTournamentId, 'BYE');
+  const firstRoundLabel = roundLabelForSize(bracketSize);
+
+  const seeds = new Array(bracketSize).fill(byeTeamId);
+  for (let i = 0; i < koTeamIds.length; i++) {
+    seeds[i] = koTeamIds[i];
+  }
+  const pairs = seedPairs(bracketSize);
+  let sfIdx = 0;
+  assignCourt.resetRound();
+  for (const [s1, s2] of pairs) {
+    const teamA = seeds[s1 - 1];
+    const teamB = seeds[s2 - 1];
+    const isBye = String(teamA) !== String(byeTeamId) && String(teamB) === String(byeTeamId);
+    const isFourTeamSemi = koTeamIds.length === 4 && !isBye;
+
+    const m = await Match.create({
+      tournamentId: koTournamentId,
+      round: isFourTeamSemi ? '準決賽' : firstRoundLabel,
+      matchFormat,
+      teamA,
+      teamB,
+      court: assignCourt.next(isBye),
+      scheduledTime: '',
+      status: isBye ? 'finished' : 'scheduled',
+      completedGames: [],
+      currentGameIndex: 0,
+      currentPoints: { a: 0, b: 0 },
+      winnerId: isBye ? teamA : undefined,
+      ...(isFourTeamSemi
+        ? {
+            knockoutWinnerSlot: `W-SF${sfIdx + 1}`,
+            knockoutLoserSlot: `L-SF${sfIdx + 1}`,
+          }
+        : {}),
+    });
+    if (isFourTeamSemi) sfIdx += 1;
+    createdMatchIds.push(m._id);
+  }
+
+  // 4 隊：準決賽 → 決賽 + 季軍賽
+  if (koTeamIds.length === 4) {
+    const w1 = await ensurePlaceholderTeam(koTournamentId, 'W-SF1');
+    const w2 = await ensurePlaceholderTeam(koTournamentId, 'W-SF2');
+    const l1 = await ensurePlaceholderTeam(koTournamentId, 'L-SF1');
+    const l2 = await ensurePlaceholderTeam(koTournamentId, 'L-SF2');
+
+    assignCourt.resetRound();
+    const finalM = await Match.create({
+      tournamentId: koTournamentId,
+      round: '決賽',
+      matchFormat,
+      teamA: w1,
+      teamB: w2,
+      court: assignCourt.next(),
+      scheduledTime: '',
+      status: 'scheduled',
+      completedGames: [],
+      currentGameIndex: 0,
+      currentPoints: { a: 0, b: 0 },
+    });
+    const bronzeM = await Match.create({
+      tournamentId: koTournamentId,
+      round: '季軍賽',
+      matchFormat,
+      teamA: l1,
+      teamB: l2,
+      court: assignCourt.next(),
+      scheduledTime: '',
+      status: 'scheduled',
+      completedGames: [],
+      currentGameIndex: 0,
+      currentPoints: { a: 0, b: 0 },
+    });
+    createdMatchIds.push(finalM._id, bronzeM._id);
+  } else if (koTeamIds.length > 2) {
+    // 其他規模：後續輪次 TBD 占位（無季軍賽）
+    let size = bracketSize / 2;
+    while (size >= 2) {
+      const label = roundLabelForSize(size);
+      assignCourt.resetRound();
+      for (let i = 0; i < size / 2; i++) {
+        const t1 = await ensurePlaceholderTeam(koTournamentId, `TBD-${label}-${i * 2 + 1}`);
+        const t2 = await ensurePlaceholderTeam(koTournamentId, `TBD-${label}-${i * 2 + 2}`);
+        const m = await Match.create({
+          tournamentId: koTournamentId,
+          round: label,
+          matchFormat,
+          teamA: t1,
+          teamB: t2,
+          court: assignCourt.next(),
+          scheduledTime: '',
+          status: 'scheduled',
+          completedGames: [],
+          currentGameIndex: 0,
+          currentPoints: { a: 0, b: 0 },
+        });
+        createdMatchIds.push(m._id);
+      }
+      size = size / 2;
+    }
+  }
+
+  return { createdMatchIds };
+}
+
+/**
+ * 純淘汰賽：直接用本賽事已建立／匯入的隊伍產生鬼腳籤表（無需小組賽）。
+ */
+export async function generateKnockoutFromTeams({ knockoutTournamentId, matchFormat, courts }) {
+  if (!mongoose.isValidObjectId(knockoutTournamentId)) {
+    return { ok: false, error: 'invalid_id' };
+  }
+
+  const ko = await Tournament.findById(knockoutTournamentId).lean();
+  if (!ko) return { ok: false, error: 'not_found' };
+  if (ko.phase !== 'knockout') return { ok: false, error: 'target_not_knockout' };
+
+  const existingMatchCount = await Match.countDocuments({ tournamentId: ko._id });
+  if (existingMatchCount > 0) return { ok: false, error: 'target_has_matches' };
+
+  const teams = await Team.find({
+    tournamentId: ko._id,
+    isPlaceholder: { $ne: true },
+  })
+    .sort({ seed: 1, createdAt: 1 })
+    .select('_id')
+    .lean();
+
+  if (teams.length < 2) return { ok: false, error: 'not_enough_teams' };
+
+  let venueList = Array.isArray(courts) ? resolveCourtSlugs(courts) : null;
+  if (!venueList) {
+    const event = await Event.findById(ko.eventId).select('venues').lean();
+    venueList = venueSlugList(event?.venues);
+  }
+
+  const koTeamIds = teams.map((t) => t._id);
+  const { createdMatchIds } = await createBracketFromTeamIds(ko._id, koTeamIds, {
+    matchFormat,
+    courts: venueList,
+  });
+  return {
+    ok: true,
+    createdTeams: koTeamIds.length,
+    createdMatches: createdMatchIds.length,
+    matchFormat: parseMatchFormat(matchFormat),
+    courtsUsed: (venueList || []).length,
+  };
+}
+
 /**
  * 由小組賽結果產生淘汰賽第一輪 + 後續 TBD 輪次。
  */
@@ -227,18 +421,13 @@ export async function generateKnockoutFromGroup({
     return { ok: true, createdTeams: koTeamIds.length, createdMatches: 0, updatedMatches: filledIds.length };
   }
 
-  const bracketSize = nextPow2(koTeamIds.length);
-  const byeTeamId = await ensurePlaceholderTeam(ko._id, 'BYE');
-
-  // First round label depends on bracket size
-  const firstRoundLabel = roundLabelForSize(bracketSize);
-  const createdMatchIds = [];
-
   // === Cross pairing（A1 對 B2、A2 對 B1 ...）===
   // 只在「出線隊數剛好為 2^k」且「組數為偶數」時使用；
   // 若需 BYE（出線隊數非 2^k）或組數為奇數，則退回種子＋BYE 的方式。
   const canCross =
     isPow2(koTeamIds.length) && groups.length % 2 === 0 && koTeamIds.length === qualifiers.length;
+
+  const createdMatchIds = [];
 
   if (canCross) {
     // Build map groupId -> [koTeamId rank1..N]
@@ -253,19 +442,19 @@ export async function generateKnockoutFromGroup({
       arr.sort((a, b) => a.rank - b.rank);
     }
 
+    const firstRoundLabel = roundLabelForSize(nextPow2(koTeamIds.length));
+
     for (let gi = 0; gi < groups.length; gi += 2) {
       const g1 = groups[gi];
       const g2 = groups[gi + 1];
       const r1 = byGroup.get(String(g1._id)) || [];
       const r2 = byGroup.get(String(g2._id)) || [];
-      // Ensure both groups have at least takeN qualifiers; otherwise fallback
       if (r1.length < takeN || r2.length < takeN) {
-        // fallback below
         break;
       }
       for (let i = 0; i < takeN; i++) {
-        const teamA = r1[i].koTeamId; // g1 第 i+1 名
-        const teamB = r2[takeN - 1 - i].koTeamId; // g2 反向
+        const teamA = r1[i].koTeamId;
+        const teamB = r2[takeN - 1 - i].koTeamId;
         const sfIndex = createdMatchIds.length;
         const m = await Match.create({
           tournamentId: ko._id,
@@ -290,101 +479,18 @@ export async function generateKnockoutFromGroup({
       }
     }
 
-    // 若 cross pairing 途中 break（資料不足），清掉已建場次並退回
-    if (createdMatchIds.length !== koTeamIds.length / 2) {
-      await Match.deleteMany({ _id: { $in: createdMatchIds } });
-      createdMatchIds.length = 0;
-    }
-  }
-
-  // === Fallback：種子＋BYE（原本邏輯）===
-  if (createdMatchIds.length === 0) {
-    // Fill seeds 1..bracketSize (group order then rank order)
-    const seeds = new Array(bracketSize).fill(byeTeamId);
-    for (let i = 0; i < koTeamIds.length; i++) {
-      seeds[i] = koTeamIds[i];
-    }
-    const pairs = seedPairs(bracketSize);
-    let sfIdx = 0;
-    for (const [s1, s2] of pairs) {
-      const teamA = seeds[s1 - 1];
-      const teamB = seeds[s2 - 1];
-      const isBye = String(teamA) !== String(byeTeamId) && String(teamB) === String(byeTeamId);
-      const isFourTeamSemi = koTeamIds.length === 4 && !isBye;
-
-      const m = await Match.create({
-        tournamentId: ko._id,
-        round: isFourTeamSemi ? '準決賽' : firstRoundLabel,
-        matchFormat: MATCH_FORMAT.BEST_OF_3,
-        teamA,
-        teamB,
-        court: '',
-        scheduledTime: '',
-        status: isBye ? 'finished' : 'scheduled',
-        completedGames: [],
-        currentGameIndex: 0,
-        currentPoints: { a: 0, b: 0 },
-        winnerId: isBye ? teamA : undefined,
-        ...(isFourTeamSemi
-          ? {
-              knockoutWinnerSlot: `W-SF${sfIdx + 1}`,
-              knockoutLoserSlot: `L-SF${sfIdx + 1}`,
-            }
-          : {}),
-      });
-      if (isFourTeamSemi) sfIdx += 1;
-      createdMatchIds.push(m._id);
-    }
-  }
-
-  // 4 強（2 組各前 2）：準決賽 → 決賽 + 季軍賽（敗者對戰）
-  if (koTeamIds.length === 4) {
-    const w1 = await ensurePlaceholderTeam(ko._id, 'W-SF1');
-    const w2 = await ensurePlaceholderTeam(ko._id, 'W-SF2');
-    const l1 = await ensurePlaceholderTeam(ko._id, 'L-SF1');
-    const l2 = await ensurePlaceholderTeam(ko._id, 'L-SF2');
-
-    const finalM = await Match.create({
-      tournamentId: ko._id,
-      round: '決賽',
-      matchFormat: MATCH_FORMAT.BEST_OF_3,
-      teamA: w1,
-      teamB: w2,
-      court: '',
-      scheduledTime: '',
-      status: 'scheduled',
-      completedGames: [],
-      currentGameIndex: 0,
-      currentPoints: { a: 0, b: 0 },
-    });
-    const bronzeM = await Match.create({
-      tournamentId: ko._id,
-      round: '季軍賽',
-      matchFormat: MATCH_FORMAT.BEST_OF_3,
-      teamA: l1,
-      teamB: l2,
-      court: '',
-      scheduledTime: '',
-      status: 'scheduled',
-      completedGames: [],
-      currentGameIndex: 0,
-      currentPoints: { a: 0, b: 0 },
-    });
-    createdMatchIds.push(finalM._id, bronzeM._id);
-  } else {
-    // 其他規模：決賽等 TBD 占位（無季軍賽）
-    let size = bracketSize / 2;
-    while (size >= 2) {
-      const label = roundLabelForSize(size);
-      for (let i = 0; i < size / 2; i++) {
-        const t1 = await ensurePlaceholderTeam(ko._id, `TBD-${label}-${i * 2 + 1}`);
-        const t2 = await ensurePlaceholderTeam(ko._id, `TBD-${label}-${i * 2 + 2}`);
-        const m = await Match.create({
+    if (createdMatchIds.length === koTeamIds.length / 2) {
+      if (koTeamIds.length === 4) {
+        const w1 = await ensurePlaceholderTeam(ko._id, 'W-SF1');
+        const w2 = await ensurePlaceholderTeam(ko._id, 'W-SF2');
+        const l1 = await ensurePlaceholderTeam(ko._id, 'L-SF1');
+        const l2 = await ensurePlaceholderTeam(ko._id, 'L-SF2');
+        const finalM = await Match.create({
           tournamentId: ko._id,
-          round: label,
+          round: '決賽',
           matchFormat: MATCH_FORMAT.BEST_OF_3,
-          teamA: t1,
-          teamB: t2,
+          teamA: w1,
+          teamB: w2,
           court: '',
           scheduledTime: '',
           status: 'scheduled',
@@ -392,12 +498,52 @@ export async function generateKnockoutFromGroup({
           currentGameIndex: 0,
           currentPoints: { a: 0, b: 0 },
         });
-        createdMatchIds.push(m._id);
+        const bronzeM = await Match.create({
+          tournamentId: ko._id,
+          round: '季軍賽',
+          matchFormat: MATCH_FORMAT.BEST_OF_3,
+          teamA: l1,
+          teamB: l2,
+          court: '',
+          scheduledTime: '',
+          status: 'scheduled',
+          completedGames: [],
+          currentGameIndex: 0,
+          currentPoints: { a: 0, b: 0 },
+        });
+        createdMatchIds.push(finalM._id, bronzeM._id);
+      } else if (koTeamIds.length > 2) {
+        let size = nextPow2(koTeamIds.length) / 2;
+        while (size >= 2) {
+          const label = roundLabelForSize(size);
+          for (let i = 0; i < size / 2; i++) {
+            const t1 = await ensurePlaceholderTeam(ko._id, `TBD-${label}-${i * 2 + 1}`);
+            const t2 = await ensurePlaceholderTeam(ko._id, `TBD-${label}-${i * 2 + 2}`);
+            const m = await Match.create({
+              tournamentId: ko._id,
+              round: label,
+              matchFormat: MATCH_FORMAT.BEST_OF_3,
+              teamA: t1,
+              teamB: t2,
+              court: '',
+              scheduledTime: '',
+              status: 'scheduled',
+              completedGames: [],
+              currentGameIndex: 0,
+              currentPoints: { a: 0, b: 0 },
+            });
+            createdMatchIds.push(m._id);
+          }
+          size = size / 2;
+        }
       }
-      size = size / 2;
+      return { ok: true, createdTeams: koTeamIds.length, createdMatches: createdMatchIds.length };
     }
+
+    await Match.deleteMany({ _id: { $in: createdMatchIds } });
   }
 
-  return { ok: true, createdTeams: koTeamIds.length, createdMatches: createdMatchIds.length };
+  const { createdMatchIds: ids } = await createBracketFromTeamIds(ko._id, koTeamIds);
+  return { ok: true, createdTeams: koTeamIds.length, createdMatches: ids.length };
 }
 

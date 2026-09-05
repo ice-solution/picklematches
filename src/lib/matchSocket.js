@@ -2,8 +2,20 @@ import { Match } from '../models/Match.js';
 import { Tournament } from '../models/Tournament.js';
 import { Event } from '../models/Event.js';
 import { advanceKnockoutFromFinishedMatch } from './knockoutAdvance.js';
+import { findVenue, normalizeEventVenues } from './venues.js';
 
-/** 比分更新後推播至 Socket.io（前台／大螢幕） */
+function courtRoom(eventId, venueSlug) {
+  return `court:${eventId}:${venueSlug}`;
+}
+
+function resolveCourtRooms(event, match) {
+  const venues = normalizeEventVenues(event.venues);
+  const venue = findVenue(venues, match.court);
+  if (!venue) return [];
+  return [courtRoom(String(event._id), venue.slug)];
+}
+
+/** 比分更新後推播至 Socket.io（前台／大螢幕／場地 Live） */
 export async function broadcastMatchUpdate(app, matchId) {
   let advance = { matchIds: [] };
   try {
@@ -29,8 +41,21 @@ export async function broadcastMatchUpdate(app, matchId) {
         io.to(`match:${m2id}`).emit('match:update', { match: m2 });
       }
     }
-    // 大會頁只推一次，避免連續觸發多次整頁 reload
     io.to(`event:${eid}`).emit('match:update', { matches: eventMatches });
+
+    for (const room of resolveCourtRooms(evt, populated)) {
+      const payload =
+        populated.status === 'live'
+          ? { match: populated }
+          : { match: null, lastMatch: populated };
+      io.to(room).emit('court:update', payload);
+    }
   }
   return populated;
+}
+
+export async function broadcastCourtIdle(app, eventId, venueSlug) {
+  const io = app.get('io');
+  if (!io || !eventId || !venueSlug) return;
+  io.to(courtRoom(String(eventId), String(venueSlug))).emit('court:update', { match: null });
 }

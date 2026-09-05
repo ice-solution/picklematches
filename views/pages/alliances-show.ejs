@@ -1,0 +1,39 @@
+<%- include('../partials/public-page-start', { title }) %>
+    <p class="text-sm"><a href="/alliances" class="text-emerald-400 underline">← 聯盟表</a></p>
+    <div class="mt-4 flex flex-wrap items-start gap-4">
+      <% if (alliance.logoUrl) { %>
+        <img src="<%= alliance.logoUrl %>" alt="" class="h-16 w-16 rounded-lg object-cover" />
+      <% } %>
+      <div>
+        <h1 class="text-2xl font-bold text-white"><%= alliance.name %></h1>
+        <% if (alliance.location) { %><p class="mt-1 text-sm text-slate-400"><%= alliance.location %></p><% } %>
+      </div>
+    </div>
+    <% if (alliance.description) { %>
+      <p class="mt-6 whitespace-pre-wrap text-slate-300"><%= alliance.description %></p>
+    <% } %>
+    <% if (alliance.website) { %>
+      <p class="mt-4"><a href="<%= alliance.website %>" target="_blank" rel="noopener" class="text-sky-400 underline">官方網站 ↗</a></p>
+    <% } %>
+
+    <section class="mt-10">
+      <h2 class="text-lg font-semibold text-emerald-400">成員</h2>
+      <% if (!members.length) { %>
+        <p class="mt-3 text-sm text-slate-500">暫無公開成員資料。</p>
+      <% } else { %>
+        <ul class="mt-4 grid gap-3 sm:grid-cols-2">
+          <% members.forEach(function (m) { %>
+            <li class="home-card flex items-center justify-between gap-2">
+              <div>
+                <a href="/players/<%= m.member.profileSlug %>" class="font-medium text-white hover:text-emerald-300"><%= m.member.name %></a>
+                <% if (m.role === 'organizer') { %><span class="ml-2 text-xs text-amber-400">發起人</span><% } %>
+                <% if (m.member.duprRating != null) { %>
+                  <p class="text-xs text-slate-500">DUPR <%= m.member.duprRating %></p>
+                <% } %>
+              </div>
+            </li>
+          <% }); %>
+        </ul>
+      <% } %>
+    </section>
+<%- include('../partials/public-page-end') %>

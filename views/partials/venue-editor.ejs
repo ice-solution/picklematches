@@ -1,0 +1,116 @@
+<%#
+  大會場地編輯表。locals: venues (normalized), showPin (default true)
+%>
+<%
+  var _venues = typeof venues !== 'undefined' && venues ? venues : [];
+  var _showPin = typeof showPin === 'undefined' ? true : !!showPin;
+%>
+<div id="venue-editor" class="space-y-3">
+  <div class="overflow-x-auto rounded border border-slate-800">
+    <table class="w-full min-w-[420px] text-left text-sm">
+      <thead>
+        <tr class="border-b border-slate-800 bg-slate-950/80 text-xs text-slate-500">
+          <th class="px-3 py-2 w-28">ID（slug）</th>
+          <th class="px-3 py-2">顯示名稱</th>
+          <% if (_showPin) { %><th class="px-3 py-2 w-36">PIN</th><% } %>
+          <th class="px-3 py-2 w-16"></th>
+        </tr>
+      </thead>
+      <tbody id="venue-rows">
+        <% if (!_venues.length) { %>
+          <tr class="venue-row border-b border-slate-800/80">
+            <td class="px-2 py-2">
+              <input name="venueSlug" value="1" placeholder="1" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-sm" />
+            </td>
+            <td class="px-2 py-2">
+              <input name="venueName" value="1 號場" placeholder="1 號場" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm" />
+            </td>
+            <% if (_showPin) { %>
+              <td class="px-2 py-2">
+                <input name="venuePin" type="text" inputmode="numeric" autocomplete="off" placeholder="設定 PIN" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-sm" />
+              </td>
+            <% } %>
+            <td class="px-2 py-2 text-right">
+              <button type="button" class="venue-remove text-xs text-rose-400 hover:underline">移除</button>
+            </td>
+          </tr>
+        <% } else { %>
+          <% _venues.forEach(function (v) { %>
+            <tr class="venue-row border-b border-slate-800/80">
+              <td class="px-2 py-2">
+                <input name="venueSlug" value="<%= v.slug %>" required class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-sm" />
+              </td>
+              <td class="px-2 py-2">
+                <input name="venueName" value="<%= v.name %>" required class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm" />
+              </td>
+              <% if (_showPin) { %>
+                <td class="px-2 py-2">
+                  <input name="venuePin" type="text" inputmode="numeric" autocomplete="off" placeholder="<%= v.pinHash ? '已設定（留空不變）' : '設定 PIN' %>" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-sm" />
+                </td>
+              <% } %>
+              <td class="px-2 py-2 text-right">
+                <button type="button" class="venue-remove text-xs text-rose-400 hover:underline">移除</button>
+              </td>
+            </tr>
+          <% }); %>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+  <button type="button" id="venue-add" class="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">＋ 新增場地</button>
+  <p class="text-xs text-slate-500">
+    ID 用於網址，例如 Live：<code class="rounded bg-slate-800 px-1">/e/…/court/1/live</code>。PIN 供場地工作人員登入計分。
+  </p>
+</div>
+<template id="venue-row-tpl">
+  <tr class="venue-row border-b border-slate-800/80">
+    <td class="px-2 py-2">
+      <input name="venueSlug" value="" placeholder="2" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-sm" />
+    </td>
+    <td class="px-2 py-2">
+      <input name="venueName" value="" placeholder="2 號場" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm" />
+    </td>
+    <% if (_showPin) { %>
+      <td class="px-2 py-2">
+        <input name="venuePin" type="text" inputmode="numeric" autocomplete="off" placeholder="設定 PIN" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-sm" />
+      </td>
+    <% } %>
+    <td class="px-2 py-2 text-right">
+      <button type="button" class="venue-remove text-xs text-rose-400 hover:underline">移除</button>
+    </td>
+  </tr>
+</template>
+<script>
+  (function () {
+    var tbody = document.getElementById('venue-rows');
+    var tpl = document.getElementById('venue-row-tpl');
+    var addBtn = document.getElementById('venue-add');
+    if (!tbody || !tpl || !addBtn) return;
+
+    function bindRemove(row) {
+      var btn = row.querySelector('.venue-remove');
+      if (!btn) return;
+      btn.addEventListener('click', function () {
+        if (tbody.querySelectorAll('.venue-row').length <= 1) {
+          row.querySelectorAll('input').forEach(function (inp) { inp.value = ''; });
+          return;
+        }
+        row.remove();
+      });
+    }
+
+    tbody.querySelectorAll('.venue-row').forEach(bindRemove);
+
+    addBtn.addEventListener('click', function () {
+      var node = tpl.content.cloneNode(true);
+      var row = node.querySelector('.venue-row');
+      tbody.appendChild(node);
+      bindRemove(tbody.lastElementChild);
+      var n = tbody.querySelectorAll('.venue-row').length;
+      var slug = tbody.lastElementChild.querySelector('[name="venueSlug"]');
+      var name = tbody.lastElementChild.querySelector('[name="venueName"]');
+      if (slug && !slug.value) slug.value = String(n);
+      if (name && !name.value) name.value = String(n) + ' 號場';
+    });
+  })();
+</script>

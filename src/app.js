@@ -6,23 +6,40 @@ import helmet from 'helmet';
 import cors from 'cors';
 import methodOverride from 'method-override';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 import { homeRouter } from './routes/home.js';
 import { publicWebRouter } from './routes/publicWeb.js';
 import { publicApiRouter } from './routes/publicApi.js';
 import { adminRouter } from './routes/admin.js';
-import { refereeRouter } from './routes/referee.js';
-import { refereeApiRouter } from './routes/refereeApi.js';
 import { adminApiRouter } from './routes/adminApi.js';
-import { scoreboardApiRouter } from './routes/scoreboardApi.js';
+import { memberRouter } from './routes/member.js';
+import { registerWebRouter } from './routes/registerWeb.js';
+import { registerApiRouter } from './routes/registerApi.js';
+import { paymentWebhookRouter } from './routes/paymentWebhook.js';
+import { allianceWebRouter, memberAllianceRouter } from './routes/allianceWeb.js';
+import { openSessionWebRouter } from './routes/openSessionWeb.js';
+import { playerWebRouter } from './routes/playerWeb.js';
+import { courtWebRouter } from './routes/courtWeb.js';
+import { courtApiRouter } from './routes/courtApi.js';
 import { scoreSummary, scoreDisplayParts, formatLabel, gamesLine, matchStatusLabel, formatTeamWithCode } from './lib/viewHelpers.js';
 import { isDeuce } from './lib/scoring.js';
 import { displayMatchTime, displayMatchSchedule } from './lib/matchTime.js';
 import { formatDateDisplayZh } from './lib/datetime.js';
+import { bracketSlotLabel } from './lib/knockoutLadder.js';
+import { normalizeEventVenues, venueLabel } from './lib/venues.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, '..');
+
+function getCssVersion() {
+  try {
+    return String(fs.statSync(path.join(rootDir, 'public/css/styles.css')).mtimeMs);
+  } catch {
+    return '1';
+  }
+}
 
 export function createApp() {
   const app = express();
@@ -44,6 +61,10 @@ export function createApp() {
   app.locals.formatDateDisplayZh = formatDateDisplayZh;
   app.locals.matchStatusLabel = matchStatusLabel;
   app.locals.formatTeamWithCode = formatTeamWithCode;
+  app.locals.bracketSlotLabel = bracketSlotLabel;
+  app.locals.normalizeEventVenues = normalizeEventVenues;
+  app.locals.venueLabel = venueLabel;
+  app.locals.cssVersion = getCssVersion();
 
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({ origin: true, credentials: true }));
@@ -64,17 +85,29 @@ export function createApp() {
     })
   );
 
+  app.use((req, res, next) => {
+    res.locals.session = req.session;
+    next();
+  });
+
   app.use('/public', express.static(path.join(rootDir, 'public')));
   app.use('/docs', express.static(path.join(rootDir, 'public', 'docs')));
 
   app.use('/', homeRouter);
+  app.use('/member', memberRouter);
+  app.use('/member', memberAllianceRouter);
+  app.use('/alliances', allianceWebRouter);
+  app.use('/players', playerWebRouter);
+  app.use('/sessions', openSessionWebRouter);
+  app.use('/e', courtWebRouter);
   app.use('/e', publicWebRouter);
+  app.use('/e', registerWebRouter);
+  app.use('/api/public', courtApiRouter);
   app.use('/api/public', publicApiRouter);
+  app.use('/api/public', registerApiRouter);
+  app.use('/webhook', paymentWebhookRouter);
   app.use('/admin', adminRouter);
-  app.use('/referee', refereeRouter);
-  app.use('/api/referee', refereeApiRouter);
   app.use('/api/admin', adminApiRouter);
-  app.use('/api/admin', scoreboardApiRouter);
 
   app.use((req, res) => {
     if (req.path.startsWith('/api')) {
