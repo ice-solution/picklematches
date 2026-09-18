@@ -439,8 +439,73 @@
     min-height: auto;
   }
 
-  .kb-match--bronze .kb-slot {
+    .kb-match--bronze .kb-slot {
     width: 100%;
+  }
+
+  /* 雙敗樹：寬螢幕縮入版面；窄螢幕勝部／敗部分開並跟螢幕縮放 */
+  .de-tree-card {
+    @apply rounded border border-slate-800 bg-slate-950/70 p-3;
+  }
+
+  .de-tree-card,
+  .de-tree-pan,
+  .de-tree-stack,
+  .de-tree-gf,
+  .de-tree-gf-card {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .de-tree-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+  }
+
+  .de-tree-stack {
+    display: none;
+  }
+
+  .de-tree-gf {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  @media (min-width: 480px) {
+    .de-tree-gf {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .de-tree-gf-card {
+    @apply rounded border border-sky-800/50 bg-sky-950/30 px-3 py-2 text-center;
+  }
+
+  .de-tree-side-label {
+    @apply mb-1 text-sm font-semibold;
+  }
+
+  @media (max-width: 1023px) {
+    .de-tree-combined {
+      display: none;
+    }
+
+    .de-tree-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .de-tree-pan {
+      overflow-x: auto;
+    }
+
+    .de-tree-pan .de-tree-svg {
+      width: 100%;
+      max-width: 100%;
+    }
   }
 
   @media (max-width: 640px) {

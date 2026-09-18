@@ -1,4 +1,6 @@
 import { buildKnockoutLadderColumns, buildKnockoutBracket } from './knockoutLadder.js';
+import { buildDoubleElimTracks } from './doubleElimGenerator.js';
+import { buildDoubleElimTreeLayout } from './doubleElimTree.js';
 import { getPodiumFromKnockoutMatches } from './knockoutPodium.js';
 import { formatDateDisplayZh, normalizeDateOnly } from './datetime.js';
 
@@ -46,6 +48,7 @@ export function buildEventCompetitions({
 }) {
   const groups = (tournaments || []).filter((t) => t.phase === 'group');
   const knockouts = (tournaments || []).filter((t) => t.phase === 'knockout');
+  const doubleElims = (tournaments || []).filter((t) => t.phase === 'double_elim');
 
   const standingsByGroupId = new Map(
     (groupStandingsList || []).map((s) => [String(s.tournament._id), s])
@@ -118,10 +121,36 @@ export function buildEventCompetitions({
         knockoutTournamentId: koId,
         knockoutLadderColumns: buildKnockoutLadderColumns(koMs),
         knockoutBracket: buildKnockoutBracket(koMs),
+        doubleElimTracks: null,
+        isDoubleElim: false,
         podium: getPodiumFromKnockoutMatches(koMs),
         matches: [...koMs].sort(sortMatches),
       };
-    });
+    })
+    .concat(
+      doubleElims.map((de) => {
+        const deId = String(de._id);
+        const deMs = knockoutMatchesByTournamentId?.get(deId) || matchesByTid.get(deId) || [];
+        const label = formatDateDisplayZh(de.competitionDate);
+        const competitionDate = normalizeDateOnly(de.competitionDate) || '';
+        const tracks = buildDoubleElimTracks(deMs);
+        return {
+          key: deId,
+          name: de.name,
+          order: de.order ?? 0,
+          competitionDate,
+          competitionDateLabel: label,
+          knockoutTournamentId: deId,
+          knockoutLadderColumns: [],
+          knockoutBracket: null,
+          doubleElimTracks: tracks,
+          doubleElimTree: buildDoubleElimTreeLayout(tracks),
+          isDoubleElim: true,
+          podium: null,
+          matches: [...deMs].sort(sortMatches),
+        };
+      })
+    );
 
   const podiumsWithResults = competitions
     .filter((c) => c.hasKnockout && c.podium)

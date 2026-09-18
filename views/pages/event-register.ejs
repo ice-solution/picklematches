@@ -7,7 +7,10 @@
       <a href="/e/<%= event.slug %>" class="text-emerald-400 underline">← <%= event.name %></a>
     </p>
     <h1 class="mt-4 text-2xl font-bold text-white"><%= event.name %> — 線上報名</h1>
-    <p class="mt-2 text-sm text-slate-400">登入帳號：<%= member.name %>（<%= member.email %>）</p>
+    <p class="mt-2 text-sm text-slate-400">無需先註冊會員，直接填寫資料即可報名。</p>
+    <% if (member) { %>
+      <p class="mt-1 text-xs text-slate-500">已登入：<%= member.name %>（<%= member.email %>），資料已預填，可修改。</p>
+    <% } %>
 
     <% if (event.registrationInfo) { %>
       <div class="mt-6 rounded border border-sky-900/50 bg-sky-950/30 p-4 text-sm text-slate-300 whitespace-pre-wrap"><%= event.registrationInfo %></div>
@@ -50,6 +53,22 @@
           <p id="division-hint" class="mt-2 text-xs text-slate-500"></p>
         </div>
 
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label class="block text-sm text-slate-400">姓名 <span class="text-rose-400">*</span></label>
+            <input name="contactName" required value="<%= member && member.name ? member.name : '' %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="主報名人姓名" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-400">電郵 <span class="text-rose-400">*</span></label>
+            <input name="contactEmail" type="email" required value="<%= member && member.email ? member.email : '' %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="用於通知／收據" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm text-slate-400">聯絡電話</label>
+          <input name="contactPhone" type="tel" value="<%= member && member.phone ? member.phone : '' %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+
         <div>
           <label class="block text-sm text-slate-400">隊伍／組合名稱</label>
           <input name="teamName" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="選填" />
@@ -58,15 +77,11 @@
           <label class="block text-sm text-slate-400">隊員姓名（顯示用）</label>
           <input name="playerNames" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="例：陳大文、李小明" />
         </div>
-        <div>
-          <label class="block text-sm text-slate-400">聯絡電話</label>
-          <input name="contactPhone" type="tel" value="<%= member.phone || '' %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
-        </div>
 
         <div id="partner-field" class="hidden">
           <label class="block text-sm text-slate-400">搭檔電郵 <span class="text-rose-400">*</span></label>
-          <input name="partnerEmail" type="email" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="用於通知，不必有會員帳號" />
-          <p class="mt-1 text-xs text-slate-500">雙打須填寫搭檔電郵（僅作通知；對方無需先註冊）。</p>
+          <input name="partnerEmail" type="email" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="雙打搭檔電郵" />
+          <p class="mt-1 text-xs text-slate-500">雙打必須填寫搭檔電郵（僅作通知，對方無需註冊會員）。</p>
         </div>
 
         <div>
@@ -96,11 +111,12 @@
         registration_disabled: '此賽事尚未開放報名。',
         division_not_found: '組別不存在。',
         registration_closed: '此組別報名已截止或未開始。',
+        contact_name_required: '請填寫姓名。',
+        contact_email_required: '請填寫有效電郵。',
         partner_email_required: '雙打請填寫搭檔電郵。',
-        partner_same_as_self: '搭檔不能是自己。',
+        partner_same_as_self: '搭檔電郵不能與主報名人相同。',
         eligibility_failed: '不符合組別資格要求。',
-        division_full: '此組別名額已滿。',
-        login_required: '請先登入。'
+        division_full: '此組別名額已滿。'
       };
 
       function updateDivisionUi() {
@@ -119,6 +135,7 @@
         } else {
           partnerField.classList.add('hidden');
           partnerField.querySelector('input').required = false;
+          partnerField.querySelector('input').value = '';
         }
         hint.textContent = Number(fee) > 0
           ? '報名費：' + cur + ' ' + fee + '（每隊一筆，付款後方為完成報名）'

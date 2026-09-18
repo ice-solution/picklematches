@@ -154,8 +154,10 @@
         <% tournaments.forEach(function (t) { %>
           <li class="flex flex-wrap items-center gap-3 rounded border border-slate-800 bg-slate-900/50 px-4 py-3">
             <span class="font-medium"><%= t.name %></span>
-            <span class="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400"><%= t.phase === 'group' ? '小組賽' : '淘汰賽' %></span>
-            <span class="text-xs text-slate-500">各組前 <%= t.advancePerGroup %> 名</span>
+            <span class="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400"><%= t.phase === 'group' ? '小組賽' : t.phase === 'double_elim' ? '雙敗淘汰' : '淘汰賽' %></span>
+            <% if (t.phase === 'group') { %>
+              <span class="text-xs text-slate-500">各組前 <%= t.advancePerGroup %> 名</span>
+            <% } %>
             <% if (t.competitionDate) { %>
               <span class="text-xs text-sky-400/90"><%= typeof formatDateDisplayZh === 'function' ? formatDateDisplayZh(t.competitionDate) : t.competitionDate %></span>
             <% } %>
@@ -167,20 +169,46 @@
         <% }); %>
       </ul>
 
-      <form method="post" action="/admin/events/<%= event._id %>/tournaments" class="mt-6 space-y-3 rounded border border-dashed border-slate-700 p-4">
+      <form method="post" action="/admin/events/<%= event._id %>/tournaments" class="mt-6 space-y-3 rounded border border-dashed border-slate-700 p-4" id="new-tournament-form">
         <h3 class="text-sm font-semibold text-slate-300">新增賽事</h3>
         <div class="flex flex-wrap gap-3">
           <input name="name" required placeholder="賽事名稱" class="min-w-[200px] flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2" />
-          <select name="phase" class="rounded border border-slate-700 bg-slate-900 px-3 py-2">
+          <select name="phase" id="new-tournament-phase" class="rounded border border-slate-700 bg-slate-900 px-3 py-2">
             <option value="group">小組賽</option>
-            <option value="knockout">淘汰賽</option>
+            <option value="knockout">淘汰賽（單敗）</option>
+            <option value="double_elim">雙敗淘汰賽</option>
           </select>
-          <input name="advancePerGroup" type="number" min="1" value="2" class="w-24 rounded border border-slate-700 bg-slate-900 px-3 py-2" title="各組前 N 名" />
+          <input
+            id="new-tournament-advance"
+            name="advancePerGroup"
+            type="number"
+            min="1"
+            value="2"
+            class="w-24 rounded border border-slate-700 bg-slate-900 px-3 py-2"
+            title="各組前 N 名（僅小組賽）"
+            aria-label="各組前 N 名"
+          />
           <input name="competitionDate" type="date" class="rounded border border-slate-700 bg-slate-900 px-3 py-2" title="比賽日期" />
           <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-600">新增</button>
         </div>
-        <p class="text-xs text-slate-500">「各組前 N 名」主要用於小組賽晉級設定。</p>
+        <p id="new-tournament-advance-hint" class="text-xs text-slate-500">「各組前 N 名」僅小組賽晉級用；淘汰／雙敗唔使填。</p>
       </form>
+      <script>
+        (function () {
+          var phase = document.getElementById('new-tournament-phase');
+          var advance = document.getElementById('new-tournament-advance');
+          var hint = document.getElementById('new-tournament-advance-hint');
+          if (!phase || !advance) return;
+          function sync() {
+            var isGroup = phase.value === 'group';
+            advance.classList.toggle('hidden', !isGroup);
+            advance.disabled = !isGroup;
+            if (hint) hint.classList.toggle('hidden', !isGroup);
+          }
+          phase.addEventListener('change', sync);
+          sync();
+        })();
+      </script>
     </section>
 
     <section class="mt-10">

@@ -1,16 +1,17 @@
 import { Router } from 'express';
 import { loadEventBySlug } from '../middleware/loadEvent.js';
-import { requireMemberApi } from '../middleware/memberAuth.js';
 import { startRegistrationCheckout } from '../lib/registrationService.js';
 
 export const registerApiRouter = Router({ mergeParams: true });
 
-registerApiRouter.post('/register/:eventSlug/checkout', loadEventBySlug, requireMemberApi, async (req, res, next) => {
+registerApiRouter.post('/register/:eventSlug/checkout', loadEventBySlug, async (req, res, next) => {
   try {
     const result = await startRegistrationCheckout({
       event: req.event,
       divisionId: req.body?.divisionId,
-      primaryMemberId: req.session.memberId,
+      primaryMemberId: req.session?.memberId || undefined,
+      contactName: req.body?.contactName,
+      contactEmail: req.body?.contactEmail,
       partnerEmail: req.body?.partnerEmail,
       teamName: req.body?.teamName,
       playerNames: req.body?.playerNames,
@@ -19,8 +20,7 @@ registerApiRouter.post('/register/:eventSlug/checkout', loadEventBySlug, require
     });
 
     if (!result.ok) {
-      const status =
-        result.error === 'login_required' ? 401 : result.error === 'division_full' ? 409 : 400;
+      const status = result.error === 'division_full' ? 409 : 400;
       return res.status(status).json({
         error: result.error,
         issues: result.issues || undefined,

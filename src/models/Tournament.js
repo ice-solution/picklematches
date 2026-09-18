@@ -4,8 +4,8 @@ const tournamentSchema = new mongoose.Schema(
   {
     eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true },
     name: { type: String, required: true, trim: true },
-    /** group: 小組賽, knockout: 淘汰賽 — 同一 Event 下可有多筆 */
-    phase: { type: String, enum: ['group', 'knockout'], required: true },
+    /** group: 小組賽, knockout: 單敗淘汰, double_elim: 雙敗淘汰 */
+    phase: { type: String, enum: ['group', 'knockout', 'double_elim'], required: true },
     /** 淘汰賽對應的小組賽賽事（產生淘汰或後台綁定） */
     sourceGroupTournamentId: {
       type: mongoose.Schema.Types.ObjectId,

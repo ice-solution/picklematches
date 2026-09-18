@@ -32,6 +32,7 @@ import { getEventGroupStandings } from '../lib/groupStandings.js';
 import { finalizeFinishedMatch, applyManualScoresFromBody } from '../lib/matchResult.js';
 import { broadcastMatchUpdate } from '../lib/matchSocket.js';
 import { generateKnockoutFromGroup, generateKnockoutFromTeams } from '../lib/knockoutGenerator.js';
+import { generateDoubleElimFromTeams, buildDoubleElimTracks } from '../lib/doubleElimGenerator.js';
 import { generateGroupRoundRobin } from '../lib/groupScheduleGenerator.js';
 import { assignTeamCodeIfEmpty } from '../lib/teamCodes.js';
 import { buildGroupRoundRobinMatrices } from '../lib/groupRoundRobinMatrix.js';
@@ -618,7 +619,9 @@ adminRouter.post('/events/:eventId/tournaments', requireStaff, async (req, res, 
     if (!event) return res.status(404).send('Not found');
 
     const name = String(req.body.name || '').trim();
-    const phase = req.body.phase === 'knockout' ? 'knockout' : 'group';
+    const phaseRaw = String(req.body.phase || 'group');
+    const phase =
+      phaseRaw === 'knockout' ? 'knockout' : phaseRaw === 'double_elim' ? 'double_elim' : 'group';
     const advancePerGroup = Math.max(1, parseInt(req.body.advancePerGroup, 10) || 2);
     if (!name) {
       return res.redirect(`/admin/events/${eventId}`);
@@ -854,6 +857,8 @@ adminRouter.get('/tournaments/:tournamentId', requireStaff, async (req, res, nex
 
     const knockoutLadderColumns =
       tournament.phase === 'knockout' ? buildKnockoutLadderColumns(matches) : [];
+    const doubleElimTracks =
+      tournament.phase === 'double_elim' ? buildDoubleElimTracks(matches) : null;
 
     let importReport = null;
     if (req.session.importReport) {
@@ -889,6 +894,7 @@ adminRouter.get('/tournaments/:tournamentId', requireStaff, async (req, res, nex
       importReport,
       teamImportReport,
       knockoutLadderColumns,
+      doubleElimTracks,
       groupRoundRobinMatrices,
       query: req.query,
     });
@@ -996,6 +1002,46 @@ adminRouter.post('/tournaments/:tournamentId/generate-knockout-bracket', require
   }
 });
 
+/** 雙敗淘汰：產生勝部／敗部／總決賽雙軌籤表 */
+adminRouter.post('/tournaments/:tournamentId/generate-double-elim', requireStaff, async (req, res, next) => {
+  try {
+    const { tournamentId } = req.params;
+    if (!mongoose.isValidObjectId(tournamentId)) return res.status(404).send('Not found');
+
+    const force = req.body.force === '1' || req.body.force === 'true';
+    if (force) {
+      const t = await Tournament.findById(tournamentId).lean();
+      if (!t || t.phase !== 'double_elim') {
+        return res.redirect(`/admin/tournaments/${tournamentId}`);
+      }
+      const matches = await Match.find({ tournamentId }).select('_id').lean();
+      const matchIds = matches.map((m) => m._id);
+      if (matchIds.length) {
+        await MatchAssignment.deleteMany({ matchId: { $in: matchIds } });
+        await Match.deleteMany({ _id: { $in: matchIds } });
+      }
+      await Team.deleteMany({ tournamentId, isPlaceholder: true });
+    }
+
+    const r = await generateDoubleElimFromTeams({
+      tournamentId,
+      matchFormat: req.body.matchFormat,
+      courts: undefined,
+    });
+    if (!r.ok) {
+      const code = r.error || 'error';
+      return res.redirect(`/admin/tournaments/${tournamentId}?gen=${encodeURIComponent(code)}`);
+    }
+    const qs = [`gen=ok`, `teams=${r.createdTeams}`];
+    if (r.createdMatches) qs.push(`matches=${r.createdMatches}`);
+    if (r.matchFormat) qs.push(`fmt=${encodeURIComponent(r.matchFormat)}`);
+    if (r.courtsUsed != null) qs.push(`courts=${r.courtsUsed}`);
+    res.redirect(`/admin/tournaments/${tournamentId}?${qs.join('&')}`);
+  } catch (e) {
+    next(e);
+  }
+});
+
 /** 小組賽：各組單循環一鍵產生賽程 */
 adminRouter.post('/tournaments/:tournamentId/generate-group-schedule', requireStaff, async (req, res, next) => {
   try {
@@ -1064,7 +1110,9 @@ adminRouter.post('/tournaments/:tournamentId/reset-knockout', requireStaff, asyn
     if (!mongoose.isValidObjectId(tournamentId)) return res.status(404).send('Not found');
     const t = await Tournament.findById(tournamentId).lean();
     if (!t) return res.status(404).send('Not found');
-    if (t.phase !== 'knockout') return res.redirect(`/admin/tournaments/${tournamentId}`);
+    if (t.phase !== 'knockout' && t.phase !== 'double_elim') {
+      return res.redirect(`/admin/tournaments/${tournamentId}`);
+    }
 
     const matches = await Match.find({ tournamentId }).select('_id').lean();
     const matchIds = matches.map((m) => m._id);
@@ -1088,12 +1136,12 @@ adminRouter.post('/tournaments/:tournamentId/update', requireStaff, async (req, 
     const doc = await Tournament.findById(tournamentId);
     if (!doc) return res.status(404).send('Not found');
     const name = String(req.body.name || '').trim();
-    const advancePerGroup = Math.max(1, parseInt(req.body.advancePerGroup, 10) || 1);
     if (!name) return res.redirect(`/admin/tournaments/${tournamentId}`);
     doc.name = name;
-    doc.advancePerGroup = advancePerGroup;
     doc.competitionDate = normalizeDateOnly(req.body.competitionDate) || '';
     if (doc.phase === 'group') {
+      const advancePerGroup = Math.max(1, parseInt(req.body.advancePerGroup, 10) || 1);
+      doc.advancePerGroup = advancePerGroup;
       const winPts = parseInt(String(req.body.groupWinPoints ?? '').trim(), 10);
       const lossPts = parseInt(String(req.body.groupLossPoints ?? '').trim(), 10);
       if (!Number.isNaN(winPts)) doc.groupWinPoints = winPts;

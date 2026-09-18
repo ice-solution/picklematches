@@ -43,6 +43,17 @@ const matchSchema = new mongoose.Schema(
     /** 淘汰賽：完賽後勝者／敗者填入對應占位隊名（如 W-SF1、L-SF1） */
     knockoutWinnerSlot: { type: String, trim: true, default: null },
     knockoutLoserSlot: { type: String, trim: true, default: null },
+    /**
+     * 雙敗淘汰軌道：winners | losers | grand_final
+     * 單敗／小組賽可為空
+     */
+    bracketTrack: {
+      type: String,
+      enum: ['', 'winners', 'losers', 'grand_final'],
+      default: '',
+    },
+    /** 總決賽場次：1 = 第一場；2 = 若敗部反勝需再打（勝部一次優勢） */
+    grandFinalLeg: { type: Number, min: 1, max: 2, default: null },
   },
   { timestamps: true }
 );

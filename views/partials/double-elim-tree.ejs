@@ -1,0 +1,92 @@
+<%#
+  tree: buildDoubleElimTreeLayout()
+  寬螢幕：一整張圖縮入版面。窄螢幕：勝部、敗部分開，跟螢幕闊度排。
+%>
+<% if (tree && (tree.winners || tree.losers)) { %>
+<section class="double-elim-tree mt-8" id="de-tree" aria-label="雙敗淘汰樹狀圖">
+  <h3 class="text-base font-semibold text-white">雙敗淘汰圖</h3>
+  <p class="mt-1 text-xs text-slate-500">左勝部、右敗部，由底向上接線。寬螢幕縮入版面一次睇完；窄螢幕則總決賽、勝部、敗部分開，跟螢幕闊度縮放。</p>
+
+  <div class="de-tree-card de-tree-combined mt-4">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 <%= tree.width %> <%= tree.height %>"
+      preserveAspectRatio="xMidYMin meet"
+      class="de-tree-svg"
+      style="aspect-ratio: <%= tree.width %> / <%= tree.height %>"
+      role="img"
+    >
+      <% [
+        { side: tree.winners, stroke: '#34d399', title: '勝部', titleFill: '#6ee7b7' },
+        { side: tree.losers, stroke: '#fbbf24', title: '敗部', titleFill: '#fcd34d' },
+      ].forEach(function (block) { %>
+        <% if (block.side && block.side.top) { %>
+          <text x="<%= block.side.top.cx %>" y="18" text-anchor="middle" fill="<%= block.titleFill %>" font-size="13"><%= block.title %></text>
+        <% } %>
+        <%- include('double-elim-tree-side', { side: block.side, stroke: block.stroke, title: '', titleFill: block.titleFill }) %>
+      <% }); %>
+      <% (tree.grandFinal || []).forEach(function (n) { %>
+        <path d="M <%= n.x1 %> <%= n.y1 %> L <%= n.x1 %> <%= n.y %> L <%= n.x2 %> <%= n.y %> L <%= n.x2 %> <%= n.y2 %>" fill="none" stroke="#38bdf8" stroke-width="1.6" />
+        <text x="<%= n.cx %>" y="<%= n.y - 8 %>" text-anchor="middle" fill="#7dd3fc" font-size="12"><%= n.title %></text>
+        <% if (n.score) { %>
+          <text x="<%= n.cx %>" y="<%= n.y + 14 %>" text-anchor="middle" fill="#6ee7b7" font-size="11" font-family="ui-monospace, monospace"><%= n.score %></text>
+        <% } %>
+      <% }); %>
+    </svg>
+  </div>
+
+  <div class="de-tree-stack mt-4">
+    <% if (tree.grandFinal && tree.grandFinal.length) { %>
+      <div class="de-tree-gf">
+        <% tree.grandFinal.forEach(function (n) { %>
+          <div class="de-tree-gf-card">
+            <p class="text-xs font-semibold text-sky-300"><%= n.title %></p>
+            <p class="mt-1 text-sm text-slate-100"><%= n.a %> vs <%= n.b %></p>
+            <% if (n.score) { %>
+              <p class="mt-0.5 font-mono text-xs text-emerald-300"><%= n.score %></p>
+            <% } %>
+          </div>
+        <% }); %>
+      </div>
+    <% } %>
+
+    <% if (tree.winnersPanel) { %>
+      <div>
+        <p class="de-tree-side-label text-emerald-300">勝部</p>
+        <div class="de-tree-card de-tree-pan">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 <%= tree.winnersPanel.width %> <%= tree.winnersPanel.height %>"
+            preserveAspectRatio="xMidYMin meet"
+            class="de-tree-svg"
+            style="aspect-ratio: <%= tree.winnersPanel.width %> / <%= tree.winnersPanel.height %>"
+            role="img"
+            aria-label="勝部"
+          >
+            <%- include('double-elim-tree-side', { side: tree.winnersPanel, stroke: '#34d399', title: '勝部', titleFill: '#6ee7b7' }) %>
+          </svg>
+        </div>
+      </div>
+    <% } %>
+
+    <% if (tree.losersPanel) { %>
+      <div>
+        <p class="de-tree-side-label text-amber-300">敗部</p>
+        <div class="de-tree-card de-tree-pan">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 <%= tree.losersPanel.width %> <%= tree.losersPanel.height %>"
+            preserveAspectRatio="xMidYMin meet"
+            class="de-tree-svg"
+            style="aspect-ratio: <%= tree.losersPanel.width %> / <%= tree.losersPanel.height %>"
+            role="img"
+            aria-label="敗部"
+          >
+            <%- include('double-elim-tree-side', { side: tree.losersPanel, stroke: '#fbbf24', title: '敗部', titleFill: '#fcd34d' }) %>
+          </svg>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</section>
+<% } %>

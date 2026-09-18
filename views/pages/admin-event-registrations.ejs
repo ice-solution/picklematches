@@ -100,11 +100,16 @@
               <td class="px-2 py-3"><%= r.division ? r.division.name : '—' %></td>
               <td class="px-2 py-3"><%= r.teamName || r.playerNames || '—' %></td>
               <td class="px-2 py-3 text-xs text-slate-400">
+                <% if (r.contactName || r.contactEmail) { %>
+                  <%= r.contactName || '—' %><% if (r.contactEmail) { %> &lt;<%= r.contactEmail %>&gt;<% } %>
+                <% } %>
                 <% (r.members || []).forEach(function (m, i) { %>
-                  <% if (i) { %><br /><% } %><%= m.name %> &lt;<%= m.email %>&gt;
+                  <% if (r.contactEmail && String(m.email || '').toLowerCase() === String(r.contactEmail || '').toLowerCase()) { return; } %>
+                  <% if (r.contactName || r.contactEmail || i) { %><br /><% } %><%= m.name %> &lt;<%= m.email %>&gt;
                 <% }); %>
+                <% if (!(r.contactName || r.contactEmail) && !(r.members || []).length) { %>—<% } %>
                 <% if (r.partnerEmail) { %>
-                  <br /><span class="text-slate-500">搭檔通知：<%= r.partnerEmail %></span>
+                  <br /><span class="text-slate-500">搭檔：<%= r.partnerEmail %></span>
                 <% } %>
               </td>
               <td class="px-2 py-3">

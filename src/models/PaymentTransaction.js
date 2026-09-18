@@ -6,7 +6,7 @@ const paymentTransactionSchema = new mongoose.Schema(
     eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true },
     divisionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Division', required: true },
     memberIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Member' }],
-    primaryMemberId: { type: mongoose.Schema.Types.ObjectId, ref: 'Member', required: true },
+    primaryMemberId: { type: mongoose.Schema.Types.ObjectId, ref: 'Member' },
     amount: { type: Number, required: true, min: 0 },
     currency: { type: String, default: 'HKD' },
     paymentGateway: { type: String, enum: ['wonder', 'none'], default: 'wonder' },

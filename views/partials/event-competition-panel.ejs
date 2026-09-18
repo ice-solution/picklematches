@@ -46,6 +46,16 @@
     event: event,
   }) %>
 
+  <% if (comp.isDoubleElim && comp.doubleElimTree) { %>
+    <%- include('double-elim-tree', { tree: comp.doubleElimTree }) %>
+  <% } else if (comp.doubleElimTracks) { %>
+    <%- include('double-elim-ladder', {
+      tournament: { phase: 'double_elim' },
+      doubleElimTracks: comp.doubleElimTracks,
+      adminLinks: false,
+    }) %>
+  <% } %>
+
   <section class="comp-schedule mt-10 overflow-x-auto">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <h3 class="text-lg font-semibold text-white">賽程與結果</h3>

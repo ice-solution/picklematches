@@ -1,0 +1,15 @@
+<% if (side) { %>
+  <% if (side.top && title) { %>
+    <text x="<%= side.top.cx %>" y="<%= side.top.y - 16 %>" text-anchor="middle" fill="<%= titleFill %>" font-size="13"><%= title %></text>
+  <% } %>
+  <% (side.leaves || []).forEach(function (l) { %>
+    <text x="<%= l.x %>" y="<%= l.y %>" text-anchor="middle" fill="#cbd5e1" font-size="12"><%= l.name %></text>
+  <% }); %>
+  <% (side.nodes || []).forEach(function (n) { %>
+    <path d="M <%= n.x1 %> <%= n.y1 %> L <%= n.x1 %> <%= n.y %> L <%= n.x2 %> <%= n.y %> L <%= n.x2 %> <%= n.y2 %>" fill="none" stroke="<%= stroke %>" stroke-width="1.6" />
+    <text x="<%= n.cx %>" y="<%= n.y - 8 %>" text-anchor="middle" fill="#e2e8f0" font-size="11"><%= n.a %> vs <%= n.b %></text>
+    <% if (n.score) { %>
+      <text x="<%= n.cx %>" y="<%= n.y + 14 %>" text-anchor="middle" fill="#6ee7b7" font-size="11" font-family="ui-monospace, monospace"><%= n.score %></text>
+    <% } %>
+  <% }); %>
+<% } %>

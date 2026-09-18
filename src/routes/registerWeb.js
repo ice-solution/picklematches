@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import { loadEventBySlug } from '../middleware/loadEvent.js';
-import { requireMember } from '../middleware/memberAuth.js';
 import { Division } from '../models/Division.js';
 import { Registration } from '../models/Registration.js';
 import { Member } from '../models/Member.js';
@@ -9,14 +8,17 @@ import { countDivisionRegistrations, isDivisionRegistrationOpen } from '../lib/r
 
 export const registerWebRouter = Router({ mergeParams: true });
 
-registerWebRouter.get('/:eventSlug/register', loadEventBySlug, requireMember, async (req, res, next) => {
+registerWebRouter.get('/:eventSlug/register', loadEventBySlug, async (req, res, next) => {
   try {
     const event = req.event;
     if (!event.registrationEnabled) {
       return res.redirect(`/e/${event.slug}?error=registration_disabled`);
     }
-    const member = await Member.findById(req.session.memberId).lean();
-    if (!member) return res.redirect('/member/login');
+
+    let member = null;
+    if (req.session?.memberId) {
+      member = await Member.findById(req.session.memberId).lean();
+    }
 
     const divisions = await Division.find({ eventId: event._id, isPublished: true })
       .sort({ order: 1, createdAt: 1 })
@@ -56,6 +58,7 @@ registerWebRouter.get('/:eventSlug/register/success', loadEventBySlug, async (re
       title: '報名成功',
       event: req.event,
       registration,
+      isMember: Boolean(req.session?.memberId),
     });
   } catch (e) {
     next(e);
