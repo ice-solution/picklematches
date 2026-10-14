@@ -1,4 +1,8 @@
 <% var matchList = matches || []; %>
+<% function courtLiveHref(m) {
+  if (!m || !m.court || !event || !event.slug) return '';
+  return '/e/' + event.slug + '/court/' + encodeURIComponent(String(m.court).trim()) + '/live';
+} %>
 
 <!-- 手機：卡片 -->
 <div class="schedule-cards md:hidden space-y-3">
@@ -6,6 +10,7 @@
     <p class="rounded border border-slate-800 bg-slate-900/40 py-8 text-center text-sm text-slate-500">此篩選尚無場次</p>
   <% } %>
   <% matchList.forEach(function (m) { %>
+    <% var liveHref = courtLiveHref(m); %>
     <article
       class="schedule-match-row rounded-lg border border-slate-800 bg-slate-900/50 p-4"
       data-id="<%= m._id %>"
@@ -39,12 +44,16 @@
         <div class="score-cell text-sm">
           <%- include('score-display', { m: m, scoreMainClass: 'font-mono font-semibold text-emerald-300', scoreDetailClass: 'mt-0.5 block font-mono text-xs text-slate-400' }) %>
         </div>
-        <a
-          class="shrink-0 rounded bg-emerald-800/80 px-3 py-2 text-xs font-semibold text-white"
-          href="/e/<%= event.slug %>/screen/<%= m._id %>"
-          target="_blank"
-          rel="noopener"
-        >直播</a>
+        <% if (liveHref) { %>
+          <a
+            class="shrink-0 rounded bg-emerald-800/80 px-3 py-2 text-xs font-semibold text-white"
+            href="<%= liveHref %>"
+            target="_blank"
+            rel="noopener"
+          >直播</a>
+        <% } else { %>
+          <span class="shrink-0 text-xs text-slate-600">未編場地</span>
+        <% } %>
       </div>
     </article>
   <% }); %>
@@ -71,13 +80,18 @@
         <tr><td colspan="9" class="py-8 text-center text-slate-500">此篩選尚無場次</td></tr>
       <% } %>
       <% matchList.forEach(function (m) { %>
+        <% var liveHrefDesk = courtLiveHref(m); %>
         <tr
           class="schedule-match-row border-b border-slate-800/80"
           data-id="<%= m._id %>"
           data-phase="<%= m.tournamentPhase || '' %>"
         >
           <td class="py-2.5 pr-3">
-            <a class="inline-block whitespace-nowrap rounded bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-100 hover:bg-slate-700" href="/e/<%= event.slug %>/screen/<%= m._id %>" target="_blank" rel="noopener">直播</a>
+            <% if (liveHrefDesk) { %>
+              <a class="inline-block whitespace-nowrap rounded bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-100 hover:bg-slate-700" href="<%= liveHrefDesk %>" target="_blank" rel="noopener">直播</a>
+            <% } else { %>
+              <span class="text-xs text-slate-600">—</span>
+            <% } %>
           </td>
           <td class="py-2.5 pr-3 text-slate-300"><%= m.tournamentPhase === 'knockout' ? '淘汰' : m.tournamentPhase === 'double_elim' ? '雙敗' : m.tournamentPhase === 'league' ? '聯賽' : '小組' %></td>
           <td class="py-2.5 pr-3 text-slate-400"><%= m.scheduleGroupLabel || '—' %></td>
