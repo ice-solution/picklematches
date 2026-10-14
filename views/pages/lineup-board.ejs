@@ -176,6 +176,16 @@
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
+      /* 最少約 6 個半形／3 個中文；最長約 30 個英文字母 */
+      box-sizing: border-box;
+      min-width: max(6ch, 3.25em);
+      max-width: 30ch;
+      width: max-content;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.25;
     }
     .player-chip.dragging { opacity: 0.4; cursor: grabbing; }
     .drag-ghost {
@@ -184,6 +194,14 @@
       padding: 10px 16px; border-radius: 999px;
       background: var(--green); color: #fff; font-weight: 700; font-size: 16px;
       box-shadow: 0 12px 28px rgba(0,0,0,.4);
+      box-sizing: border-box;
+      min-width: max(6ch, 3.25em);
+      max-width: 30ch;
+      width: max-content;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     #msg {
       margin: 8px 0 0;
@@ -390,6 +408,7 @@
         el.type = 'button';
         el.className = 'player-chip';
         el.textContent = name;
+        el.title = name;
         el.dataset.name = name;
         if (slotIdx != null) el.dataset.slot = String(slotIdx);
 
