@@ -1,4 +1,7 @@
 import { Match } from '../models/Match.js';
+import { isLeagueFormat, leagueWinnerId, leagueGameLabel, lineupPair } from './leagueRules.js';
+import { resolveCurrentPlayers } from './leagueLineup.js';
+import { playersFromConfirmedLineup } from './leagueLineup.js';
 
 /**
  * 從 winnerId、已完成局或目前局分推斷勝方（供報分表與寫回賽程）
@@ -14,6 +17,10 @@ export function inferMatchWinnerId(match) {
   if (match.winnerId) {
     const w = String(match.winnerId);
     if (w === teamA || w === teamB) return w;
+  }
+
+  if (isLeagueFormat(match.matchFormat)) {
+    return leagueWinnerId(match);
   }
 
   const games = Array.isArray(match.completedGames) ? match.completedGames : [];
@@ -65,8 +72,19 @@ export function ensureCompletedGamesFromCurrent(match) {
   if (ca === 0 && cb === 0) return;
 
   const completed = Array.isArray(match.completedGames) ? [...match.completedGames] : [];
+  const label = isLeagueFormat(match.matchFormat) ? leagueGameLabel(completed.length) : '';
+  const lineup = isLeagueFormat(match.matchFormat)
+    ? resolveCurrentPlayers(match)
+    : { playersA: [], playersB: [] };
+  const row = {
+    a: ca,
+    b: cb,
+    ...(label ? { label } : {}),
+    ...(lineup.playersA.length ? { playersA: lineup.playersA } : {}),
+    ...(lineup.playersB.length ? { playersB: lineup.playersB } : {}),
+  };
   if (completed.length === 0) {
-    match.completedGames = [{ a: ca, b: cb }];
+    match.completedGames = [row];
     match.currentGameIndex = 1;
     return;
   }
@@ -75,7 +93,7 @@ export function ensureCompletedGamesFromCurrent(match) {
   if (last && last.a === ca && last.b === cb) return;
 
   match.completedGames = completed;
-  match.completedGames.push({ a: ca, b: cb });
+  match.completedGames.push(row);
   match.currentGameIndex = match.completedGames.length;
 }
 
@@ -112,7 +130,7 @@ export function finalizeFinishedMatch(match) {
   return { ok: true, winnerId: null, tied: true };
 }
 
-/** 後台表單手動輸入比分（completedGameA[] / completedGameB[]、currentPointA/B） */
+/** 後台表單手動輸入比分（completedGameA[] / completedGameB[]、出場、備註） */
 export function applyManualScoresFromBody(match, body) {
   if (!match || !body) return;
 
@@ -120,41 +138,76 @@ export function applyManualScoresFromBody(match, body) {
     const n = parseInt(String(v ?? '').trim(), 10);
     return Number.isNaN(n) || n < 0 ? 0 : n;
   };
+  const asArr = (v) => {
+    if (v === undefined || v === null) return [];
+    return Array.isArray(v) ? v : [v];
+  };
 
   let as = body.completedGameA;
   let bs = body.completedGameB;
-  if (as === undefined && bs === undefined) return;
+  const pA1 = asArr(body.gameAPlayer1);
+  const pA2 = asArr(body.gameAPlayer2);
+  const pB1 = asArr(body.gameBPlayer1);
+  const pB2 = asArr(body.gameBPlayer2);
+  const remarks = asArr(body.gameRemark);
+  const hasLineupFields =
+    pA1.length || pA2.length || pB1.length || pB2.length || remarks.length ||
+    body.currentAPlayer1 !== undefined ||
+    body.currentAPlayer2 !== undefined ||
+    body.currentBPlayer1 !== undefined ||
+    body.currentBPlayer2 !== undefined;
+
+  if (as === undefined && bs === undefined && !hasLineupFields) return;
 
   if (!Array.isArray(as)) as = as != null && String(as).trim() !== '' ? [as] : [];
   if (!Array.isArray(bs)) bs = bs != null && String(bs).trim() !== '' ? [bs] : [];
 
   const games = [];
-  const len = Math.max(as.length, bs.length);
+  const len = Math.max(as.length, bs.length, pA1.length, pA2.length, pB1.length, pB2.length, remarks.length);
   for (let i = 0; i < len; i++) {
     const aRaw = as[i];
     const bRaw = bs[i];
-    const hasInput =
+    const playersA = lineupPair(pA1[i], pA2[i]);
+    const playersB = lineupPair(pB1[i], pB2[i]);
+    const remark = String(remarks[i] ?? '').trim().slice(0, 200);
+    const hasScore =
       String(aRaw ?? '').trim() !== '' ||
       String(bRaw ?? '').trim() !== '' ||
       parseNonNeg(aRaw) > 0 ||
       parseNonNeg(bRaw) > 0;
-    if (hasInput) {
-      games.push({ a: parseNonNeg(aRaw), b: parseNonNeg(bRaw) });
-    }
+    if (!hasScore && !playersA.length && !playersB.length && !remark) continue;
+    const row = {
+      a: parseNonNeg(aRaw),
+      b: parseNonNeg(bRaw),
+      playersA,
+      playersB,
+      remark,
+    };
+    if (isLeagueFormat(match.matchFormat)) row.label = leagueGameLabel(games.length);
+    games.push(row);
   }
 
   const curA = parseNonNeg(body.currentPointA);
   const curB = parseNonNeg(body.currentPointB);
   const hasCurrent = curA > 0 || curB > 0;
-  if (!games.length && !hasCurrent) return;
+  if (!games.length && !hasCurrent && !hasLineupFields) return;
 
-  match.completedGames = games;
+  if (games.length) {
+    match.completedGames = games;
+    match.currentGameIndex = games.length;
+  }
   match.currentPoints = { a: curA, b: curB };
-  match.currentGameIndex = games.length;
+  if (isLeagueFormat(match.matchFormat)) {
+    match.currentLineup = {
+      playersA: lineupPair(body.currentAPlayer1, body.currentAPlayer2),
+      playersB: lineupPair(body.currentBPlayer1, body.currentBPlayer2),
+    };
+  }
 
   if (typeof match.markModified === 'function') {
     match.markModified('completedGames');
     match.markModified('currentPoints');
+    match.markModified('currentLineup');
   }
 }
 

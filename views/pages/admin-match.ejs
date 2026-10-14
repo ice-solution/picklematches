@@ -44,7 +44,7 @@
           <button type="button" data-side="b" class="adm-score-btn mt-3 w-full rounded-lg bg-sky-700 py-3 text-sm font-semibold text-white active:bg-sky-600">B +1</button>
         </div>
       </div>
-      <p class="mt-6 text-center text-sm text-slate-400">大比分（贏局數）</p>
+      <p class="mt-6 text-center text-sm text-slate-400"><%= match.matchFormat === 'leagueFive' ? '累計總分（五回合）' : '大比分（贏局數）' %></p>
       <p id="adm-games-disp" class="text-center font-mono text-slate-200"><%= gamesLine(match) %></p>
       <p class="mt-2 text-center text-sm text-slate-500">狀態：<span id="adm-status-disp"><%= match.status %></span></p>
       <p id="adm-score-msg" class="mt-3 text-center text-sm text-amber-300"></p>
@@ -73,18 +73,27 @@
       </div>
       <div>
         <label class="text-xs text-slate-500">賽制（整場）</label>
-        <select name="matchFormat" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+        <select name="matchFormat" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" <%= match.matchFormat === 'leagueFive' ? 'disabled' : '' %>>
           <option value="bestOf3" <%= match.matchFormat === 'bestOf3' ? 'selected' : '' %>>三局兩勝</option>
           <option value="bestOf5" <%= match.matchFormat === 'bestOf5' ? 'selected' : '' %>>五局三勝</option>
           <option value="singleGame" <%= match.matchFormat === 'singleGame' ? 'selected' : '' %>>一局過</option>
+          <option value="leagueFive" <%= match.matchFormat === 'leagueFive' ? 'selected' : '' %>>聯賽五回合（21分）</option>
         </select>
+        <% if (match.matchFormat === 'leagueFive') { %>
+          <input type="hidden" name="matchFormat" value="leagueFive" />
+          <p class="mt-1 text-xs text-slate-500">聯賽固定五回合：男雙、女雙、混雙×3，各回合先到 21 分，以累計總分定勝負（無和局）。</p>
+        <% } %>
         <% if (match.status !== 'scheduled') { %>
           <p class="mt-1 text-xs text-amber-500">比賽已開始或結束，變更賽制可能影響比分合理性，請謹慎。</p>
         <% } %>
       </div>
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="grid gap-4 sm:grid-cols-3">
         <div>
-          <label class="text-xs text-slate-500">開賽時間（僅時分，日期見大會設定）</label>
+          <label class="text-xs text-slate-500">此場日期</label>
+          <input name="scheduledDate" type="date" value="<%= match.scheduledDate || '' %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">開賽時間</label>
           <input name="scheduledTime" type="time" value="<%= typeof scheduledTimeValue !== 'undefined' ? scheduledTimeValue : '' %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
         </div>
         <div>
@@ -110,10 +119,64 @@
           <% }); %>
         </select>
       </div>
+      <label class="inline-flex items-center gap-2 text-sm text-slate-300">
+        <input type="hidden" name="showOnWebsite" value="0" />
+        <input type="checkbox" name="showOnWebsite" value="1" <%= match.showOnWebsite !== false ? 'checked' : '' %> />
+        在網站顯示此場次
+      </label>
+      <p class="text-xs text-slate-500">關閉後前台賽程、直播頁同公開 API 都唔會出現；後台同場地計分照常。</p>
 
       <div class="border-t border-slate-800 pt-4">
         <h3 class="text-sm font-semibold text-slate-200">手動修正比分</h3>
-        <p class="mt-1 text-xs text-slate-500">直接輸入各局分數後按「儲存場次」。上方即時計分（+1）可照常使用，兩邊互不影響。</p>
+        <p class="mt-1 text-xs text-slate-500"><%= match.matchFormat === 'leagueFive' ? '每一回合記入比分、出場球員（從固定名單揀）同備註。' : '直接輸入各局分數後按「儲存場次」。上方即時計分（+1）可照常使用，兩邊互不影響。' %></p>
+        <% var leagueLabels = ['男雙', '女雙', '混雙（1）', '混雙（2）', '混雙（3）']; %>
+        <% var isLeagueMatch = match.matchFormat === 'leagueFive'; %>
+        <% var completed = match.completedGames || []; %>
+        <% var rosterA = (match.teamA && match.teamA.players) ? match.teamA.players.map(function (p) { return typeof p === 'string' ? p : p.name; }).filter(Boolean) : []; %>
+        <% var rosterB = (match.teamB && match.teamB.players) ? match.teamB.players.map(function (p) { return typeof p === 'string' ? p : p.name; }).filter(Boolean) : []; %>
+        <% if (isLeagueMatch) { %>
+        <div class="mt-4 space-y-3">
+          <% var currentPlayers = typeof resolveCurrentPlayers === 'function' ? resolveCurrentPlayers(match) : { playersA: (match.currentLineup && match.currentLineup.playersA) || [], playersB: (match.currentLineup && match.currentLineup.playersB) || [] }; %>
+          <% for (var gi = 0; gi < 5; gi++) { %>
+            <% var lg = completed[gi] || {}; %>
+            <% var gp = typeof resolveGamePlayers === 'function' ? resolveGamePlayers(match, gi, lg) : { playersA: lg.playersA || [], playersB: lg.playersB || [] }; %>
+            <div class="rounded border border-slate-800 bg-slate-950/50 p-3">
+              <p class="text-xs font-semibold text-emerald-400/90"><%= leagueLabels[gi] %></p>
+              <div class="mt-2 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label class="text-[10px] text-slate-500"><%= match.teamA && match.teamA.name ? match.teamA.name : 'A' %> 分數</label>
+                  <input name="completedGameA[]" type="number" min="0" value="<%= lg.a != null && lg.a !== '' ? lg.a : '' %>" class="mt-0.5 w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-sm" />
+                  <p class="mt-1 text-[10px] text-slate-500">出場</p>
+                  <%- include('../partials/league-player-pair', { name1: 'gameAPlayer1[]', name2: 'gameAPlayer2[]', roster: rosterA, selected: gp.playersA || [] }) %>
+                </div>
+                <div>
+                  <label class="text-[10px] text-slate-500"><%= match.teamB && match.teamB.name ? match.teamB.name : 'B' %> 分數</label>
+                  <input name="completedGameB[]" type="number" min="0" value="<%= lg.b != null && lg.b !== '' ? lg.b : '' %>" class="mt-0.5 w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-sm" />
+                  <p class="mt-1 text-[10px] text-slate-500">出場</p>
+                  <%- include('../partials/league-player-pair', { name1: 'gameBPlayer1[]', name2: 'gameBPlayer2[]', roster: rosterB, selected: gp.playersB || [] }) %>
+                </div>
+              </div>
+              <label class="mt-2 block text-[10px] text-slate-500">此回合備註</label>
+              <input name="gameRemark[]" value="<%= lg.remark || '' %>" maxlength="200" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs" placeholder="例如：傷停、替換…" />
+            </div>
+          <% } %>
+          <div class="rounded border border-amber-900/40 bg-amber-950/20 p-3">
+            <p class="text-xs font-medium text-amber-300/90">進行中回合</p>
+            <div class="mt-2 grid gap-3 sm:grid-cols-2">
+              <div>
+                <input name="currentPointA" type="number" min="0" value="<%= match.currentPoints?.a ?? 0 %>" class="w-24 rounded border border-amber-800/50 bg-slate-950 px-2 py-1.5 font-mono text-sm text-amber-100" />
+                <p class="mt-1 text-[10px] text-slate-500">出場</p>
+                <%- include('../partials/league-player-pair', { name1: 'currentAPlayer1', name2: 'currentAPlayer2', roster: rosterA, selected: currentPlayers.playersA || [] }) %>
+              </div>
+              <div>
+                <input name="currentPointB" type="number" min="0" value="<%= match.currentPoints?.b ?? 0 %>" class="w-24 rounded border border-amber-800/50 bg-slate-950 px-2 py-1.5 font-mono text-sm text-amber-100" />
+                <p class="mt-1 text-[10px] text-slate-500">出場</p>
+                <%- include('../partials/league-player-pair', { name1: 'currentBPlayer1', name2: 'currentBPlayer2', roster: rosterB, selected: currentPlayers.playersB || [] }) %>
+              </div>
+            </div>
+          </div>
+        </div>
+        <% } else { %>
         <div class="mt-4 overflow-x-auto">
           <table class="w-full min-w-[280px] text-left text-sm" id="manual-games-table">
             <thead>
@@ -130,7 +193,6 @@
               </tr>
             </thead>
             <tbody id="manual-games-body">
-              <% var completed = match.completedGames || []; %>
               <% if (!completed.length) { %>
                 <tr class="manual-game-row border-b border-slate-800/60">
                   <td class="py-2 pr-2 text-slate-500">1</td>
@@ -160,7 +222,12 @@
           </table>
         </div>
         <button type="button" id="btn-add-game-row" class="mt-3 text-xs text-sky-400 underline hover:text-sky-300">＋ 加多一局（已完成）</button>
-        <p class="mt-2 text-xs text-slate-600">完賽時「進行中」分數會併入最後一局。狀態選 finished 會自動判勝方。</p>
+        <% } %>
+        <p class="mt-2 text-xs text-slate-600"><%= isLeagueMatch ? '五個回合對應男雙、女雙、混雙×3。完賽時「進行中」分數會併入當前回合。總分相同不能完賽。名單請先喺隊伍設定填好固定隊員。' : '完賽時「進行中」分數會併入最後一局。狀態選 finished 會自動判勝方。' %></p>
+        <div class="mt-4">
+          <label class="text-xs text-slate-500">整場備註</label>
+          <textarea name="remark" rows="2" maxlength="500" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" placeholder="例如：總結、爭議球、天氣…"><%= match.remark || '' %></textarea>
+        </div>
       </div>
 
       <button type="submit" class="rounded bg-emerald-600 px-6 py-2 font-semibold text-white">儲存場次</button>
@@ -171,7 +238,23 @@
       var matchId = <%- JSON.stringify(String(match._id)) %>;
       var msg = document.getElementById('adm-score-msg');
       function setMsg(t) { msg.textContent = t || ''; }
+      var isLeague = <%- JSON.stringify(match.matchFormat === 'leagueFive') %>;
+      var leagueLabels = ['男雙', '女雙', '混雙（1）', '混雙（2）', '混雙（3）'];
       function gamesLineFromMatch(m) {
+        if (isLeague || m.matchFormat === 'leagueFive') {
+          var games = m.completedGames || [];
+          var totA = 0, totB = 0, bits = [];
+          for (var i = 0; i < games.length; i++) {
+            totA += games[i].a || 0;
+            totB += games[i].b || 0;
+            bits.push((games[i].label || leagueLabels[i] || '') + ' ' + games[i].a + '-' + games[i].b);
+          }
+          var ca = m.currentPoints && m.currentPoints.a != null ? m.currentPoints.a : 0;
+          var cb = m.currentPoints && m.currentPoints.b != null ? m.currentPoints.b : 0;
+          if (m.status !== 'finished') { totA += ca; totB += cb; }
+          if (m.status === 'live') bits.push((leagueLabels[games.length] || '') + ' [' + ca + '-' + cb + ']');
+          return totA + '-' + totB + (bits.length ? '（' + bits.join(' · ') + '）' : '');
+        }
         var games = m.completedGames;
         if (!games || !games.length) {
           var ca = m.currentPoints && m.currentPoints.a != null ? m.currentPoints.a : 0;

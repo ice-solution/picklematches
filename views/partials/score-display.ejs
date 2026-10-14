@@ -6,4 +6,7 @@
   <% if (sp.detail) { %>
     <span class="match-score-detail <%= detailCls %>"><%= sp.detail %></span>
   <% } %>
+  <% if (m && m.remark) { %>
+    <span class="mt-0.5 block text-[10px] leading-snug text-slate-500"><%= m.remark %></span>
+  <% } %>
 </div>

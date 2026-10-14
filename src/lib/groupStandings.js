@@ -13,7 +13,7 @@ function cmpNumDesc(a, b) {
  * 由已完賽場次計算各組排名（積分→得失分→得分→隊名）。
  * @returns {Promise<Array<{ group: object, rows: Array<object> }>>}
  */
-export async function computeGroupStandings(tournamentId) {
+export async function computeGroupStandings(tournamentId, { listedOnly = false } = {}) {
   const tid = new mongoose.Types.ObjectId(tournamentId);
   const tournament = await Tournament.findById(tid).select('groupWinPoints groupLossPoints').lean();
   const winPts = tournament?.groupWinPoints ?? 1;
@@ -48,6 +48,7 @@ export async function computeGroupStandings(tournamentId) {
   const matches = await Match.find({
     tournamentId: tid,
     status: 'finished',
+    ...(listedOnly ? { showOnWebsite: { $ne: false } } : {}),
   })
     .select('teamA teamB winnerId completedGames groupId status currentPoints')
     .lean();
@@ -111,15 +112,17 @@ export async function computeGroupStandings(tournamentId) {
  * 大會底下所有小組賽賽事的報分表（供前台顯示，唯讀計算，不寫入 Match）。
  * @returns {Promise<Array<{ tournament: object, advancePerGroup: number, groups: Array }>>}
  */
-export async function getEventGroupStandings(eventId) {
+export async function getEventGroupStandings(eventId, { listedOnly = false } = {}) {
   const eid = new mongoose.Types.ObjectId(eventId);
-  const tournaments = await Tournament.find({ eventId: eid, phase: 'group' })
+  const q = { eventId: eid, phase: 'group' };
+  if (listedOnly) q.showOnWebsite = { $ne: false };
+  const tournaments = await Tournament.find(q)
     .sort({ order: 1, createdAt: 1 })
     .lean();
 
   return Promise.all(
     tournaments.map(async (t) => {
-      const blocks = await computeGroupStandings(t._id);
+      const blocks = await computeGroupStandings(t._id, { listedOnly });
       const advanceN = Math.max(1, t.advancePerGroup ?? 2);
       for (const block of blocks) {
         block.rows.forEach((row, idx) => {

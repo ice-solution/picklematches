@@ -9,6 +9,8 @@
     <h2 class="text-2xl font-bold text-white"><%= comp.name %></h2>
     <% if (typeof isOrphanKnockout !== 'undefined' && isOrphanKnockout) { %>
       <p class="mt-1 text-sm text-slate-400">淘汰賽</p>
+    <% } else if (comp.isLeague) { %>
+      <p class="mt-1 text-sm text-slate-400">聯賽 · 五回合（男雙、女雙、混雙×3）先到 21 分，累計總分較高者勝 · 排名先計得失球再計勝場</p>
     <% } %>
   </header>
 
@@ -27,6 +29,15 @@
     <%- include('group-standings', {
       groupStandingsList: [comp.standings],
       highlightTeam: typeof highlightTeam !== 'undefined' ? highlightTeam : '',
+      hideSectionHeading: true,
+    }) %>
+  </div>
+  <% } %>
+
+  <% if (comp.isLeague && comp.leagueStandings) { %>
+  <div class="comp-standings mt-8">
+    <%- include('league-standings', {
+      leagueStandingsList: [comp.leagueStandings],
       hideSectionHeading: true,
     }) %>
   </div>

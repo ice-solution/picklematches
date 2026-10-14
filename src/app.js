@@ -23,7 +23,10 @@ import { openSessionWebRouter } from './routes/openSessionWeb.js';
 import { playerWebRouter } from './routes/playerWeb.js';
 import { courtWebRouter } from './routes/courtWeb.js';
 import { courtApiRouter } from './routes/courtApi.js';
+import { lineupWebRouter } from './routes/lineupWeb.js';
+import { lineupApiRouter } from './routes/lineupApi.js';
 import { scoreSummary, scoreDisplayParts, formatLabel, gamesLine, matchStatusLabel, formatTeamWithCode } from './lib/viewHelpers.js';
+import { resolveGamePlayers, resolveCurrentPlayers } from './lib/leagueLineup.js';
 import { isDeuce } from './lib/scoring.js';
 import { displayMatchTime, displayMatchSchedule } from './lib/matchTime.js';
 import { formatDateDisplayZh } from './lib/datetime.js';
@@ -53,6 +56,8 @@ export function createApp() {
   app.set('view engine', 'ejs');
   app.locals.scoreSummary = scoreSummary;
   app.locals.scoreDisplayParts = scoreDisplayParts;
+  app.locals.resolveGamePlayers = resolveGamePlayers;
+  app.locals.resolveCurrentPlayers = resolveCurrentPlayers;
   app.locals.formatLabel = formatLabel;
   app.locals.gamesLine = gamesLine;
   app.locals.isDeuce = isDeuce;
@@ -65,6 +70,11 @@ export function createApp() {
   app.locals.normalizeEventVenues = normalizeEventVenues;
   app.locals.venueLabel = venueLabel;
   app.locals.cssVersion = getCssVersion();
+  // 暫時唔畀 Google 收錄：.env 設 SITE_NOINDEX=true（之後想開放就改 false 或刪除）
+  const siteNoIndex = !['0', 'false', 'no', 'off'].includes(
+    String(process.env.SITE_NOINDEX ?? 'true').trim().toLowerCase()
+  );
+  app.locals.siteNoIndex = siteNoIndex;
 
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({ origin: true, credentials: true }));
@@ -87,7 +97,20 @@ export function createApp() {
 
   app.use((req, res, next) => {
     res.locals.session = req.session;
+    res.locals.siteNoIndex = siteNoIndex;
+    if (siteNoIndex) {
+      res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    }
     next();
+  });
+
+  app.get('/robots.txt', (_req, res) => {
+    res.type('text/plain');
+    if (siteNoIndex) {
+      res.send('User-agent: *\nDisallow: /\n');
+    } else {
+      res.send('User-agent: *\nAllow: /\n');
+    }
   });
 
   app.use('/public', express.static(path.join(rootDir, 'public')));
@@ -100,9 +123,11 @@ export function createApp() {
   app.use('/players', playerWebRouter);
   app.use('/sessions', openSessionWebRouter);
   app.use('/e', courtWebRouter);
+  app.use('/e', lineupWebRouter);
   app.use('/e', publicWebRouter);
   app.use('/e', registerWebRouter);
   app.use('/api/public', courtApiRouter);
+  app.use('/api/public', lineupApiRouter);
   app.use('/api/public', publicApiRouter);
   app.use('/api/public', registerApiRouter);
   app.use('/webhook', paymentWebhookRouter);

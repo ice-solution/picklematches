@@ -1,6 +1,6 @@
-/**
- * 正規化為 24 小時制 "HH:mm"。支援 Excel 時間小數（0–1）、字串、舊版 Date。
- */
+import { formatDateDisplayZh, normalizeDateOnly } from './datetime.js';
+
+/** 正規化為 24 小時制 "HH:mm"。支援 Excel 時間小數（0–1）、字串、舊版 Date。 */
 export function normalizeTimeToHHmm(val) {
   if (val == null || val === '') return '';
   if (typeof val === 'number' && Number.isFinite(val)) {
@@ -51,13 +51,40 @@ export function displayMatchTime(m) {
   return '—';
 }
 
-/** 賽程表：日期 + 時間（competitionDate 來自所屬賽事） */
+/** 此場日期：優先場次 scheduledDate，否則賽事 competitionDate */
+export function matchScheduleDate(m) {
+  if (!m) return '';
+  return normalizeDateOnly(m.scheduledDate) || normalizeDateOnly(m.competitionDate) || '';
+}
+
+/** 賽程表：日期 + 時間 */
 export function displayMatchSchedule(m) {
   if (!m) return '—';
   const time = displayMatchTime(m);
-  const date = m.competitionDate ? String(m.competitionDate).trim() : '';
+  const dateIso = matchScheduleDate(m);
+  const date = dateIso ? formatDateDisplayZh(dateIso) || dateIso : '';
   if (date && time !== '—') return `${date} ${time}`;
   if (date) return date;
   if (time !== '—') return time;
   return '—';
+}
+
+export function compareMatchesBySchedule(a, b) {
+  const da = matchScheduleDate(a);
+  const db = matchScheduleDate(b);
+  if (da !== db) {
+    if (!da) return 1;
+    if (!db) return -1;
+    return da.localeCompare(db);
+  }
+  const ta = a.scheduledTime || '';
+  const tb = b.scheduledTime || '';
+  if (ta !== tb) {
+    if (!ta) return 1;
+    if (!tb) return -1;
+    return ta.localeCompare(tb);
+  }
+  const ca = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+  const cb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+  return ca - cb;
 }

@@ -1,0 +1,56 @@
+<% if (typeof leagueStandingsList !== 'undefined' && leagueStandingsList && leagueStandingsList.length) { %>
+<section id="league-standings" class="mt-10">
+  <div class="border-b border-slate-800 pb-4">
+    <% if (typeof hideSectionHeading === 'undefined' || !hideSectionHeading) { %>
+    <h2 class="text-xl font-bold text-emerald-400">聯賽積分榜</h2>
+    <% } else { %>
+    <h3 class="text-lg font-bold text-emerald-400">聯賽積分榜</h3>
+    <% } %>
+    <p class="mt-1 text-sm text-slate-400">每場五回合（男雙、女雙、混雙×3），各回合先到 21 分；五場總分較高者勝。排名：<strong class="text-slate-300">得失球</strong> → <strong class="text-slate-300">勝場</strong>。無和局。</p>
+  </div>
+
+  <% leagueStandingsList.forEach(function (tblock) { %>
+    <div class="mt-8">
+      <h3 class="text-lg font-semibold text-white"><%= tblock.tournament.name %></h3>
+      <div class="mt-4 overflow-x-auto rounded border border-slate-800 bg-slate-900/40">
+        <table class="w-full min-w-[520px] text-left text-xs sm:text-sm standings-table">
+          <thead>
+            <tr class="border-b border-slate-800 text-xs text-slate-500">
+              <th class="px-2 py-2 text-center w-10">名次</th>
+              <th class="px-2 py-2">隊伍</th>
+              <th class="px-2 py-2">隊員</th>
+              <th class="px-2 py-2 text-center">賽</th>
+              <th class="px-2 py-2 text-center">勝</th>
+              <th class="px-2 py-2 text-center">負</th>
+              <th class="px-2 py-2 text-center">得分</th>
+              <th class="px-2 py-2 text-center">失分</th>
+              <th class="px-2 py-2 text-center">得失</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!tblock.rows.length) { %>
+              <tr><td colspan="9" class="px-3 py-4 text-center text-slate-500">尚無隊伍</td></tr>
+            <% } %>
+            <% tblock.rows.forEach(function (row) { %>
+              <tr class="standings-row border-b border-slate-800/60 <%= row.rank === 1 ? 'bg-emerald-950/25' : '' %>" data-team="<%= row.name %>" data-team-code="<%= row.code || '' %>">
+                <td class="px-2 py-2 text-center font-bold tabular-nums text-slate-300"><%= row.rank %></td>
+                <td class="px-2 py-2 font-medium text-slate-100">
+                  <% if (row.code) { %><span class="mr-1 font-mono text-xs text-sky-300"><%= row.code %></span><% } %>
+                  <%= row.name %>
+                </td>
+                <td class="px-2 py-2 text-slate-400"><%= (row.players && row.players.length) ? row.players.join('、') : '—' %></td>
+                <td class="px-2 py-2 text-center tabular-nums text-slate-400"><%= row.played %></td>
+                <td class="px-2 py-2 text-center tabular-nums text-emerald-400/90"><%= row.wins %></td>
+                <td class="px-2 py-2 text-center tabular-nums text-rose-400/80"><%= row.losses %></td>
+                <td class="px-2 py-2 text-center tabular-nums text-slate-300"><%= row.pointsFor %></td>
+                <td class="px-2 py-2 text-center tabular-nums text-slate-400"><%= row.pointsAgainst %></td>
+                <td class="px-2 py-2 text-center tabular-nums font-semibold text-white"><%= row.pointDiff >= 0 ? '+' + row.pointDiff : row.pointDiff %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  <% }); %>
+</section>
+<% } %>

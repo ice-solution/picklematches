@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <% if (typeof siteNoIndex !== 'undefined' && siteNoIndex) { %>
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <% } %>
+  <title><%= title %></title>
+  <style>
+    :root {
+      --bg: #0c1220;
+      --panel: #151c2c;
+      --panel-2: #1a2336;
+      --line: #2a3548;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --soft: #64748b;
+      --green: #059669;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Noto Sans TC", "PingFang TC", "Hiragino Sans CNS", sans-serif;
+      background: radial-gradient(1200px 600px at 20% -10%, #1a2740 0%, var(--bg) 55%);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
+    }
+    .eyebrow { margin: 0; font-size: 13px; color: var(--soft); }
+    h1 {
+      margin: 8px 0 0;
+      font-size: clamp(28px, 4vw, 34px);
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .hint {
+      margin: 12px 0 0;
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+    .panel {
+      margin-top: 28px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 22px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.25);
+    }
+    .field { margin-top: 18px; }
+    .field:first-child { margin-top: 0; }
+    label {
+      display: block;
+      font-size: 13px;
+      color: var(--soft);
+      margin-bottom: 8px;
+    }
+    select {
+      width: 100%;
+      appearance: none;
+      -webkit-appearance: none;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 14px;
+      padding: 14px 40px 14px 16px;
+      font-size: 18px;
+      min-height: 56px;
+      background-image: linear-gradient(45deg, transparent 50%, #94a3b8 50%),
+        linear-gradient(135deg, #94a3b8 50%, transparent 50%);
+      background-position: calc(100% - 22px) calc(50% - 3px), calc(100% - 16px) calc(50% - 3px);
+      background-size: 6px 6px, 6px 6px;
+      background-repeat: no-repeat;
+    }
+    select:disabled {
+      opacity: 0.45;
+    }
+    .btn {
+      margin-top: 22px;
+      width: 100%;
+      border: 0;
+      border-radius: 14px;
+      background: var(--green);
+      color: white;
+      font-size: 18px;
+      font-weight: 700;
+      min-height: 56px;
+      cursor: pointer;
+    }
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .empty {
+      padding: 18px;
+      border-radius: 14px;
+      border: 1px dashed var(--line);
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="eyebrow"><%= event.name %></p>
+    <h1><%= tournament.name %></h1>
+    <p class="hint">先揀當日比賽，再揀貴隊入排陣。對手頁面分開。</p>
+
+    <form class="panel" id="hub-form">
+      <% if (!rows.length) { %>
+        <div class="empty">
+          未有場次。<br />請賽務先喺「場次（賽程／賽制）」建立對戰。
+        </div>
+      <% } else { %>
+        <div class="field">
+          <label for="match">當日比賽</label>
+          <select id="match" required>
+            <option value="">請選擇比賽…</option>
+            <% rows.forEach(function (row) { %>
+              <% var prefix = row.scheduleLabel ? (row.scheduleLabel + ' · ') : (row.round ? (row.round + ' · ') : ''); %>
+              <% var courtBit = row.court ? (' · ' + row.court) : ''; %>
+              <option
+                value="<%= row.matchId %>"
+                data-url-a="<%= row.urlA %>"
+                data-url-b="<%= row.urlB %>"
+                data-team-a="<%= row.teamAName %>"
+                data-team-b="<%= row.teamBName %>"
+                data-confirmed-a="<%= row.confirmedA ? '1' : '' %>"
+                data-confirmed-b="<%= row.confirmedB ? '1' : '' %>"
+              ><%= prefix %><%= row.teamAName %> vs <%= row.teamBName %><%= courtBit %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="field">
+          <label for="team">隊伍</label>
+          <select id="team" required disabled>
+            <option value="">請先揀比賽…</option>
+          </select>
+        </div>
+        <button type="submit" class="btn" id="go" disabled>開始排陣</button>
+      <% } %>
+    </form>
+  </div>
+
+  <script>
+    (function () {
+      var matchSel = document.getElementById('match');
+      var teamSel = document.getElementById('team');
+      var goBtn = document.getElementById('go');
+      var form = document.getElementById('hub-form');
+      if (!matchSel || !teamSel || !goBtn || !form) return;
+
+      function syncGo() {
+        goBtn.disabled = !teamSel.value;
+      }
+
+      function resetTeam(placeholder) {
+        teamSel.innerHTML = '';
+        var opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = placeholder || '請選擇隊伍…';
+        teamSel.appendChild(opt);
+        teamSel.value = '';
+        teamSel.disabled = true;
+        syncGo();
+      }
+
+      matchSel.addEventListener('change', function () {
+        var opt = matchSel.options[matchSel.selectedIndex];
+        if (!matchSel.value || !opt) {
+          resetTeam('請先揀比賽…');
+          return;
+        }
+        teamSel.innerHTML = '';
+        var ph = document.createElement('option');
+        ph.value = '';
+        ph.textContent = '請選擇隊伍…';
+        teamSel.appendChild(ph);
+
+        [
+          { url: opt.getAttribute('data-url-a'), name: opt.getAttribute('data-team-a'), done: opt.getAttribute('data-confirmed-a') },
+          { url: opt.getAttribute('data-url-b'), name: opt.getAttribute('data-team-b'), done: opt.getAttribute('data-confirmed-b') },
+        ].forEach(function (side) {
+          var o = document.createElement('option');
+          o.value = side.url || '';
+          o.textContent = (side.name || '隊伍') + (side.done ? '（已確認）' : '');
+          teamSel.appendChild(o);
+        });
+        teamSel.disabled = false;
+        teamSel.value = '';
+        syncGo();
+      });
+
+      teamSel.addEventListener('change', syncGo);
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!teamSel.value) return;
+        window.location.href = teamSel.value;
+      });
+    })();
+  </script>
+</body>
+</html>

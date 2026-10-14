@@ -14,6 +14,15 @@ const teamSchema = new mongoose.Schema(
     isPlaceholder: { type: Boolean, default: false },
     /** 報到／已登記 */
     checkedIn: { type: Boolean, default: false },
+    /** 聯賽固定隊員（只存姓名） */
+    players: {
+      type: [
+        {
+          name: { type: String, trim: true, required: true },
+        },
+      ],
+      default: [],
+    },
   },
   { timestamps: true }
 );

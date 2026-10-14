@@ -11,15 +11,22 @@
     <% if (typeof groupStandingsList !== 'undefined' && groupStandingsList && groupStandingsList.length) { %>
       <a href="#standings" class="font-semibold text-emerald-400 underline">↓ 小組報分表</a>
     <% } %>
+    <% if (typeof leagueStandingsList !== 'undefined' && leagueStandingsList && leagueStandingsList.length) { %>
+      <a href="#league-standings" class="font-semibold text-emerald-400 underline">↓ 聯賽積分榜</a>
+    <% } %>
     <a href="#schedule" class="text-sky-400 underline">↓ 場次列表</a>
     <a href="<%= typeof publicEventUrl !== 'undefined' ? publicEventUrl : '/e/' + event.slug %>" target="_blank" rel="noopener" class="text-sky-400 underline">開啟前台 ↗</a>
   </p>
 
+  <% if (typeof leagueStandingsList !== 'undefined' && leagueStandingsList && leagueStandingsList.length) { %>
+    <%- include('../partials/league-standings', { leagueStandingsList: leagueStandingsList, hideSectionHeading: false }) %>
+  <% } %>
+
   <% if (typeof groupStandingsList !== 'undefined' && groupStandingsList && groupStandingsList.length) { %>
   <%- include('../partials/group-standings', { groupStandingsList: groupStandingsList, highlightTeam: '' }) %>
-  <% } else { %>
+  <% } else if (!(typeof leagueStandingsList !== 'undefined' && leagueStandingsList && leagueStandingsList.length)) { %>
   <p class="mt-8 rounded border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm text-slate-500">
-    此大會尚無「小組賽」類型賽事，或尚未建立組別／隊伍。報分表只會統計<strong class="text-slate-400">小組賽</strong>且<strong class="text-slate-400">已完賽</strong>的場次。
+    此大會尚無小組賽或聯賽報分資料。小組報分表只統計<strong class="text-slate-400">小組賽</strong>已完賽場次；聯賽榜只統計<strong class="text-slate-400">聯賽</strong>已完賽場次。
   </p>
   <% } %>
 

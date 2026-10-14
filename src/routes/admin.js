@@ -10,7 +10,7 @@ import { Match, MATCH_FORMAT } from '../models/Match.js';
 import { MatchAssignment } from '../models/MatchAssignment.js';
 import { requireStaff, requireAllianceReview, requireAdmin } from '../middleware/auth.js';
 import { toDatetimeLocalValue, parseDatetimeLocal, normalizeDateOnly } from '../lib/datetime.js';
-import { normalizeTimeToHHmm, timeInputValueFromMatch } from '../lib/matchTime.js';
+import { normalizeTimeToHHmm, timeInputValueFromMatch, matchScheduleDate, displayMatchTime } from '../lib/matchTime.js';
 import { uploadMatchXlsx } from '../middleware/uploadMatchXlsx.js';
 import {
   parseMatchWorkbookBuffer,
@@ -29,8 +29,20 @@ import {
 } from '../lib/tournamentImport.js';
 import { buildKnockoutLadderColumns } from '../lib/knockoutLadder.js';
 import { getEventGroupStandings } from '../lib/groupStandings.js';
+import { getEventLeagueStandings, computeLeagueStandings } from '../lib/leagueStandings.js';
+import { generateLeagueDoubleRoundRobin } from '../lib/leagueScheduleGenerator.js';
+import { parseRosterNames, isLeagueFormat } from '../lib/leagueRules.js';
+import {
+  ensureLineupTokens,
+  getSideLineup,
+  unlockSideLineup,
+  LEAGUE_GAME_LABELS,
+} from '../lib/leagueLineup.js';
+import { parseShowOnWebsite } from '../lib/publicListing.js';
 import { finalizeFinishedMatch, applyManualScoresFromBody } from '../lib/matchResult.js';
+import { finishMatchManual } from '../lib/scoring.js';
 import { broadcastMatchUpdate } from '../lib/matchSocket.js';
+import { getSiteUrl } from '../lib/siteUrl.js';
 import { generateKnockoutFromGroup, generateKnockoutFromTeams } from '../lib/knockoutGenerator.js';
 import { generateDoubleElimFromTeams, buildDoubleElimTracks } from '../lib/doubleElimGenerator.js';
 import { generateGroupRoundRobin } from '../lib/groupScheduleGenerator.js';
@@ -46,8 +58,13 @@ import {
 } from '../lib/registrationTeamService.js';
 import { Alliance } from '../models/Alliance.js';
 import { approveAlliance, rejectAlliance } from '../lib/allianceService.js';
-import { normalizeEventVenues, parseVenuesFromBody, findVenue } from '../lib/venues.js';
+import { normalizeEventVenues, parseVenuesFromBody, findVenue, venueLabel } from '../lib/venues.js';
 import { demoteOtherLiveOnCourt } from '../lib/courtLive.js';
+import {
+  startVenueStream,
+  stopVenueStream,
+  getAllStreamStatuses,
+} from '../lib/youtubeStreamService.js';
 import {
   BACKOFFICE_ROLES,
   canAccessEventDoc,
@@ -464,6 +481,95 @@ adminRouter.post('/events', requireStaff, async (req, res, next) => {
   }
 });
 
+adminRouter.get('/events/:eventId/lineup-day', requireStaff, async (req, res, next) => {
+  try {
+    const { eventId } = req.params;
+    if (!mongoose.isValidObjectId(eventId)) return res.status(404).send('Not found');
+    const event = await Event.findById(eventId).lean();
+    if (!event) return res.status(404).send('Not found');
+
+    const date = normalizeDateOnly(req.query.date) || '';
+    const tournaments = await Tournament.find({ eventId: event._id, phase: 'league' })
+      .sort({ order: 1, createdAt: 1 })
+      .lean();
+    const tids = tournaments.map((t) => t._id);
+    const tById = new Map(tournaments.map((t) => [String(t._id), t]));
+    const venues = normalizeEventVenues(event.venues);
+    const baseUrl = getSiteUrl();
+
+    let rows = [];
+    if (date && tids.length) {
+      const matches = await Match.find({
+        tournamentId: { $in: tids },
+        matchFormat: MATCH_FORMAT.LEAGUE_FIVE,
+      })
+        .populate('teamA teamB')
+        .sort({ scheduledTime: 1, createdAt: 1 })
+        .exec();
+
+      for (const match of matches) {
+        const t = tById.get(String(match.tournamentId));
+        const mDate = matchScheduleDate({
+          scheduledDate: match.scheduledDate,
+          competitionDate: t?.competitionDate || '',
+        });
+        if (mDate !== date) continue;
+
+        const changed = ensureLineupTokens(match);
+        if (changed) await match.save();
+
+        const lineupA = getSideLineup(match, 'a');
+        const lineupB = getSideLineup(match, 'b');
+        rows.push({
+          matchId: String(match._id),
+          tournamentName: t?.name || '—',
+          round: match.round || '',
+          time: displayMatchTime(match),
+          court: match.court ? venueLabel(venues, match.court) : '',
+          teamAName: match.teamA?.name || 'A',
+          teamBName: match.teamB?.name || 'B',
+          lineupA,
+          lineupB,
+          labels: LEAGUE_GAME_LABELS,
+          urlA: `${baseUrl}/e/${event.slug}/lineup/${match._id}/a/${lineupA.token}`,
+          urlB: `${baseUrl}/e/${event.slug}/lineup/${match._id}/b/${lineupB.token}`,
+        });
+      }
+    }
+
+    res.render('pages/admin-lineup-day', {
+      title: `當日排陣 — ${event.name}`,
+      event,
+      date,
+      rows,
+      userEmail: req.session.email,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.post('/matches/:matchId/lineup-unlock', requireStaff, async (req, res, next) => {
+  try {
+    const { matchId } = req.params;
+    if (!mongoose.isValidObjectId(matchId)) return res.status(404).send('Not found');
+    const match = await Match.findById(matchId);
+    if (!match) return res.status(404).send('Not found');
+    const tournament = await Tournament.findById(match.tournamentId).select('eventId').lean();
+    if (!tournament) return res.status(404).send('Not found');
+
+    const side = String(req.body.side || '').toLowerCase() === 'b' ? 'b' : 'a';
+    unlockSideLineup(match, side);
+    await match.save();
+
+    const date = normalizeDateOnly(req.body.date) || '';
+    const qs = date ? `?date=${encodeURIComponent(date)}` : '';
+    res.redirect(`/admin/events/${tournament.eventId}/lineup-day${qs}`);
+  } catch (e) {
+    next(e);
+  }
+});
+
 adminRouter.get('/events/:eventId/matches-summary', requireStaff, async (req, res, next) => {
   try {
     const { eventId } = req.params;
@@ -475,12 +581,13 @@ adminRouter.get('/events/:eventId/matches-summary', requireStaff, async (req, re
     const tName = Object.fromEntries(tournaments.map((t) => [String(t._id), t.name]));
     const matches = await Match.find({ tournamentId: { $in: tids } })
       .populate('teamA teamB winnerId')
-      .sort({ scheduledTime: 1, createdAt: 1 })
+      .sort({ scheduledDate: 1, scheduledTime: 1, createdAt: 1 })
       .lean();
     matches.forEach((m) => {
       m.tournamentName = tName[String(m.tournamentId)] || '—';
     });
     const groupStandingsList = await getEventGroupStandings(event._id);
+    const leagueStandingsList = await getEventLeagueStandings(event._id);
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     const publicEventUrl = `${baseUrl}/e/${event.slug}`;
 
@@ -490,6 +597,7 @@ adminRouter.get('/events/:eventId/matches-summary', requireStaff, async (req, re
       tournaments,
       matches,
       groupStandingsList,
+      leagueStandingsList,
       publicEventUrl,
       userEmail: req.session.email,
     });
@@ -515,6 +623,14 @@ adminRouter.get('/events/:eventId', requireStaff, async (req, res, next) => {
     if (req.query.saved === '1') flash = '已儲存';
     if (req.query.deleted === '1') flash = '已刪除賽事';
 
+    let streamFlash = null;
+    let streamError = null;
+    if (req.query.stream === 'on') streamFlash = '已開始推流（請到 YouTube Studio 確認直播）';
+    if (req.query.stream === 'off') streamFlash = '已停止直播';
+    if (req.query.stream === 'missing_rtsp') streamError = '請先儲存該場地的鏡頭 RTSP';
+    if (req.query.stream === 'missing_youtube') streamError = '請先儲存 YouTube RTMP／串流金鑰';
+    if (req.query.stream === 'fail') streamError = '開播失敗，請檢查 RTSP、金鑰與本機 ffmpeg';
+
     let tournamentImportReport = null;
     if (req.session.tournamentImportReport) {
       tournamentImportReport = req.session.tournamentImportReport;
@@ -522,11 +638,15 @@ adminRouter.get('/events/:eventId', requireStaff, async (req, res, next) => {
     }
 
     const venues = normalizeEventVenues(event.venues);
+    const streamStatuses = getAllStreamStatuses(event._id, venues);
 
     res.render('pages/admin-event', {
       title: `設定 — ${event.name}`,
       event: { ...event, venues },
       venues,
+      streamStatuses,
+      streamFlash,
+      streamError,
       tournaments,
       userEmail: req.session.email,
       flash,
@@ -592,6 +712,37 @@ adminRouter.post('/events/:eventId/update', requireStaff, async (req, res, next)
   }
 });
 
+adminRouter.post('/events/:eventId/venues/:venueSlug/stream/start', requireStaff, async (req, res, next) => {
+  try {
+    const { eventId, venueSlug } = req.params;
+    if (!mongoose.isValidObjectId(eventId)) return res.status(404).send('Not found');
+    try {
+      await startVenueStream(eventId, venueSlug);
+      res.redirect(`/admin/events/${eventId}?stream=on`);
+    } catch (err) {
+      const code = err?.message || 'fail';
+      if (code === 'missing_rtsp' || code === 'missing_youtube' || code === 'venue_not_found') {
+        return res.redirect(`/admin/events/${eventId}?stream=${code === 'venue_not_found' ? 'fail' : code}`);
+      }
+      console.error('[stream start]', err);
+      res.redirect(`/admin/events/${eventId}?stream=fail`);
+    }
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.post('/events/:eventId/venues/:venueSlug/stream/stop', requireStaff, async (req, res, next) => {
+  try {
+    const { eventId, venueSlug } = req.params;
+    if (!mongoose.isValidObjectId(eventId)) return res.status(404).send('Not found');
+    await stopVenueStream(eventId, venueSlug);
+    res.redirect(`/admin/events/${eventId}?stream=off`);
+  } catch (e) {
+    next(e);
+  }
+});
+
 adminRouter.post('/events/:eventId/registration', requireStaff, async (req, res, next) => {
   try {
     const { eventId } = req.params;
@@ -621,7 +772,13 @@ adminRouter.post('/events/:eventId/tournaments', requireStaff, async (req, res, 
     const name = String(req.body.name || '').trim();
     const phaseRaw = String(req.body.phase || 'group');
     const phase =
-      phaseRaw === 'knockout' ? 'knockout' : phaseRaw === 'double_elim' ? 'double_elim' : 'group';
+      phaseRaw === 'knockout'
+        ? 'knockout'
+        : phaseRaw === 'double_elim'
+          ? 'double_elim'
+          : phaseRaw === 'league'
+            ? 'league'
+            : 'group';
     const advancePerGroup = Math.max(1, parseInt(req.body.advancePerGroup, 10) || 2);
     if (!name) {
       return res.redirect(`/admin/events/${eventId}`);
@@ -638,6 +795,7 @@ adminRouter.post('/events/:eventId/tournaments', requireStaff, async (req, res, 
       advancePerGroup,
       order,
       competitionDate: competitionDate || '',
+      showOnWebsite: parseShowOnWebsite(req.body.showOnWebsite, true),
     });
     res.redirect(`/admin/tournaments/${t._id}`);
   } catch (e) {
@@ -852,7 +1010,7 @@ adminRouter.get('/tournaments/:tournamentId', requireStaff, async (req, res, nex
     let teams = await Team.find({ tournamentId }).sort({ createdAt: 1 }).lean();
     const matches = await Match.find({ tournamentId })
       .populate('teamA teamB winnerId')
-      .sort({ scheduledTime: 1, createdAt: 1 })
+      .sort({ scheduledDate: 1, scheduledTime: 1, createdAt: 1 })
       .lean();
 
     const knockoutLadderColumns =
@@ -876,6 +1034,8 @@ adminRouter.get('/tournaments/:tournamentId', requireStaff, async (req, res, nex
       tournament.phase === 'group'
         ? buildGroupRoundRobinMatrices({ groups, teams, matches })
         : [];
+    const leagueStandings =
+      tournament.phase === 'league' ? await computeLeagueStandings(tournament._id) : [];
 
     const venues = normalizeEventVenues(event.venues);
 
@@ -896,6 +1056,7 @@ adminRouter.get('/tournaments/:tournamentId', requireStaff, async (req, res, nex
       knockoutLadderColumns,
       doubleElimTracks,
       groupRoundRobinMatrices,
+      leagueStandings,
       query: req.query,
     });
   } catch (e) {
@@ -1080,6 +1241,44 @@ adminRouter.post('/tournaments/:tournamentId/generate-group-schedule', requireSt
   }
 });
 
+/** 聯賽：雙循環（可清空重產，或只補未排對賽） */
+adminRouter.post('/tournaments/:tournamentId/generate-league-schedule', requireStaff, async (req, res, next) => {
+  try {
+    const { tournamentId } = req.params;
+    if (!mongoose.isValidObjectId(tournamentId)) return res.status(404).send('Not found');
+
+    const force = req.body.force === '1' || req.body.force === 'true';
+    const fillMissing = req.body.fillMissing === '1' || req.body.fillMissing === 'true';
+    if (force) {
+      const t = await Tournament.findById(tournamentId).lean();
+      if (!t || t.phase !== 'league') {
+        return res.redirect(`/admin/tournaments/${tournamentId}`);
+      }
+      const matches = await Match.find({ tournamentId }).select('_id').lean();
+      const matchIds = matches.map((m) => m._id);
+      if (matchIds.length) {
+        await MatchAssignment.deleteMany({ matchId: { $in: matchIds } });
+        await Match.deleteMany({ _id: { $in: matchIds } });
+      }
+    }
+
+    const r = await generateLeagueDoubleRoundRobin({
+      tournamentId,
+      fillMissing: fillMissing && !force,
+    });
+    if (!r.ok) {
+      const code = r.error || 'error';
+      return res.redirect(`/admin/tournaments/${tournamentId}?gen=${encodeURIComponent(code)}`);
+    }
+    const qs = [`gen=ok`, `teams=${r.teams}`, `rounds=${r.rounds}`];
+    if (r.createdMatches != null) qs.push(`matches=${r.createdMatches}`);
+    if (r.filled) qs.push(`filled=1`);
+    res.redirect(`/admin/tournaments/${tournamentId}?${qs.join('&')}`);
+  } catch (e) {
+    next(e);
+  }
+});
+
 /** 清空本賽事所有場次（保留組別與隊伍，可重新匯入賽程） */
 adminRouter.post('/tournaments/:tournamentId/clear-matches', requireStaff, async (req, res, next) => {
   try {
@@ -1139,6 +1338,7 @@ adminRouter.post('/tournaments/:tournamentId/update', requireStaff, async (req, 
     if (!name) return res.redirect(`/admin/tournaments/${tournamentId}`);
     doc.name = name;
     doc.competitionDate = normalizeDateOnly(req.body.competitionDate) || '';
+    doc.showOnWebsite = parseShowOnWebsite(req.body.showOnWebsite, false);
     if (doc.phase === 'group') {
       const advancePerGroup = Math.max(1, parseInt(req.body.advancePerGroup, 10) || 1);
       doc.advancePerGroup = advancePerGroup;
@@ -1148,6 +1348,20 @@ adminRouter.post('/tournaments/:tournamentId/update', requireStaff, async (req, 
       if (!Number.isNaN(lossPts)) doc.groupLossPoints = lossPts;
     }
     await doc.save();
+    res.redirect(`/admin/tournaments/${tournamentId}?saved=1`);
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.post('/tournaments/:tournamentId/matches-website', requireStaff, async (req, res, next) => {
+  try {
+    const { tournamentId } = req.params;
+    if (!mongoose.isValidObjectId(tournamentId)) return res.status(404).send('Not found');
+    const tournament = await Tournament.findById(tournamentId).lean();
+    if (!tournament) return res.status(404).send('Not found');
+    const show = parseShowOnWebsite(req.body.showOnWebsite, true);
+    await Match.updateMany({ tournamentId }, { $set: { showOnWebsite: show } });
     res.redirect(`/admin/tournaments/${tournamentId}?saved=1`);
   } catch (e) {
     next(e);
@@ -1214,7 +1428,12 @@ adminRouter.post('/tournaments/:tournamentId/teams', requireStaff, async (req, r
       if (g) groupId = g._id;
     }
 
-    const doc = await Team.create({ tournamentId, groupId, name });
+    const doc = await Team.create({
+      tournamentId,
+      groupId,
+      name,
+      players: parseRosterNames(req.body.players).map((n) => ({ name: n })),
+    });
     await assignTeamCodeIfEmpty(doc);
     res.redirect(`/admin/tournaments/${tournamentId}`);
   } catch (e) {
@@ -1255,6 +1474,9 @@ adminRouter.post('/teams/:teamId/update', requireStaff, async (req, res, next) =
     team.name = name;
     team.code = code;
     team.groupId = groupId;
+    if (req.body.players !== undefined) {
+      team.players = parseRosterNames(req.body.players).map((n) => ({ name: n }));
+    }
     await team.save();
     res.redirect(`/admin/tournaments/${team.tournamentId}?team_saved=1`);
   } catch (e) {
@@ -1271,8 +1493,15 @@ adminRouter.post('/tournaments/:tournamentId/matches', requireStaff, async (req,
 
     const teamA = String(req.body.teamA || '');
     const teamB = String(req.body.teamB || '');
-    const mf = String(req.body.matchFormat || 'bestOf3');
-    if (![MATCH_FORMAT.BEST_OF_3, MATCH_FORMAT.BEST_OF_5, MATCH_FORMAT.SINGLE_GAME].includes(mf)) {
+    let mf = String(req.body.matchFormat || 'bestOf3');
+    if (t.phase === 'league') mf = MATCH_FORMAT.LEAGUE_FIVE;
+    const allowedFormats = [
+      MATCH_FORMAT.BEST_OF_3,
+      MATCH_FORMAT.BEST_OF_5,
+      MATCH_FORMAT.SINGLE_GAME,
+      MATCH_FORMAT.LEAGUE_FIVE,
+    ];
+    if (!allowedFormats.includes(mf)) {
       return res.redirect(`/admin/tournaments/${tournamentId}`);
     }
     if (!mongoose.isValidObjectId(teamA) || !mongoose.isValidObjectId(teamB) || teamA === teamB) {
@@ -1296,6 +1525,7 @@ adminRouter.post('/tournaments/:tournamentId/matches', requireStaff, async (req,
     const event = await Event.findById(t.eventId).select('venues').lean();
     const court = resolveCourtSlug(event?.venues, req.body.court);
     const scheduledTime = normalizeTimeToHHmm(req.body.scheduledTime);
+    const scheduledDate = normalizeDateOnly(req.body.scheduledDate) || '';
 
     await Match.create({
       tournamentId,
@@ -1306,10 +1536,12 @@ adminRouter.post('/tournaments/:tournamentId/matches', requireStaff, async (req,
       teamB: tb._id,
       court,
       scheduledTime,
+      scheduledDate,
       status: 'scheduled',
       completedGames: [],
       currentGameIndex: 0,
       currentPoints: { a: 0, b: 0 },
+      showOnWebsite: parseShowOnWebsite(req.body.showOnWebsite, true),
     });
 
     res.redirect(`/admin/tournaments/${tournamentId}`);
@@ -1331,6 +1563,11 @@ adminRouter.get('/matches/:matchId/edit', requireStaff, async (req, res, next) =
 
     const teams = await Team.find({ tournamentId: tournament._id }).sort({ createdAt: 1 }).lean();
     const venues = normalizeEventVenues(event?.venues);
+    const matchErrMap = {
+      league_tied: '總分相同，聯賽冇和局，請核對五回合比分。',
+      league_need_five: '聯賽要打完五回合才可以完賽。',
+      league_game_not_to_21: '進行中回合要先到 21 分。',
+    };
 
     res.render('pages/admin-match', {
       title: '編輯場次',
@@ -1342,7 +1579,7 @@ adminRouter.get('/matches/:matchId/edit', requireStaff, async (req, res, next) =
       userEmail: req.session.email,
       scheduledTimeValue: timeInputValueFromMatch(match),
       flash: req.query.saved === '1' ? '已儲存' : null,
-      error: null,
+      error: req.query.error ? matchErrMap[req.query.error] || String(req.query.error) : null,
     });
   } catch (e) {
     next(e);
@@ -1361,8 +1598,15 @@ adminRouter.post('/matches/:matchId/update', requireStaff, async (req, res, next
 
     const teamA = String(req.body.teamA || '');
     const teamB = String(req.body.teamB || '');
-    const mf = String(req.body.matchFormat || 'bestOf3');
-    if (![MATCH_FORMAT.BEST_OF_3, MATCH_FORMAT.BEST_OF_5, MATCH_FORMAT.SINGLE_GAME].includes(mf)) {
+    let mf = String(req.body.matchFormat || 'bestOf3');
+    if (tournament.phase === 'league') mf = MATCH_FORMAT.LEAGUE_FIVE;
+    const allowedFormats = [
+      MATCH_FORMAT.BEST_OF_3,
+      MATCH_FORMAT.BEST_OF_5,
+      MATCH_FORMAT.SINGLE_GAME,
+      MATCH_FORMAT.LEAGUE_FIVE,
+    ];
+    if (!allowedFormats.includes(mf)) {
       return res.redirect(`/admin/matches/${matchId}/edit`);
     }
     if (!mongoose.isValidObjectId(teamA) || !mongoose.isValidObjectId(teamB) || teamA === teamB) {
@@ -1379,16 +1623,28 @@ adminRouter.post('/matches/:matchId/update', requireStaff, async (req, res, next
     match.teamB = tb._id;
     match.matchFormat = mf;
     match.scheduledTime = normalizeTimeToHHmm(req.body.scheduledTime);
+    match.scheduledDate = normalizeDateOnly(req.body.scheduledDate) || '';
     match.scheduledAt = null;
     const eventDoc = await Event.findById(tournament.eventId).select('venues').lean();
     match.court = resolveCourtSlug(eventDoc?.venues, req.body.court);
     match.round = String(req.body.round || '').trim();
     match.status = String(req.body.status || 'scheduled');
+    match.showOnWebsite = parseShowOnWebsite(req.body.showOnWebsite, false);
+    if (req.body.remark !== undefined) {
+      match.remark = String(req.body.remark || '').trim().slice(0, 500);
+    }
 
     applyManualScoresFromBody(match, req.body);
 
     if (match.status === 'finished') {
-      finalizeFinishedMatch(match);
+      if (isLeagueFormat(match.matchFormat)) {
+        const fin = finishMatchManual(match);
+        if (!fin.ok) {
+          return res.redirect(`/admin/matches/${matchId}/edit?error=${encodeURIComponent(fin.error)}`);
+        }
+      } else {
+        finalizeFinishedMatch(match);
+      }
     } else if (
       (match.completedGames?.length || 0) > 0 ||
       Number(match.currentPoints?.a) > 0 ||

@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <% if (typeof siteNoIndex !== 'undefined' && siteNoIndex) { %>
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <% } %>
+  <title><%= title %></title>
+  <style>
+    :root {
+      --bg: #0c1220;
+      --panel: #151c2c;
+      --panel-2: #1a2336;
+      --line: #2a3548;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --soft: #64748b;
+      --green: #059669;
+      --amber: #fbbf24;
+      --rose: #fb7185;
+      --sky: #38bdf8;
+      --footer-h: calc(76px + env(safe-area-inset-bottom));
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Noto Sans TC", "PingFang TC", "Hiragino Sans CNS", sans-serif;
+      background: radial-gradient(1200px 600px at 80% -10%, #1a2740 0%, var(--bg) 55%);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      touch-action: manipulation;
+    }
+    .back {
+      display: inline-block;
+      color: var(--sky);
+      text-decoration: none;
+      font-size: 14px;
+    }
+    .eyebrow { margin: 0; font-size: 12px; color: var(--soft); }
+    h1 { margin: 4px 0 0; font-size: clamp(22px, 3.5vw, 30px); font-weight: 700; line-height: 1.2; }
+    .meta { margin: 6px 0 0; font-size: 13px; color: var(--muted); line-height: 1.45; }
+    .meta strong { color: var(--text); font-weight: 600; }
+    .note { margin: 6px 0 0; font-size: 12px; color: var(--amber); line-height: 1.4; }
+
+    /* —— 已確認：普通捲動 —— */
+    .wrap-done {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 24px 18px 40px;
+    }
+    .done-banner {
+      margin-top: 20px;
+      background: rgba(5,150,105,0.16);
+      border: 1px solid rgba(5,150,105,0.4);
+      border-radius: 16px;
+      padding: 16px 18px;
+    }
+    .done-banner strong { color: #6ee7b7; }
+    .done-banner p { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+    .done-list { margin: 16px 0 0; display: grid; gap: 10px; }
+    .done-item {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+    }
+    .done-item .lab { margin: 0; font-size: 13px; color: #6ee7b7; font-weight: 700; }
+    .done-item .names { margin: 8px 0 0; font-size: 22px; font-weight: 700; }
+
+    /* —— 編輯：全屏固定名單 + 下方捲動回合 —— */
+    body.edit-mode {
+      height: 100dvh;
+      max-height: 100dvh;
+      overflow: hidden;
+    }
+    .app {
+      height: 100dvh;
+      max-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      max-width: 920px;
+      margin: 0 auto;
+    }
+    .app-top {
+      flex: 0 0 auto;
+      padding: 12px 16px 10px;
+      background: linear-gradient(180deg, rgba(12,18,32,0.98) 70%, rgba(12,18,32,0.85));
+      border-bottom: 1px solid transparent;
+    }
+    .roster-sticky {
+      flex: 0 0 auto;
+      z-index: 20;
+      padding: 0 16px 10px;
+      background: rgba(12, 18, 32, 0.97);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.28);
+    }
+    .roster-sticky .panel {
+      margin: 0;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px 14px;
+    }
+    .roster-sticky h2 { margin: 0; font-size: 14px; }
+    .roster-sticky .sub { margin: 4px 0 0; font-size: 11px; color: var(--soft); }
+    #roster-pool {
+      margin-top: 10px;
+      min-height: 52px;
+      max-height: 28vh;
+      overflow-y: auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px dashed var(--line);
+      background: rgba(0,0,0,0.18);
+      -webkit-overflow-scrolling: touch;
+    }
+    .slots-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 12px 16px var(--footer-h);
+    }
+    .slots { display: grid; gap: 10px; }
+    .slot-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px 14px;
+    }
+    .slot-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .slot-head h3 { margin: 0; font-size: 16px; }
+    .slot-count { font-size: 12px; color: var(--soft); }
+    .slot-drop {
+      margin-top: 10px;
+      min-height: 56px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(0,0,0,0.18);
+      transition: background .15s, border-color .15s, box-shadow .15s;
+    }
+    .slot-drop.drag-over {
+      border-color: #34d399;
+      background: rgba(16, 185, 129, 0.16);
+      box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.45);
+    }
+    .slot-drop .ph { font-size: 13px; color: #475569; pointer-events: none; }
+    .player-chip {
+      appearance: none;
+      border: 1px solid #3f4b63;
+      background: #243047;
+      color: white;
+      border-radius: 999px;
+      padding: 9px 14px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .player-chip.dragging { opacity: 0.4; cursor: grabbing; }
+    .drag-ghost {
+      position: fixed; z-index: 80; pointer-events: none;
+      transform: translate(-50%, -50%);
+      padding: 10px 16px; border-radius: 999px;
+      background: var(--green); color: #fff; font-weight: 700; font-size: 16px;
+      box-shadow: 0 12px 28px rgba(0,0,0,.4);
+    }
+    #msg {
+      margin: 8px 0 0;
+      min-height: 1.1rem;
+      text-align: center;
+      font-size: 13px;
+      color: var(--amber);
+    }
+    #msg.err { color: var(--rose); }
+    #msg.ok { color: #6ee7b7; }
+    .footer {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      z-index: 30;
+      border-top: 1px solid var(--line);
+      background: rgba(12, 18, 32, 0.96);
+      backdrop-filter: blur(10px);
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    }
+    .footer-inner {
+      max-width: 920px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1.35fr;
+      gap: 10px;
+    }
+    .footer button {
+      border: 0;
+      border-radius: 14px;
+      min-height: 52px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    #btn-save { background: transparent; border: 1px solid var(--line); color: var(--text); }
+    #btn-confirm { background: var(--green); color: white; }
+    .warn { color: var(--rose); font-size: 14px; margin: 0; }
+    .sub { font-size: 12px; color: var(--soft); }
+  </style>
+</head>
+<body class="<%= confirmed ? '' : 'edit-mode' %>">
+  <% if (confirmed) { %>
+  <div class="wrap-done">
+    <% if (typeof hubUrl !== 'undefined' && hubUrl) { %>
+      <a class="back" href="<%= hubUrl %>">← 返回揀場次／隊伍</a>
+    <% } %>
+    <p class="eyebrow" style="margin-top:12px"><%= event.name %> · <%= tournament.name %></p>
+    <h1><%= team && team.name ? team.name : '隊伍' %> 排陣</h1>
+    <p class="meta">
+      對戰 <strong><%= opponent && opponent.name ? opponent.name : '對手' %></strong>
+      <% if (scheduleDate) { %> · <%= scheduleDate %><% } %>
+      <% if (scheduleTime && scheduleTime !== '—') { %> · <%= scheduleTime %><% } %>
+      <% if (courtLabel) { %> · <%= courtLabel %><% } %>
+    </p>
+    <div class="done-banner">
+      <strong>已確認排陣</strong>
+      <p>如要改動，請聯絡賽務解鎖。</p>
+    </div>
+    <div class="done-list">
+      <% lineup.games.forEach(function (g, i) { %>
+        <div class="done-item">
+          <p class="lab"><%= gameLabels[i] %></p>
+          <p class="names"><%= (g.players && g.players.length) ? g.players.join('　·　') : '—' %></p>
+        </div>
+      <% }); %>
+    </div>
+  </div>
+  <% } else { %>
+  <div class="app">
+    <header class="app-top">
+      <% if (typeof hubUrl !== 'undefined' && hubUrl) { %>
+        <a class="back" href="<%= hubUrl %>">← 返回揀場次／隊伍</a>
+      <% } %>
+      <p class="eyebrow" style="margin-top:8px"><%= event.name %> · <%= tournament.name %></p>
+      <h1><%= team && team.name ? team.name : '隊伍' %> 排陣</h1>
+      <p class="meta">
+        對戰 <strong><%= opponent && opponent.name ? opponent.name : '對手' %></strong>
+        <% if (scheduleDate) { %> · <%= scheduleDate %><% } %>
+        <% if (scheduleTime && scheduleTime !== '—') { %> · <%= scheduleTime %><% } %>
+        <% if (courtLabel) { %> · <%= courtLabel %><% } %>
+      </p>
+      <p class="note">每回合 2 人；每位最多 2 個回合。名單固定喺上面，下面捲動回合。</p>
+    </header>
+
+    <section class="roster-sticky">
+      <div class="panel">
+        <h2>球員名單</h2>
+        <p class="sub">拖去下面回合；點回合內芯片可移返。</p>
+        <div id="roster-pool">
+          <% if (!roster.length) { %>
+            <p class="warn">此隊尚未設定固定隊員，請先請賽務喺後台填寫名單。</p>
+          <% } %>
+        </div>
+      </div>
+    </section>
+
+    <div class="slots-scroll">
+      <section class="slots" id="slots">
+        <% gameLabels.forEach(function (lab, i) { %>
+          <div class="slot-card" data-slot="<%= i %>">
+            <div class="slot-head">
+              <h3><%= lab %></h3>
+              <span class="slot-count">0 / 2</span>
+            </div>
+            <div class="slot-drop" data-slot="<%= i %>"></div>
+          </div>
+        <% }); %>
+      </section>
+      <p id="msg"></p>
+    </div>
+
+    <div class="footer">
+      <div class="footer-inner">
+        <button type="button" id="btn-save">暫存</button>
+        <button type="button" id="btn-confirm">確認排陣</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var matchId = <%- JSON.stringify(String(match._id)) %>;
+      var side = <%- JSON.stringify(side) %>;
+      var token = <%- JSON.stringify(token) %>;
+      var roster = <%- JSON.stringify(roster || []) %>;
+      var initial = <%- JSON.stringify((lineup.games || []).map(function (g) { return g.players || []; })) %>;
+      var labels = <%- JSON.stringify(gameLabels) %>;
+      var apiBase = '/api/public/lineup/' + encodeURIComponent(matchId) + '/' + encodeURIComponent(side) + '/' + encodeURIComponent(token);
+
+      var state = [];
+      for (var i = 0; i < 5; i++) state[i] = (initial[i] || []).slice(0, 2);
+
+      var pool = document.getElementById('roster-pool');
+      var msg = document.getElementById('msg');
+      var ghost = null;
+      var dragActive = false;
+      var DRAG_THRESHOLD = 8;
+      var MAX_APPEAR = 2;
+
+      function setMsg(t, kind) {
+        msg.textContent = t || '';
+        msg.className = kind === 'err' ? 'err' : kind === 'ok' ? 'ok' : '';
+      }
+
+      function clearGhost() {
+        if (ghost) {
+          ghost.remove();
+          ghost = null;
+        }
+        document.querySelectorAll('.drag-ghost').forEach(function (n) { n.remove(); });
+        document.querySelectorAll('.player-chip.dragging').forEach(function (n) {
+          n.classList.remove('dragging');
+        });
+        clearHighlight();
+        dragActive = false;
+      }
+
+      function appearanceCount() {
+        var m = {};
+        state.forEach(function (arr) {
+          (arr || []).forEach(function (n) {
+            m[n] = (m[n] || 0) + 1;
+          });
+        });
+        return m;
+      }
+
+      function render() {
+        clearGhost();
+        var counts = appearanceCount();
+        pool.innerHTML = '';
+        if (!roster.length) {
+          pool.innerHTML = '<p class="warn">此隊尚未設定固定隊員，請先請賽務喺後台填寫名單。</p>';
+        } else {
+          roster.forEach(function (name) {
+            if ((counts[name] || 0) >= MAX_APPEAR) return;
+            pool.appendChild(makeChip(name, null));
+          });
+          if (![...roster].some(function (n) { return (counts[n] || 0) < MAX_APPEAR; })) {
+            var p = document.createElement('p');
+            p.className = 'sub';
+            p.style.margin = '0';
+            p.textContent = '全員已用滿 ' + MAX_APPEAR + ' 次（可點回合內芯片移返）';
+            pool.appendChild(p);
+          }
+        }
+        document.querySelectorAll('.slot-drop').forEach(function (box) {
+          var idx = Number(box.getAttribute('data-slot'));
+          box.innerHTML = '';
+          var arr = state[idx] || [];
+          arr.forEach(function (name) { box.appendChild(makeChip(name, idx)); });
+          if (arr.length < 2) {
+            var ph = document.createElement('span');
+            ph.className = 'ph';
+            ph.textContent = '拖球員到此（尚欠 ' + (2 - arr.length) + '）';
+            box.appendChild(ph);
+          }
+          var countEl = box.parentElement.querySelector('.slot-count');
+          if (countEl) countEl.textContent = arr.length + ' / 2';
+        });
+      }
+
+      function makeChip(name, slotIdx) {
+        var el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'player-chip';
+        el.textContent = name;
+        el.dataset.name = name;
+        if (slotIdx != null) el.dataset.slot = String(slotIdx);
+
+        el.addEventListener('click', function () {
+          if (slotIdx == null || dragActive) return;
+          removeFromSlot(slotIdx, name);
+          render();
+        });
+
+        el.addEventListener('pointerdown', function (e) {
+          if (e.button != null && e.button !== 0) return;
+          if (dragActive) clearGhost();
+          e.preventDefault();
+
+          var pointerId = e.pointerId;
+          var startX = e.clientX;
+          var startY = e.clientY;
+          var moved = false;
+          var fromSlot = slotIdx;
+
+          function ensureGhost(x, y) {
+            if (ghost) return;
+            ghost = document.createElement('div');
+            ghost.className = 'drag-ghost';
+            ghost.textContent = name;
+            document.body.appendChild(ghost);
+            el.classList.add('dragging');
+            moveGhost(x, y);
+          }
+
+          function onMove(ev) {
+            if (ev.pointerId !== pointerId) return;
+            var dx = ev.clientX - startX;
+            var dy = ev.clientY - startY;
+            if (!moved && (dx * dx + dy * dy) < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
+            moved = true;
+            dragActive = true;
+            ensureGhost(ev.clientX, ev.clientY);
+            moveGhost(ev.clientX, ev.clientY);
+            highlightDrop(ev.clientX, ev.clientY);
+          }
+
+          function onUp(ev) {
+            if (ev.pointerId !== pointerId) return;
+            teardown();
+            var x = ev.clientX;
+            var y = ev.clientY;
+            clearGhost();
+            if (!moved) return;
+            var target = document.elementFromPoint(x, y);
+            var drop = target && target.closest ? target.closest('.slot-drop') : null;
+            if (drop) {
+              placePlayer(name, fromSlot, Number(drop.getAttribute('data-slot')));
+            }
+            render();
+          }
+
+          function teardown() {
+            try { el.releasePointerCapture(pointerId); } catch (err) {}
+            el.removeEventListener('pointermove', onMove);
+            el.removeEventListener('pointerup', onUp);
+            el.removeEventListener('pointercancel', onUp);
+            window.removeEventListener('pointerup', onUp, true);
+            window.removeEventListener('pointercancel', onUp, true);
+          }
+
+          try { el.setPointerCapture(pointerId); } catch (err) {}
+          el.addEventListener('pointermove', onMove);
+          el.addEventListener('pointerup', onUp);
+          el.addEventListener('pointercancel', onUp);
+          window.addEventListener('pointerup', onUp, true);
+          window.addEventListener('pointercancel', onUp, true);
+        });
+        return el;
+      }
+
+      function moveGhost(x, y) {
+        if (!ghost) return;
+        ghost.style.left = x + 'px';
+        ghost.style.top = y + 'px';
+      }
+      function highlightDrop(x, y) {
+        clearHighlight();
+        var prev = ghost;
+        if (prev) prev.style.visibility = 'hidden';
+        var el = document.elementFromPoint(x, y);
+        if (prev) prev.style.visibility = '';
+        var drop = el && el.closest ? el.closest('.slot-drop') : null;
+        if (drop) drop.classList.add('drag-over');
+      }
+      function clearHighlight() {
+        document.querySelectorAll('.slot-drop.drag-over').forEach(function (d) {
+          d.classList.remove('drag-over');
+        });
+      }
+      function removeFromSlot(slotIdx, name) {
+        state[slotIdx] = (state[slotIdx] || []).filter(function (n) { return n !== name; });
+      }
+      function placePlayer(name, fromSlot, toSlot) {
+        if (fromSlot != null && fromSlot === toSlot) return;
+        var cur = state[toSlot] || [];
+        if (cur.indexOf(name) !== -1) {
+          if (fromSlot != null) removeFromSlot(fromSlot, name);
+          return;
+        }
+        if (cur.length >= 2) {
+          setMsg(labels[toSlot] + ' 已滿 2 人，請先移走一位', 'err');
+          return;
+        }
+        var usedElsewhere = 0;
+        state.forEach(function (arr, i) {
+          if (fromSlot != null && i === fromSlot) return;
+          if ((arr || []).indexOf(name) !== -1) usedElsewhere += 1;
+        });
+        if (usedElsewhere >= MAX_APPEAR) {
+          setMsg(name + ' 已排入 ' + MAX_APPEAR + ' 個回合（每位最多 ' + MAX_APPEAR + ' 次）', 'err');
+          return;
+        }
+        if (fromSlot != null) removeFromSlot(fromSlot, name);
+        cur.push(name);
+        state[toSlot] = cur;
+        setMsg('');
+      }
+
+      function save(confirm) {
+        setMsg(confirm ? '確認中…' : '暫存中…');
+        return fetch(apiBase, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
+            games: state.map(function (players) { return { players: players }; }),
+            confirm: !!confirm,
+          }),
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (ref) {
+            if (!ref.ok) {
+              var err = ref.j.error || '錯誤';
+              if (err === 'slot_incomplete') setMsg('請填齊五個回合，每位 2 人（缺：' + (ref.j.label || '') + '）', 'err');
+              else if (err === 'player_overused') setMsg((ref.j.player || '球員') + ' 已超過最多 2 個回合', 'err');
+              else if (err === 'already_confirmed') setMsg('已確認，請聯絡賽務解鎖', 'err');
+              else if (err === 'need_five_slots') setMsg('請填齊五個回合', 'err');
+              else setMsg(err, 'err');
+              return;
+            }
+            if (confirm) { location.reload(); return; }
+            setMsg('已暫存', 'ok');
+          })
+          .catch(function () { setMsg('網路錯誤', 'err'); });
+      }
+
+      document.getElementById('btn-save').addEventListener('click', function () { save(false); });
+      document.getElementById('btn-confirm').addEventListener('click', function () {
+        if (!confirm('確認後不能自行修改（需賽務解鎖）。確定？')) return;
+        save(true);
+      });
+
+      render();
+    })();
+  </script>
+  <% } %>
+</body>
+</html>

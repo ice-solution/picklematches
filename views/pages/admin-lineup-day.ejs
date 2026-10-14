@@ -1,0 +1,99 @@
+<%- include('../partials/head', { title }) %>
+<%- include('../partials/admin-frame-start') %>
+<main class="mx-auto w-full max-w-5xl pb-12 pt-1">
+  <p class="text-sm text-slate-500">
+    <a href="/admin/events/<%= event._id %>" class="text-emerald-400 underline">← <%= event.name %></a>
+  </p>
+  <h1 class="mt-4 text-2xl font-bold text-white">當日排陣連結</h1>
+  <p class="mt-1 text-sm text-slate-400">揀好當日聯賽場次後，分別開 A／B 隊連結畀 iPad。每隊一頁，對手睇唔到對方排陣。</p>
+
+  <form method="get" class="mt-6 flex flex-wrap items-end gap-3 rounded border border-slate-800 bg-slate-900/40 p-4">
+    <div>
+      <label class="text-xs text-slate-500">比賽日期</label>
+      <input type="date" name="date" value="<%= date || '' %>" required class="mt-1 rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+    </div>
+    <button type="submit" class="rounded bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">顯示場次</button>
+  </form>
+
+  <% if (!date) { %>
+    <p class="mt-8 text-sm text-slate-500">請先選擇日期。</p>
+  <% } else if (!rows.length) { %>
+    <p class="mt-8 rounded border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm text-slate-400">
+      <%= date %> 沒有聯賽場次。請先喺聯賽賽事為場次填好「此場日期」。
+    </p>
+  <% } else { %>
+    <div class="mt-8 space-y-4">
+      <% rows.forEach(function (row) { %>
+        <article class="rounded border border-slate-800 bg-slate-900/40 p-4">
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <p class="text-xs text-slate-500"><%= row.tournamentName %> · <%= row.round || '—' %> · <%= row.time || '—' %><% if (row.court) { %> · <%= row.court %><% } %></p>
+              <h2 class="mt-1 text-lg font-semibold text-white">
+                <%= row.teamAName %> <span class="text-slate-500">vs</span> <%= row.teamBName %>
+              </h2>
+            </div>
+          </div>
+          <div class="mt-4 grid gap-3 sm:grid-cols-2">
+            <div class="rounded border border-emerald-900/40 bg-emerald-950/20 p-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-sm font-semibold text-emerald-300">A · <%= row.teamAName %></p>
+                <% if (row.lineupA.confirmed) { %>
+                  <span class="rounded bg-emerald-800/60 px-2 py-0.5 text-xs text-emerald-100">已確認</span>
+                <% } else { %>
+                  <span class="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400">未確認</span>
+                <% } %>
+              </div>
+              <p class="mt-2 break-all font-mono text-[11px] text-sky-300/90"><%= row.urlA %></p>
+              <div class="mt-2 flex flex-wrap gap-3 text-sm">
+                <a href="<%= row.urlA %>" target="_blank" rel="noopener" class="text-emerald-400 underline">開 A 隊排陣 ↗</a>
+                <% if (row.lineupA.confirmed) { %>
+                  <form method="post" action="/admin/matches/<%= row.matchId %>/lineup-unlock" class="inline">
+                    <input type="hidden" name="side" value="a" />
+                    <input type="hidden" name="date" value="<%= date %>" />
+                    <button type="submit" class="text-amber-400 underline">解鎖重排</button>
+                  </form>
+                <% } %>
+              </div>
+              <% if (row.lineupA.confirmed) { %>
+                <ul class="mt-2 space-y-0.5 text-xs text-slate-400">
+                  <% row.lineupA.games.forEach(function (g, i) { %>
+                    <li><%= row.labels[i] %>：<%= (g.players || []).join('、') || '—' %></li>
+                  <% }); %>
+                </ul>
+              <% } %>
+            </div>
+            <div class="rounded border border-sky-900/40 bg-sky-950/20 p-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-sm font-semibold text-sky-300">B · <%= row.teamBName %></p>
+                <% if (row.lineupB.confirmed) { %>
+                  <span class="rounded bg-sky-800/60 px-2 py-0.5 text-xs text-sky-100">已確認</span>
+                <% } else { %>
+                  <span class="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400">未確認</span>
+                <% } %>
+              </div>
+              <p class="mt-2 break-all font-mono text-[11px] text-sky-300/90"><%= row.urlB %></p>
+              <div class="mt-2 flex flex-wrap gap-3 text-sm">
+                <a href="<%= row.urlB %>" target="_blank" rel="noopener" class="text-sky-400 underline">開 B 隊排陣 ↗</a>
+                <% if (row.lineupB.confirmed) { %>
+                  <form method="post" action="/admin/matches/<%= row.matchId %>/lineup-unlock" class="inline">
+                    <input type="hidden" name="side" value="b" />
+                    <input type="hidden" name="date" value="<%= date %>" />
+                    <button type="submit" class="text-amber-400 underline">解鎖重排</button>
+                  </form>
+                <% } %>
+              </div>
+              <% if (row.lineupB.confirmed) { %>
+                <ul class="mt-2 space-y-0.5 text-xs text-slate-400">
+                  <% row.lineupB.games.forEach(function (g, i) { %>
+                    <li><%= row.labels[i] %>：<%= (g.players || []).join('、') || '—' %></li>
+                  <% }); %>
+                </ul>
+              <% } %>
+            </div>
+          </div>
+        </article>
+      <% }); %>
+    </div>
+  <% } %>
+</main>
+<%- include('../partials/admin-frame-end') %>

@@ -1,12 +1,15 @@
 import { demoteOtherLiveOnCourt } from '../lib/courtLive.js';
-import { addPointToCurrentGame } from '../lib/scoring.js';
+import { addPointToCurrentGame, finishMatchManual } from '../lib/scoring.js';
 import { finalizeFinishedMatch, applyManualScoresFromBody } from '../lib/matchResult.js';
 import { broadcastMatchUpdate } from '../lib/matchSocket.js';
 import { requireStaffApi } from '../middleware/auth.js';
 import { normalizeTimeToHHmm } from '../lib/matchTime.js';
+import { normalizeDateOnly } from '../lib/datetime.js';
 import { countGamesWon } from '../lib/viewHelpers.js';
 import { findVenue } from '../lib/venues.js';
 import { findAccessibleMatch, findAccessibleTournament, forbidAccess } from '../lib/eventAccess.js';
+import { leagueGameLabel, isLeagueFormat, LEAGUE_GAME_COUNT, normalizeLineupNames } from '../lib/leagueRules.js';
+import { parseShowOnWebsite } from '../lib/publicListing.js';
 import { Match } from '../models/Match.js';
 import { Team } from '../models/Team.js';
 import { Tournament } from '../models/Tournament.js';
@@ -129,6 +132,9 @@ adminApiRouter.post('/matches/:matchId/quick-update', async (req, res, next) => 
       match.scheduledTime = normalizeTimeToHHmm(body.scheduledTime);
       match.scheduledAt = null;
     }
+    if (body.scheduledDate !== undefined) {
+      match.scheduledDate = normalizeDateOnly(body.scheduledDate) || '';
+    }
     if (body.court !== undefined) {
       const raw = String(body.court || '').trim();
       match.court = raw;
@@ -139,6 +145,9 @@ adminApiRouter.post('/matches/:matchId/quick-update', async (req, res, next) => 
         if (v) match.court = v.slug;
       }
     }
+    if (body.showOnWebsite !== undefined) {
+      match.showOnWebsite = parseShowOnWebsite(body.showOnWebsite, true);
+    }
 
     const hasScoreFields =
       body.completedGameA !== undefined ||
@@ -147,6 +156,7 @@ adminApiRouter.post('/matches/:matchId/quick-update', async (req, res, next) => 
 
     if (hasScoreFields) {
       if (Array.isArray(body.completedGames)) {
+        const prev = Array.isArray(match.completedGames) ? match.completedGames : [];
         const games = [];
         for (const g of body.completedGames) {
           const aRaw = g?.a;
@@ -156,9 +166,15 @@ adminApiRouter.post('/matches/:matchId/quick-update', async (req, res, next) => 
           if (aEmpty && bEmpty) continue;
           const a = parseInt(String(aRaw ?? '0'), 10);
           const b = parseInt(String(bRaw ?? '0'), 10);
+          const idx = games.length;
+          const prevG = prev[idx] || {};
           games.push({
             a: Number.isNaN(a) || a < 0 ? 0 : a,
             b: Number.isNaN(b) || b < 0 ? 0 : b,
+            label: isLeagueFormat(match.matchFormat) ? leagueGameLabel(idx) : '',
+            playersA: Array.isArray(g.playersA) ? normalizeLineupNames(g.playersA) : (prevG.playersA || []),
+            playersB: Array.isArray(g.playersB) ? normalizeLineupNames(g.playersB) : (prevG.playersB || []),
+            remark: g.remark != null ? String(g.remark).trim().slice(0, 200) : String(prevG.remark || ''),
           });
         }
         match.completedGames = games;
@@ -175,6 +191,23 @@ adminApiRouter.post('/matches/:matchId/quick-update', async (req, res, next) => 
         });
       }
 
+      if (isLeagueFormat(match.matchFormat)) {
+        if ((match.completedGames?.length || 0) >= LEAGUE_GAME_COUNT) {
+          const fin = finishMatchManual(match);
+          if (!fin.ok) {
+            match.status = 'live';
+            match.winnerId = undefined;
+          }
+        } else if ((match.completedGames?.length || 0) > 0) {
+          if (match.status === 'scheduled' || match.status === 'finished') {
+            match.status = 'live';
+            match.winnerId = undefined;
+          }
+        } else if (match.status === 'live' || match.status === 'finished') {
+          match.status = 'scheduled';
+          match.winnerId = undefined;
+        }
+      } else {
       const { gamesA, gamesB } = countGamesWon(match.completedGames);
       const need = winsNeeded(match.matchFormat);
       if (gamesA >= need || gamesB >= need) {
@@ -189,11 +222,19 @@ adminApiRouter.post('/matches/:matchId/quick-update', async (req, res, next) => 
         match.status = 'scheduled';
         match.winnerId = undefined;
       }
+      }
     }
 
     if (body.status && MATCH_STATUSES.includes(String(body.status))) {
-      match.status = String(body.status);
-      if (match.status === 'finished') finalizeFinishedMatch(match);
+      if (isLeagueFormat(match.matchFormat) && String(body.status) === 'finished') {
+        const fin = finishMatchManual(match);
+        if (!fin.ok) {
+          return res.status(400).json({ error: fin.error });
+        }
+      } else {
+        match.status = String(body.status);
+        if (match.status === 'finished') finalizeFinishedMatch(match);
+      }
     }
 
     await match.save();

@@ -8,18 +8,27 @@ import { Tournament } from '../models/Tournament.js';
 import { attachRoundRobinMatricesToCompetitions } from '../lib/groupRoundRobinMatrix.js';
 import { enrichMatchesForSchedule } from '../lib/viewHelpers.js';
 import { getEventGroupStandings } from '../lib/groupStandings.js';
+import { getEventLeagueStandings } from '../lib/leagueStandings.js';
 import {
   buildEventCompetitions,
   buildEventDateGroups,
   findCompInDateGroups,
   pickDefaultEventDateKey,
 } from '../lib/eventCompetitions.js';
+import { filterPublicMatches, filterPublicTournaments, isShowOnWebsite } from '../lib/publicListing.js';
 export const publicWebRouter = Router({ mergeParams: true });
 
 publicWebRouter.get('/:eventSlug', loadEventBySlug, async (req, res, next) => {
   try {
     const event = req.event;
-    const tournaments = await Tournament.find({ eventId: event._id }).sort({ order: 1 }).lean();
+    if (!event.isActive) {
+      return res.status(404).render('pages/error', {
+        title: '找不到大會',
+        message: '此大會目前未在網站公開。',
+      });
+    }
+    const tournamentsAll = await Tournament.find({ eventId: event._id }).sort({ order: 1 }).lean();
+    const tournaments = filterPublicTournaments(tournamentsAll);
     const tids = tournaments.map((t) => t._id);
     const koTids = tournaments.filter((t) => t.phase === 'knockout').map((t) => t._id);
 
@@ -29,7 +38,7 @@ publicWebRouter.get('/:eventSlug', loadEventBySlug, async (req, res, next) => {
     const [allMatchesRaw, groups, groupTeams] = await Promise.all([
       Match.find({ tournamentId: { $in: tids } })
         .populate('teamA teamB winnerId')
-        .sort({ scheduledTime: 1, createdAt: 1 })
+        .sort({ scheduledDate: 1, scheduledTime: 1, createdAt: 1 })
         .lean(),
       Group.find({ tournamentId: { $in: tids } }).select('_id name tournamentId').lean(),
       groupTids.length
@@ -39,7 +48,11 @@ publicWebRouter.get('/:eventSlug', loadEventBySlug, async (req, res, next) => {
         : Promise.resolve([]),
     ]);
 
-    const matches = enrichMatchesForSchedule(allMatchesRaw, tournaments, groups);
+    const matches = enrichMatchesForSchedule(
+      filterPublicMatches(allMatchesRaw, tournamentsAll),
+      tournaments,
+      groups
+    );
     const koEnriched = matches.filter((m) => koTidSet.has(String(m.tournamentId)));
     const knockoutMatchesByTournamentId = new Map();
     for (const m of koEnriched) {
@@ -48,10 +61,12 @@ publicWebRouter.get('/:eventSlug', loadEventBySlug, async (req, res, next) => {
       knockoutMatchesByTournamentId.get(tid).push(m);
     }
 
-    const groupStandingsList = await getEventGroupStandings(event._id);
+    const groupStandingsList = await getEventGroupStandings(event._id, { listedOnly: true });
+    const leagueStandingsList = await getEventLeagueStandings(event._id, { listedOnly: true });
     const { competitions, orphanKnockouts, podiumsWithResults } = buildEventCompetitions({
       tournaments,
       groupStandingsList,
+      leagueStandingsList,
       matches,
       knockoutMatchesByTournamentId,
     });
@@ -112,6 +127,12 @@ publicWebRouter.get('/:eventSlug/screen/:matchId', loadEventBySlug, async (req, 
       return res.status(404).render('pages/error', { title: '找不到場次', message: '場次 ID 無效。' });
     }
     const event = req.event;
+    if (!event.isActive) {
+      return res.status(404).render('pages/error', {
+        title: '找不到場次',
+        message: '此大會目前未在網站公開。',
+      });
+    }
     const match = await Match.findOne({
       _id: matchId,
     })
@@ -125,6 +146,9 @@ publicWebRouter.get('/:eventSlug/screen/:matchId', loadEventBySlug, async (req, 
     const t = await Tournament.findById(match.tournamentId).lean();
     if (!t || String(t.eventId) !== String(event._id)) {
       return res.status(404).render('pages/error', { title: '找不到場次', message: '此場次不屬於本大會。' });
+    }
+    if (!isShowOnWebsite(t) || !isShowOnWebsite(match)) {
+      return res.status(404).render('pages/error', { title: '找不到場次', message: '此場次目前未在網站公開。' });
     }
 
     res.render('pages/screen', {

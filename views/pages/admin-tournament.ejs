@@ -8,15 +8,32 @@
     </p>
     <h1 class="mt-4 text-2xl font-bold text-white"><%= tournament.name %></h1>
     <p class="mt-1 text-sm text-slate-500">
-      <%= tournament.phase === 'group' ? '小組賽' : tournament.phase === 'double_elim' ? '雙敗淘汰賽' : '淘汰賽（單敗）' %>
+      <%= tournament.phase === 'group' ? '小組賽' : tournament.phase === 'double_elim' ? '雙敗淘汰賽' : tournament.phase === 'league' ? '聯賽' : '淘汰賽（單敗）' %>
       <% if (tournament.phase === 'group') { %>
         ｜ 各組前 <%= tournament.advancePerGroup %> 名晉級
       <% } else if (tournament.phase === 'double_elim') { %>
         ｜ 勝部／敗部雙軌 · 總決賽勝部一次優勢
+      <% } else if (tournament.phase === 'league') { %>
+        ｜ 雙循環 · 每場五回合 21 分 · 總分高者勝 · 排名先得失球再勝場
       <% } %>
       <span class="text-slate-600"> · </span>
       <a href="/admin/events/<%= event._id %>/matches-summary" class="text-emerald-400 underline">大會賽果總覽</a>
     </p>
+
+    <% if (tournament.phase === 'league') { %>
+    <section class="mt-6 rounded-xl border border-amber-800/50 bg-amber-950/25 p-5">
+      <h2 class="text-lg font-semibold text-amber-300">iPad 排陣</h2>
+      <p class="mt-1 text-sm text-slate-400">開喺 iPad：揀當日場次 → 揀邊隊 → 拖曳排五回合出場。每隊分開頁，對手睇唔到。</p>
+      <p class="mt-3">
+        <a
+          href="/e/<%= event.slug %>/lineup-hub/<%= tournament._id %>"
+          target="_blank"
+          rel="noopener"
+          class="inline-flex rounded-lg bg-amber-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-600"
+        >開啟 iPad 排陣頁 ↗</a>
+      </p>
+    </section>
+    <% } %>
 
     <% if (typeof flash !== 'undefined' && flash) { %>
       <p class="mt-4 rounded border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200"><%= flash %></p>
@@ -128,7 +145,7 @@
       <div class="flex flex-wrap gap-3">
         <input name="name" required value="<%= tournament.name %>" class="min-w-[200px] flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2" />
         <div>
-          <label class="block text-xs text-slate-500">比賽日期</label>
+          <label class="block text-xs text-slate-500"><%= tournament.phase === 'league' ? '賽季開始／參考日期（選填）' : '比賽日期' %></label>
           <input name="competitionDate" type="date" value="<%= tournament.competitionDate || '' %>" class="mt-1 rounded border border-slate-700 bg-slate-900 px-3 py-2" />
         </div>
         <% if (tournament.phase === 'group') { %>
@@ -146,10 +163,18 @@
         <% } %>
         <button type="submit" class="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">儲存</button>
       </div>
+      <label class="mt-3 inline-flex items-center gap-2 text-sm text-slate-300">
+        <input type="hidden" name="showOnWebsite" value="0" />
+        <input type="checkbox" name="showOnWebsite" value="1" <%= tournament.showOnWebsite !== false ? 'checked' : '' %> />
+        在網站顯示此賽事（賽程、積分榜、籤表）
+      </label>
+      <p class="mt-1 text-xs text-slate-500">關閉後前台完全睇唔到呢項賽事；後台同場地計分不受影響。亦可喺下面逐場開關。</p>
       <% if (tournament.phase === 'group') { %>
         <p class="text-xs text-slate-500">名次計算：積分（勝*勝分 + 負*負分）→ 得失分 → 得分。</p>
       <% } else if (tournament.phase === 'double_elim') { %>
         <p class="text-xs text-slate-500">雙敗淘汰：加入隊伍後用下方按鈕產生勝部／敗部／總決賽籤表。總決賽採勝部一次優勢（敗部反勝須再打一場）。</p>
+      <% } else if (tournament.phase === 'league') { %>
+        <p class="text-xs text-slate-500">聯賽：固定隊員、每場男雙／女雙／混雙三場。真正開賽<strong class="text-slate-300">日期、時間、場地</strong>喺下面每一場設定（唔使成季只寫一日）。完賽後積分榜自動更新。</p>
       <% } else if (tournament.phase === 'knockout') { %>
         <p class="text-xs text-slate-500">單敗淘汰：加入隊伍後用下方按鈕產生鬼腳籤表，或由小組賽出線產生。</p>
       <% } %>
@@ -237,6 +262,7 @@
                   <th class="w-11 px-2 py-2 text-center" title="報到">報到</th>
                   <th class="w-14 px-3 py-2">代號</th>
                   <th class="px-3 py-2">隊伍名稱</th>
+                  <% if (tournament.phase === 'league') { %><th class="px-3 py-2">隊員</th><% } %>
                   <th class="w-24 px-3 py-2 text-right">操作</th>
                 </tr>
               </thead>
@@ -246,12 +272,15 @@
                     <%- include('../partials/team-checkin-cell', { team: t }) %>
                     <td class="team-code-cell px-3 py-2 font-mono text-sm font-bold <%= t.checkedIn ? 'text-emerald-400' : 'text-sky-300' %>"><%= t.code || '—' %></td>
                     <td class="px-3 py-2 text-slate-200"><%= t.name %></td>
+                    <% if (tournament.phase === 'league') { %>
+                      <td class="px-3 py-2 text-xs text-slate-400"><%= (t.players && t.players.length) ? t.players.map(function (p) { return p.name; }).join('、') : '—' %></td>
+                    <% } %>
                     <td class="px-3 py-2 text-right">
                       <button type="button" class="team-edit-toggle text-xs text-emerald-400 underline" data-team-id="<%= t._id %>">編輯</button>
                     </td>
                   </tr>
                   <tr class="team-edit-row hidden border-b border-slate-800/50 bg-slate-950/50" data-team-id="<%= t._id %>">
-                    <td colspan="4" class="px-3 py-3">
+                    <td colspan="<%= tournament.phase === 'league' ? 5 : 4 %>" class="px-3 py-3">
                       <form method="post" action="/admin/teams/<%= t._id %>/update" class="flex flex-wrap items-end gap-2">
                         <div class="w-20">
                           <label class="text-xs text-slate-500">代號</label>
@@ -268,6 +297,12 @@
                           <label class="text-xs text-slate-500">隊伍名稱</label>
                           <input name="name" required value="<%= t.name %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm" />
                         </div>
+                        <% if (tournament.phase === 'league') { %>
+                        <div class="min-w-[16rem] flex-[2]">
+                          <label class="text-xs text-slate-500">固定隊員（每行或逗號分隔）</label>
+                          <textarea name="players" rows="2" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm"><%= (t.players && t.players.length) ? t.players.map(function (p) { return p.name; }).join('\n') : '' %></textarea>
+                        </div>
+                        <% } %>
                         <% if (tournament.phase === 'group') { %>
                         <div class="w-28">
                           <label class="text-xs text-slate-500">組別</label>
@@ -295,6 +330,12 @@
           <label class="text-xs text-slate-500">隊伍名稱</label>
           <input name="name" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
         </div>
+        <% if (tournament.phase === 'league') { %>
+        <div class="min-w-[200px] flex-1">
+          <label class="text-xs text-slate-500">固定隊員（每行或逗號）</label>
+          <input name="players" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="陳大文、李小明" />
+        </div>
+        <% } %>
         <% if (tournament.phase === 'group') { %>
         <div>
           <label class="text-xs text-slate-500">組別</label>
@@ -308,6 +349,9 @@
         <% } %>
         <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-sm font-semibold">新增隊伍</button>
       </form>
+      <% if (tournament.phase === 'league') { %>
+        <p class="mt-2 text-xs text-slate-500">新增時可同時填隊員：在隊名欄旁邊之後用編輯補齊名單。每隊固定球員，只填姓名。</p>
+      <% } %>
 
       <% if (tournament.phase === 'knockout') {
         var realTeamsForBracket = (teams || []).filter(function (t) { return !t.isPlaceholder; });
@@ -419,11 +463,60 @@
             }) %>
           </form>
         </div>
+      <% } else if (tournament.phase === 'league') {
+        var realTeamsForLeague = (teams || []).filter(function (t) { return !t.isPlaceholder; });
+        var realTeamCountLeague = realTeamsForLeague.length;
+        var hasLeagueMatches = matches && matches.length;
+      %>
+        <div class="mt-6 rounded border border-amber-800/60 bg-amber-950/25 p-4">
+          <p class="text-sm font-semibold text-amber-300">雙循環賽程 ＋ 每週加場</p>
+          <p class="mt-1 text-xs text-slate-400">
+            目前 <strong class="text-slate-200"><%= realTeamCountLeague %></strong> 隊。
+            每兩隊會打<strong class="text-slate-200">兩場</strong>（主客對調）。可以一次過產生全季，<strong class="text-slate-200">每場自己填日期、時間、場地</strong>（唔使成季只寫一日）；亦可以下面「新增場次」逐週人手加。
+            完賽後呢項聯賽積分榜會即時更新。
+          </p>
+          <% if (typeof query !== 'undefined' && query && query.gen) { %>
+            <% if (query.gen === 'ok') { %>
+              <p class="mt-3 rounded border border-emerald-500/40 bg-emerald-950/25 px-3 py-2 text-sm text-emerald-200">
+                已<%= query.filled === '1' ? '補齊' : '產生' %>：<%= query.matches || '0' %> 場、<%= query.rounds || '?' %> 輪、<%= query.teams || '?' %> 隊。
+              </p>
+            <% } else if (query.gen !== 'reset') { %>
+              <p class="mt-3 rounded border border-rose-500/50 bg-rose-950/25 px-3 py-2 text-sm text-rose-200">
+                <%
+                  var lErr = {
+                    target_has_matches: '已有場次。若要保留現有場，請用「補齊未排對賽」；要重頭排就清空後再產生。',
+                    not_enough_teams: '至少需要 2 隊。',
+                    target_not_league: '此賽事不是聯賽。',
+                    invalid_id: '無效的賽事編號。',
+                    not_found: '找不到賽事。',
+                  };
+                %><%= lErr[query.gen] || query.gen %>
+              </p>
+            <% } %>
+          <% } %>
+          <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-league-schedule" class="mt-3">
+            <input type="hidden" name="force" value="<%= hasLeagueMatches ? '1' : '0' %>" />
+            <button
+              type="submit"
+              class="rounded bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
+              onclick="return confirm('<%= hasLeagueMatches ? ('會清空現有 ' + matches.length + ' 場再產生雙循環。隊伍會保留。確定？') : ('確定依目前 ' + realTeamCountLeague + ' 隊產生雙循環全季賽程？時間可之後每週再填。') %>');"
+            ><%= hasLeagueMatches ? '清空並重新產生雙循環' : '產生雙循環全季賽程' %></button>
+          </form>
+          <% if (hasLeagueMatches) { %>
+            <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-league-schedule" class="mt-2">
+              <input type="hidden" name="fillMissing" value="1" />
+              <button type="submit" class="rounded border border-amber-700/70 px-4 py-2 text-sm text-amber-200 hover:bg-amber-950/40">補齊未排對賽（保留已有場次）</button>
+            </form>
+          <% } %>
+        </div>
       <% } %>
     </section>
 
     <% if (tournament.phase === 'group') { %>
       <%- include('../partials/group-round-robin-matrix', { groupRoundRobinMatrices: typeof groupRoundRobinMatrices !== 'undefined' ? groupRoundRobinMatrices : [] }) %>
+    <% } %>
+    <% if (tournament.phase === 'league') { %>
+      <%- include('../partials/league-standings', { leagueStandingsList: [{ tournament: tournament, rows: typeof leagueStandings !== 'undefined' ? leagueStandings : [] }], hideSectionHeading: false }) %>
     <% } %>
 
     <section class="mt-12">
@@ -557,24 +650,39 @@
       <% } %>
       <%- include('../partials/knockout-ladder', { tournament, knockoutLadderColumns }) %>
       <%- include('../partials/double-elim-ladder', { tournament, doubleElimTracks: typeof doubleElimTracks !== 'undefined' ? doubleElimTracks : null, adminLinks: true }) %>
-      <p class="mt-1 text-sm text-slate-500">可直接在表內改時間、場地與各局比分（失焦即儲存）；詳情仍可點「編輯」。</p>
+      <p class="mt-1 text-sm text-slate-500">可直接在表內改時間、場地與各局比分（失焦即儲存）；出場球員同備註請點「詳情」。</p>
       <p class="mt-1 text-xs text-slate-500">比分由左至右為第 1 局起（A–B）；未打的局留空。時間請用 24 小時制，例如 <span class="font-mono text-slate-400">14:30</span>。</p>
+      <% if (matches && matches.length) { %>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <form method="post" action="/admin/tournaments/<%= tournament._id %>/matches-website" class="inline">
+          <input type="hidden" name="showOnWebsite" value="1" />
+          <button type="submit" class="rounded border border-emerald-800/80 bg-emerald-950/40 px-3 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-900/40">全部場次在網站顯示</button>
+        </form>
+        <form method="post" action="/admin/tournaments/<%= tournament._id %>/matches-website" class="inline" onsubmit="return confirm('隱藏後前台賽程／直播頁唔會顯示呢啲場。確定？');">
+          <input type="hidden" name="showOnWebsite" value="0" />
+          <button type="submit" class="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">全部場次網站隱藏</button>
+        </form>
+      </div>
+      <% } %>
       <div class="mt-4 max-w-full overflow-x-auto">
         <table class="admin-matches-table">
           <thead>
             <tr class="border-b border-slate-800 text-slate-400">
               <th class="px-2 py-2 font-medium">對戰</th>
               <th class="whitespace-nowrap px-2 py-2 font-medium">輪次</th>
+              <th class="whitespace-nowrap px-2 py-2 font-medium">日期</th>
               <th class="whitespace-nowrap px-2 py-2 font-medium">時間</th>
               <th class="whitespace-nowrap px-2 py-2 font-medium">場地</th>
               <th class="px-2 py-2 font-medium">比分（第1局 →）</th>
               <th class="whitespace-nowrap px-2 py-2 font-medium">狀態</th>
+              <th class="whitespace-nowrap px-2 py-2 font-medium">網站</th>
               <th class="whitespace-nowrap px-2 py-2 text-right font-medium">操作</th>
             </tr>
           </thead>
           <tbody>
             <% matches.forEach(function (m) {
-              var gameSlots = m.matchFormat === 'bestOf5' ? 5 : (m.matchFormat === 'singleGame' ? 1 : 3);
+              var gameSlots = m.matchFormat === 'leagueFive' ? 5 : (m.matchFormat === 'bestOf5' ? 5 : (m.matchFormat === 'singleGame' ? 1 : 3));
+              var leagueLabels = ['男雙', '女雙', '混雙1', '混雙2', '混雙3'];
               var completed = m.completedGames || [];
               var timeVal = '';
               if (m.scheduledTime) timeVal = String(m.scheduledTime).trim();
@@ -591,6 +699,14 @@
                   <p class="mt-1 text-[10px] text-slate-500"><%= formatLabel(m.matchFormat) %></p>
                 </td>
                 <td class="whitespace-nowrap px-2 py-2 align-middle text-xs text-slate-400"><%= m.round || '—' %></td>
+                <td class="whitespace-nowrap px-2 py-2 align-middle">
+                  <input
+                    type="date"
+                    class="mq-date rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-200"
+                    value="<%= m.scheduledDate || '' %>"
+                    aria-label="開賽日期"
+                  />
+                </td>
                 <td class="whitespace-nowrap px-2 py-2 align-middle">
                   <input
                     type="text"
@@ -622,12 +738,20 @@
                       var gb = completed[gi] ? completed[gi].b : '';
                     %>
                       <div class="mq-game inline-flex shrink-0 flex-col items-center gap-0.5">
-                        <span class="text-[10px] font-medium leading-none text-slate-500">第<%= gi + 1 %>局</span>
+                        <span class="text-[10px] font-medium leading-none text-slate-500"><%= m.matchFormat === 'leagueFive' ? leagueLabels[gi] : ('第' + (gi + 1) + '局') %></span>
                         <span class="inline-flex items-center gap-0.5 rounded border border-slate-800 bg-slate-950/60 px-1 py-0.5">
                           <input type="number" min="0" class="mq-ga w-9 rounded border border-slate-700 bg-slate-900 px-0.5 py-1 text-center font-mono text-xs" data-gi="<%= gi %>" value="<%= ga %>" aria-label="第<%= gi + 1 %>局 A" title="A 隊" />
                           <span class="text-[10px] text-slate-600">–</span>
                           <input type="number" min="0" class="mq-gb w-9 rounded border border-slate-700 bg-slate-900 px-0.5 py-1 text-center font-mono text-xs" data-gi="<%= gi %>" value="<%= gb %>" aria-label="第<%= gi + 1 %>局 B" title="B 隊" />
                         </span>
+                        <% if (m.matchFormat === 'leagueFive') { %>
+                          <% var gpQuick = typeof resolveGamePlayers === 'function' ? resolveGamePlayers(m, gi, completed[gi] || null) : { playersA: (completed[gi] && completed[gi].playersA) || [], playersB: (completed[gi] && completed[gi].playersB) || [] }; %>
+                          <% var whoA = (gpQuick.playersA || []).filter(Boolean).join('、'); %>
+                          <% var whoB = (gpQuick.playersB || []).filter(Boolean).join('、'); %>
+                          <% if (whoA || whoB) { %>
+                            <span class="max-w-[5.5rem] truncate text-[9px] leading-tight text-slate-500" title="<%= whoA || '—' %> vs <%= whoB || '—' %>"><%= whoA || '—' %> / <%= whoB || '—' %></span>
+                          <% } %>
+                        <% } %>
                       </div>
                     <% } %>
                   </div>
@@ -645,6 +769,17 @@
                     <% }); %>
                   </select>
                 </td>
+                <td class="whitespace-nowrap px-2 py-2 align-middle">
+                  <label class="inline-flex items-center gap-1.5 text-xs text-slate-300">
+                    <input
+                      type="checkbox"
+                      class="mq-web"
+                      <%= m.showOnWebsite !== false ? 'checked' : '' %>
+                      aria-label="在網站顯示"
+                    />
+                    顯示
+                  </label>
+                </td>
                 <td class="whitespace-nowrap px-2 py-2 text-right align-middle"><a href="/admin/matches/<%= m._id %>/edit" class="text-emerald-400 underline">詳情</a></td>
               </tr>
             <% }); %>
@@ -654,7 +789,7 @@
 
       <% if (teams.length >= 2) { %>
         <form method="post" action="/admin/tournaments/<%= tournament._id %>/matches" class="mt-6 space-y-3 rounded border border-dashed border-slate-700 p-4">
-          <h3 class="text-sm font-semibold text-slate-300">新增場次</h3>
+          <h3 class="text-sm font-semibold text-slate-300">新增場次<% if (tournament.phase === 'league') { %>（每週人手加一場）<% } %></h3>
           <div class="grid gap-3 sm:grid-cols-2">
             <div>
               <label class="text-xs text-slate-500">隊伍 A</label>
@@ -676,11 +811,16 @@
           <div class="grid gap-3 sm:grid-cols-3">
             <div>
               <label class="text-xs text-slate-500">賽制（整場）</label>
+              <% if (tournament.phase === 'league') { %>
+                <input type="hidden" name="matchFormat" value="leagueFive" />
+                <p class="mt-1 rounded border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-300">聯賽五回合（21分）</p>
+              <% } else { %>
               <select name="matchFormat" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
                 <option value="bestOf3">三局兩勝</option>
                 <option value="bestOf5">五局三勝</option>
                 <option value="singleGame">一局過</option>
               </select>
+              <% } %>
             </div>
             <div>
               <label class="text-xs text-slate-500">組別（選填）</label>
@@ -693,12 +833,16 @@
             </div>
             <div>
               <label class="text-xs text-slate-500">輪次／標籤</label>
-              <input name="round" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="例如：A 組" />
+              <input name="round" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="<%= tournament.phase === 'league' ? '例如：第3週' : '例如：A 組' %>" />
             </div>
           </div>
-          <div class="grid gap-3 sm:grid-cols-2">
+          <div class="grid gap-3 sm:grid-cols-3">
             <div>
-              <label class="text-xs text-slate-500">開賽時間（時分）</label>
+              <label class="text-xs text-slate-500">此場日期</label>
+              <input name="scheduledDate" type="date" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-500">開賽時間</label>
               <input name="scheduledTime" type="time" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
             </div>
             <div>
@@ -712,6 +856,11 @@
               }) %>
             </div>
           </div>
+          <label class="inline-flex items-center gap-2 text-sm text-slate-300">
+            <input type="hidden" name="showOnWebsite" value="0" />
+            <input type="checkbox" name="showOnWebsite" value="1" checked />
+            建立後在網站顯示
+          </label>
           <button type="submit" class="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">建立場次</button>
         </form>
       <% } else { %>
@@ -830,6 +979,14 @@
         var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr.match-quick-row'));
         if (rows.length < 2) return;
         rows.sort(function (a, b) {
+          var da = String((a.querySelector('.mq-date') || {}).value || '').trim();
+          var db = String((b.querySelector('.mq-date') || {}).value || '').trim();
+          if (da !== db) {
+            if (!da) return 1;
+            if (!db) return -1;
+            if (da < db) return -1;
+            if (da > db) return 1;
+          }
           var ta = String((a.querySelector('.mq-time') || {}).value || '').trim();
           var tb = String((b.querySelector('.mq-time') || {}).value || '').trim();
           if (!ta && !tb) return 0;
@@ -853,17 +1010,20 @@
           var body = row._mqPending || {};
           row._mqPending = null;
           var timeChanged = body.scheduledTime !== undefined;
-          if (body.completedGames === undefined && (body.scheduledTime !== undefined || body.court !== undefined)) {
-            // keep partial updates for time/court only
+          var dateChanged = body.scheduledDate !== undefined;
+          if (body.completedGames === undefined && (body.scheduledTime !== undefined || body.scheduledDate !== undefined || body.court !== undefined || body.showOnWebsite !== undefined)) {
+            // keep partial updates
           } else if (body.completedGames !== undefined) {
             body.completedGames = collectGames(row);
           } else {
             body = {
+              scheduledDate: (row.querySelector('.mq-date') || {}).value || '',
               scheduledTime: (row.querySelector('.mq-time') || {}).value || '',
               court: (row.querySelector('.mq-court') || {}).value || '',
               completedGames: collectGames(row),
             };
             timeChanged = true;
+            dateChanged = true;
           }
           fetch('/api/admin/matches/' + matchId + '/quick-update', {
             method: 'POST',
@@ -888,8 +1048,14 @@
                     var timeInp = row.querySelector('.mq-time');
                     if (timeInp) timeInp.value = String(savedTime).trim();
                   }
-                  sortMatchRowsByTime();
                 }
+                if (dateChanged) {
+                  var dateInp = row.querySelector('.mq-date');
+                  if (dateInp && ref.j.match.scheduledDate != null) {
+                    dateInp.value = String(ref.j.match.scheduledDate).trim();
+                  }
+                }
+                if (timeChanged || dateChanged) sortMatchRowsByTime();
               }
             })
             .catch(function () { flashRow(row, false); });
@@ -897,8 +1063,14 @@
       }
 
       document.querySelectorAll('.match-quick-row').forEach(function (row) {
+        var dateInp = row.querySelector('.mq-date');
         var time = row.querySelector('.mq-time');
         var court = row.querySelector('.mq-court');
+        if (dateInp) {
+          dateInp.addEventListener('change', function () {
+            saveQuick(row, { scheduledDate: dateInp.value || '' });
+          });
+        }
         if (time) {
           function normalizeTimeInput() {
             var raw = String(time.value || '').trim();
@@ -948,6 +1120,12 @@
           });
           court.addEventListener('blur', function () {
             saveQuick(row, { court: court.value });
+          });
+        }
+        var web = row.querySelector('.mq-web');
+        if (web) {
+          web.addEventListener('change', function () {
+            saveQuick(row, { showOnWebsite: web.checked });
           });
         }
         row.querySelectorAll('.mq-ga, .mq-gb').forEach(function (inp) {

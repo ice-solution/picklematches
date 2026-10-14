@@ -1,0 +1,17 @@
+<% var sel = Array.isArray(selected) ? selected : []; %>
+<% var roster = Array.isArray(roster) ? roster : []; %>
+<% var names = [name1, name2]; %>
+<div class="flex flex-wrap gap-1">
+  <% names.forEach(function (fieldName, pi) { %>
+    <% var cur = sel[pi] || ''; %>
+    <select name="<%= fieldName %>" class="min-w-[6.5rem] flex-1 rounded border border-slate-700 bg-slate-950 px-1.5 py-1 text-xs text-slate-200">
+      <option value="">球員<%= pi + 1 %></option>
+      <% roster.forEach(function (n) { %>
+        <option value="<%= n %>" <%= cur === n ? 'selected' : '' %>><%= n %></option>
+      <% }); %>
+      <% if (cur && roster.indexOf(cur) === -1) { %>
+        <option value="<%= cur %>" selected><%= cur %></option>
+      <% } %>
+    </select>
+  <% }); %>
+</div>

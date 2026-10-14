@@ -29,12 +29,18 @@
     <div id="panel" class="mt-8 <%= match ? '' : 'hidden' %>">
       <div class="mb-4 rounded-lg border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-400">
         <span id="matchMeta"><%= match && match.round ? match.round : '—' %></span>
-        <div class="mt-2 flex flex-wrap gap-4 text-base">
-          <span class="text-emerald-400" id="namesA"><%= match && match.teamA ? match.teamA.name : '—' %></span>
+        <div class="mt-2 flex flex-wrap items-start gap-4 text-base">
+          <div class="min-w-0 flex-1">
+            <span class="text-emerald-400" id="namesA"><%= match && match.teamA ? match.teamA.name : '—' %></span>
+            <p id="playersA" class="mt-0.5 text-sm text-emerald-200/70"></p>
+          </div>
           <span class="font-semibold text-white" id="scoreText">
             <%= match ? ((match.currentPoints && match.currentPoints.a) || 0) : 0 %> : <%= match ? ((match.currentPoints && match.currentPoints.b) || 0) : 0 %>
           </span>
-          <span class="text-sky-400" id="namesB"><%= match && match.teamB ? match.teamB.name : '—' %></span>
+          <div class="min-w-0 flex-1 text-right">
+            <span class="text-sky-400" id="namesB"><%= match && match.teamB ? match.teamB.name : '—' %></span>
+            <p id="playersB" class="mt-0.5 text-sm text-sky-200/70"></p>
+          </div>
         </div>
         <p class="mt-2 text-xs text-slate-500">大比分 <span id="gamesLine" class="font-mono text-slate-300"><%= match && typeof gamesLine === 'function' ? gamesLine(match) : '—' %></span></p>
         <p id="hint" class="mt-1 hidden text-xs text-amber-400"></p>
@@ -63,6 +69,7 @@
       <button type="button" id="nextGameBtn" class="mt-4 w-full rounded-xl border border-amber-700/60 bg-amber-950/30 py-3.5 text-base font-semibold text-amber-200 hover:bg-amber-900/40">
         下一局（結束目前局並重置分數）
       </button>
+      <p id="nextGameHint" class="mt-1.5 text-center text-xs text-slate-500"></p>
 
       <button type="button" id="finishBtn" class="mt-3 w-full rounded-xl border border-red-800/70 bg-red-950/40 py-4 text-base font-semibold text-red-300 hover:bg-red-900/40">
         標記完賽（存檔並清空 Live）
@@ -80,8 +87,52 @@
       var venueName = <%- JSON.stringify(venue.name) %>;
       var base = '/api/public/' + encodeURIComponent(eventSlug) + '/court/' + encodeURIComponent(venueSlug);
 
+      var LEAGUE_LABELS = ['男雙', '女雙', '混雙（1）', '混雙（2）', '混雙（3）'];
+
+      function formatPlayers(arr) {
+        return (arr || []).map(function (n) { return String(n || '').trim(); }).filter(Boolean).join(' · ');
+      }
+
+      function boardSidePlayers(m, side, idx) {
+        var block = m && m.lineupBySide && m.lineupBySide[side];
+        if (!block || !block.confirmed || !Array.isArray(block.games) || !block.games[idx]) return [];
+        return (block.games[idx].players || []).filter(Boolean);
+      }
+
+      function currentRoundInfo(m) {
+        if (!m || m.matchFormat !== 'leagueFive') {
+          return { label: '', nextLabel: '', playersA: '', playersB: '', idx: -1 };
+        }
+        var idx = (m.completedGames || []).length;
+        var curA = ((m.currentLineup && m.currentLineup.playersA) || []).filter(Boolean);
+        var curB = ((m.currentLineup && m.currentLineup.playersB) || []).filter(Boolean);
+        var a = curA.length ? curA : boardSidePlayers(m, 'a', idx);
+        var b = curB.length ? curB : boardSidePlayers(m, 'b', idx);
+        return {
+          idx: idx,
+          label: LEAGUE_LABELS[idx] || '',
+          nextLabel: LEAGUE_LABELS[idx + 1] || '',
+          playersA: formatPlayers(a),
+          playersB: formatPlayers(b),
+        };
+      }
+
       function gamesText(m) {
-        if (!m || !m.completedGames || !m.completedGames.length) return '—';
+        if (!m) return '—';
+        if (m.matchFormat === 'leagueFive') {
+          var bits = (m.completedGames || []).map(function (g, i) {
+            return (g.label || LEAGUE_LABELS[i] || ('第' + (i + 1) + '場')) + ' ' + g.a + '-' + g.b;
+          });
+          var ca = (m.currentPoints && m.currentPoints.a) || 0;
+          var cb = (m.currentPoints && m.currentPoints.b) || 0;
+          var totA = 0, totB = 0;
+          (m.completedGames || []).forEach(function (g) { totA += g.a || 0; totB += g.b || 0; });
+          if (m.status === 'live') { totA += ca; totB += cb; }
+          var info = currentRoundInfo(m);
+          if (m.status === 'live' && info.label) bits.push(info.label + ' [' + ca + '-' + cb + ']');
+          return totA + '-' + totB + (bits.length ? '（' + bits.join(' · ') + '）' : '');
+        }
+        if (!m.completedGames || !m.completedGames.length) return '—';
         return m.completedGames.map(function (g) { return g.a + '-' + g.b; }).join(' · ');
       }
 
@@ -112,11 +163,43 @@
         document.getElementById('scoreText').textContent = ca + ' : ' + cb;
         document.getElementById('gamesLine').textContent = gamesText(match);
         var hint = document.getElementById('hint');
-        if ((ca >= 15 && ca - cb >= 2) || (cb >= 15 && cb - ca >= 2)) {
-          hint.textContent = '已達局末條件，可按「下一局」或「標記完賽」';
-          hint.classList.remove('hidden');
+        var nextBtn = document.getElementById('nextGameBtn');
+        var nextHint = document.getElementById('nextGameHint');
+        var isLeague = match.matchFormat === 'leagueFive';
+        var info = currentRoundInfo(match);
+        document.getElementById('playersA').textContent = isLeague ? (info.playersA || '（未排陣）') : '';
+        document.getElementById('playersB').textContent = isLeague ? (info.playersB || '（未排陣）') : '';
+        if (isLeague) {
+          var idx = info.idx;
+          var lab = info.label || '完場';
+          document.getElementById('matchMeta').textContent = (match.round || venueName) + ' · 現正 ' + lab + ' · 發球：' + serveLabel(match.serving);
+          if (info.nextLabel) {
+            nextBtn.textContent = '下一回合 → 進入「' + info.nextLabel + '」';
+            nextHint.textContent = '結束「' + lab + '」後，Live 會自動換成下一組排陣球員。';
+          } else {
+            nextBtn.textContent = '下一局（結束目前局並重置分數）';
+            nextHint.textContent = idx >= 4 ? '這是最後一回合；打完後請標記完賽。' : '';
+          }
+          if (idx >= 5) {
+            hint.textContent = '五回合已完，請核對總分後按「標記完賽」';
+            hint.classList.remove('hidden');
+          } else if ((ca >= 21 && ca > cb) || (cb >= 21 && cb > ca)) {
+            hint.textContent = '已到 21 分，可按「下一回合」進入' + (info.nextLabel || '下一組');
+            hint.classList.remove('hidden');
+          } else {
+            hint.classList.add('hidden');
+          }
         } else {
-          hint.classList.add('hidden');
+          nextBtn.textContent = '下一局（結束目前局並重置分數）';
+          nextHint.textContent = '';
+          document.getElementById('playersA').textContent = '';
+          document.getElementById('playersB').textContent = '';
+          if ((ca >= 15 && ca - cb >= 2) || (cb >= 15 && cb - ca >= 2)) {
+            hint.textContent = '已達局末條件，可按「下一局」或「標記完賽」';
+            hint.classList.remove('hidden');
+          } else {
+            hint.classList.add('hidden');
+          }
         }
       }
 
@@ -132,6 +215,10 @@
           var map = {
             empty_game: '目前局還沒有分數',
             tied_game: '平局不能進入下一局',
+            league_game_not_to_21: '此回合要先到 21 分才可以下一局',
+            league_games_complete: '五回合已打完，請標記完賽',
+            league_need_five: '聯賽要打完五回合才可以完賽',
+            league_tied: '總分相同，聯賽冇和局，請核對比分',
             no_live_match: '沒有進行中的比賽',
             match_ended: '比賽已結束',
             court_auth_required: '請重新登入',

@@ -1,8 +1,28 @@
 <%- include('../partials/head', { title }) %>
 <%- include('../partials/admin-frame-start') %>
+<style>
+  .admin-fold > summary {
+    list-style: none;
+  }
+  .admin-fold > summary::-webkit-details-marker {
+    display: none;
+  }
+  .admin-fold > summary .fold-chevron {
+    transition: transform 0.15s ease;
+  }
+  .admin-fold[open] > summary .fold-chevron {
+    transform: rotate(180deg);
+  }
+</style>
 <main class="mx-auto w-full max-w-5xl pb-12 pt-1">
     <p class="text-sm text-slate-500"><a href="/admin" class="text-emerald-400 underline">← 大會列表</a></p>
-    <h1 class="mt-4 text-2xl font-bold text-white">大會設定</h1>
+    <div class="mt-4 flex flex-wrap items-end justify-between gap-3">
+      <h1 class="text-2xl font-bold text-white">大會設定</h1>
+      <div class="flex flex-wrap gap-2 text-xs">
+        <button type="button" id="fold-expand-all" class="rounded border border-slate-700 px-2.5 py-1 text-slate-300 hover:bg-slate-800">全部展開</button>
+        <button type="button" id="fold-collapse-all" class="rounded border border-slate-700 px-2.5 py-1 text-slate-300 hover:bg-slate-800">全部收合</button>
+      </div>
+    </div>
 
     <% if (typeof flash !== 'undefined' && flash) { %>
       <p class="mt-4 rounded border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200"><%= flash %></p>
@@ -11,211 +31,369 @@
       <p class="mt-4 rounded border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"><%= error %></p>
     <% } %>
 
-    <section class="mt-8 rounded border border-sky-900/60 bg-sky-950/30 p-4 text-sm text-slate-300">
-      <h2 class="font-semibold text-sky-300">兩階段賽程：小組賽 → 淘汰賽</h2>
-      <ol class="mt-3 list-decimal space-y-2 pl-5 text-slate-400">
-        <li>在下方<strong class="text-slate-200">新增第一筆賽事</strong>：類型選<strong class="text-slate-200">小組賽</strong>，並設定「各組前 N 名」（例如各組前 2 名出線）。</li>
-        <li>進入該賽事 → 建立<strong>組別、隊伍</strong>，再建立<strong>小組內場次</strong>（單循環對戰請自行排滿各組應打的比賽）。打完小組、依勝負決定名次。</li>
-        <li>回到本頁<strong>再新增第二筆賽事</strong>：類型選<strong class="text-slate-200">淘汰賽</strong>，代表晉級後的階段。</li>
-        <li>進入淘汰賽賽事 → <strong>新增出線隊伍</strong>（與小組賽相同的隊伍名稱可再建一筆，或日後可改為「沿用」同一隊伍資料），並依籤表<strong>建立淘汰場次</strong>（八強、四強、決賽等）。</li>
-      </ol>
-      <p class="mt-3 text-xs text-slate-500">同一個大會底下可以有多筆「賽事」：先完成小組賽賽事內所有比分，再處理淘汰賽賽事。系統目前<strong>不會自動</strong>依小組名次產生淘汰對戰表，晉級隊伍與對位需由賽務在淘汰賽事內建立。</p>
-    </section>
+    <details class="admin-fold mt-8 rounded border border-sky-900/60 bg-sky-950/30 text-sm text-slate-300" data-fold-key="guide">
+      <summary class="flex cursor-pointer items-center justify-between gap-3 px-4 py-3">
+        <h2 class="font-semibold text-sky-300">兩階段賽程：小組賽 → 淘汰賽</h2>
+        <span class="fold-chevron text-sky-500/80" aria-hidden="true">▼</span>
+      </summary>
+      <div class="border-t border-sky-900/40 px-4 pb-4 pt-3">
+        <ol class="list-decimal space-y-2 pl-5 text-slate-400">
+          <li>在下方<strong class="text-slate-200">新增第一筆賽事</strong>：類型選<strong class="text-slate-200">小組賽</strong>，並設定「各組前 N 名」（例如各組前 2 名出線）。</li>
+          <li>進入該賽事 → 建立<strong>組別、隊伍</strong>，再建立<strong>小組內場次</strong>（單循環對戰請自行排滿各組應打的比賽）。打完小組、依勝負決定名次。</li>
+          <li>回到本頁<strong>再新增第二筆賽事</strong>：類型選<strong class="text-slate-200">淘汰賽</strong>，代表晉級後的階段。</li>
+          <li>進入淘汰賽賽事 → <strong>新增出線隊伍</strong>（與小組賽相同的隊伍名稱可再建一筆，或日後可改為「沿用」同一隊伍資料），並依籤表<strong>建立淘汰場次</strong>（八強、四強、決賽等）。</li>
+        </ol>
+        <p class="mt-3 text-xs text-slate-500">同一個大會底下可以有多筆「賽事」：先完成小組賽賽事內所有比分，再處理淘汰賽賽事。系統目前<strong>不會自動</strong>依小組名次產生淘汰對戰表，晉級隊伍與對位需由賽務在淘汰賽事內建立。</p>
+      </div>
+    </details>
 
-    <form method="post" action="/admin/events/<%= event._id %>/update" class="mt-8 space-y-4 rounded border border-slate-800 bg-slate-900/40 p-6">
-      <h2 class="text-lg font-semibold text-emerald-400">基本資料</h2>
-      <div>
-        <label class="block text-sm text-slate-400">名稱</label>
-        <input name="name" required value="<%= event.name %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
-      </div>
-      <div>
-        <label class="block text-sm text-slate-400">網址代號（slug）</label>
-        <input name="slug" required value="<%= event.slug %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-sm" />
-        <p class="mt-1 text-xs text-slate-500">變更後舊網址可寫入別名（本頁儲存時會將舊 slug 加入別名）。</p>
-      </div>
-      <div class="grid gap-4 sm:grid-cols-2">
+    <details class="admin-fold mt-6 rounded border border-slate-800 bg-slate-900/40" data-fold-key="basics" open>
+      <summary class="flex cursor-pointer items-center justify-between gap-3 px-6 py-4">
+        <h2 class="text-lg font-semibold text-emerald-400">基本資料／場地</h2>
+        <span class="fold-chevron text-slate-500" aria-hidden="true">▼</span>
+      </summary>
+      <form method="post" action="/admin/events/<%= event._id %>/update" class="space-y-4 border-t border-slate-800 px-6 pb-6 pt-4">
         <div>
-          <label class="block text-sm text-slate-400">開始</label>
-          <input name="dateStart" type="datetime-local" value="<%= dateStartLocal %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+          <label class="block text-sm text-slate-400">名稱</label>
+          <input name="name" required value="<%= event.name %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
         </div>
         <div>
-          <label class="block text-sm text-slate-400">結束</label>
-          <input name="dateEnd" type="datetime-local" value="<%= dateEndLocal %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+          <label class="block text-sm text-slate-400">網址代號（slug）</label>
+          <input name="slug" required value="<%= event.slug %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-sm" />
+          <p class="mt-1 text-xs text-slate-500">變更後舊網址可寫入別名（本頁儲存時會將舊 slug 加入別名）。</p>
         </div>
-      </div>
-      <div>
-        <label class="block text-sm text-slate-400">場地</label>
-        <div class="mt-1">
-          <%- include('../partials/venue-editor', { venues: typeof venues !== 'undefined' ? venues : (typeof normalizeEventVenues === 'function' ? normalizeEventVenues(event.venues) : []), showPin: true }) %>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label class="block text-sm text-slate-400">開始</label>
+            <input name="dateStart" type="datetime-local" value="<%= dateStartLocal %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-400">結束</label>
+            <input name="dateEnd" type="datetime-local" value="<%= dateEndLocal %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+          </div>
         </div>
-        <p class="mt-2 text-xs text-amber-400/90">更改場地 ID／名稱／PIN 後，請按下方「儲存大會」才會生效。PIN 欄留空＝維持原 PIN 不變。</p>
-        <button type="submit" class="mt-3 rounded bg-emerald-600 px-6 py-2 text-sm font-semibold text-white hover:bg-emerald-500">儲存大會</button>
-      </div>
-      <% var _vlinks = typeof venues !== 'undefined' ? venues : []; %>
-      <% if (_vlinks.length) { %>
-        <div class="rounded border border-slate-800 bg-slate-950/50 p-3 text-xs text-slate-400">
-          <p class="font-medium text-slate-300">場地網址</p>
-          <ul class="mt-2 space-y-1 font-mono">
-            <li>登入：<a class="text-emerald-400 underline" href="/e/<%= event.slug %>/court/login" target="_blank">/e/<%= event.slug %>/court/login</a></li>
-            <% _vlinks.forEach(function (v) { %>
-              <li><%= v.name %> Live：<a class="text-emerald-400 underline" href="/e/<%= event.slug %>/court/<%= v.slug %>/live" target="_blank">/e/<%= event.slug %>/court/<%= v.slug %>/live</a></li>
+        <div>
+          <label class="block text-sm text-slate-400">場地</label>
+          <div class="mt-1">
+            <%- include('../partials/venue-editor', {
+              venues: typeof venues !== 'undefined' ? venues : (typeof normalizeEventVenues === 'function' ? normalizeEventVenues(event.venues) : []),
+              showPin: true,
+              showStream: true,
+              streamStatuses: typeof streamStatuses !== 'undefined' ? streamStatuses : {},
+              eventId: '',
+            }) %>
+          </div>
+          <p class="mt-2 text-xs text-amber-400/90">更改場地 ID／名稱／PIN／直播設定後，請按「儲存大會」才會生效。PIN／串流金鑰留空＝維持不變；金鑰填 <code class="rounded bg-slate-800 px-1">-</code> 可清除。</p>
+          <button type="submit" class="mt-3 rounded bg-emerald-600 px-6 py-2 text-sm font-semibold text-white hover:bg-emerald-500">儲存大會</button>
+        </div>
+        <% var _vlinks = typeof venues !== 'undefined' ? venues : []; %>
+        <% if (_vlinks.length) { %>
+          <details class="admin-fold rounded border border-slate-800 bg-slate-950/50 text-xs text-slate-400" data-fold-key="venue-links">
+            <summary class="flex cursor-pointer items-center justify-between gap-2 px-3 py-2.5">
+              <span class="font-medium text-slate-300">場地網址</span>
+              <span class="fold-chevron text-slate-600" aria-hidden="true">▼</span>
+            </summary>
+            <ul class="space-y-1 border-t border-slate-800 px-3 pb-3 pt-2 font-mono">
+              <li>登入：<a class="text-emerald-400 underline" href="/e/<%= event.slug %>/court/login" target="_blank">/e/<%= event.slug %>/court/login</a></li>
+              <% _vlinks.forEach(function (v) { %>
+                <li><%= v.name %> Live：<a class="text-emerald-400 underline" href="/e/<%= event.slug %>/court/<%= v.slug %>/live" target="_blank">/e/<%= event.slug %>/court/<%= v.slug %>/live</a></li>
+              <% }); %>
+            </ul>
+          </details>
+        <% } %>
+        <div>
+          <label class="block text-sm text-slate-400">簡介（比賽列表顯示）</label>
+          <textarea name="description" rows="3" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2"><%= event.description || '' %></textarea>
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400">封面圖 URL（選填）</label>
+          <input name="coverImageUrl" value="<%= event.coverImageUrl || '' %>" placeholder="https://…" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+          <p class="mt-1 text-xs text-slate-500">留空則顯示名稱首字縮圖。</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" name="isActive" value="1" id="isActive" <%= event.isActive ? 'checked' : '' %> />
+          <label for="isActive" class="text-sm text-slate-300">在網站顯示此大會</label>
+        </div>
+        <p class="mt-1 text-xs text-slate-500">關閉後唔會出現喺首頁比賽列表，大會頁同公開直播頁亦唔會顯示（場地控制台仍然可用）。</p>
+        <button type="submit" class="rounded bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500">儲存大會</button>
+      </form>
+    </details>
+
+    <% var _streamVenues = typeof venues !== 'undefined' ? venues : []; %>
+    <% var _anyStreamLive = false; %>
+    <% _streamVenues.forEach(function (v) {
+      var st0 = (typeof streamStatuses !== 'undefined' && streamStatuses[v.slug]) ? streamStatuses[v.slug] : {};
+      if (st0.live) _anyStreamLive = true;
+    }); %>
+    <% if (_streamVenues.length) { %>
+      <details class="admin-fold mt-6 rounded border border-rose-900/40 bg-rose-950/15" data-fold-key="streams" <%= _anyStreamLive ? 'open' : '' %>>
+        <summary class="flex cursor-pointer items-center justify-between gap-3 px-6 py-4">
+          <div>
+            <h2 class="text-lg font-semibold text-rose-300">場地 YouTube 直播</h2>
+            <p class="mt-0.5 text-xs text-slate-500"><%= _streamVenues.length %> 個場地<% if (_anyStreamLive) { %> · <span class="text-rose-300">有直播中</span><% } %></p>
+          </div>
+          <span class="fold-chevron text-rose-500/70" aria-hidden="true">▼</span>
+        </summary>
+        <div class="space-y-4 border-t border-rose-900/30 px-6 pb-6 pt-4">
+          <p class="text-sm text-slate-400">每個場地各自開／關。開播後會把該場 RTSP 畫面夾計分板推去 YouTube。請先喺上方填好設定並儲存。</p>
+          <% if (typeof streamFlash !== 'undefined' && streamFlash) { %>
+            <p class="text-sm text-emerald-400"><%= streamFlash %></p>
+          <% } %>
+          <% if (typeof streamError !== 'undefined' && streamError) { %>
+            <p class="text-sm text-amber-400"><%= streamError %></p>
+          <% } %>
+          <ul class="space-y-3">
+            <% _streamVenues.forEach(function (v) { %>
+              <% var st = (typeof streamStatuses !== 'undefined' && streamStatuses[v.slug]) ? streamStatuses[v.slug] : {}; %>
+              <li class="flex flex-wrap items-center justify-between gap-3 rounded border border-slate-800 bg-slate-950/50 px-4 py-3">
+                <div>
+                  <p class="font-medium text-white"><%= v.name %> <span class="font-mono text-xs text-slate-500">(<%= v.slug %>)</span></p>
+                  <p class="mt-0.5 text-xs text-slate-500">
+                    <% if (st.live) { %>
+                      <span class="text-rose-300">直播中</span>
+                      <% if (st.startedAt) { %> · 開始於 <%= st.startedAt %><% } %>
+                    <% } else if (st.hasConfig) { %>
+                      已設定 · 未開播
+                    <% } else { %>
+                      未設定 RTSP／串流金鑰
+                    <% } %>
+                    <% if (st.lastError) { %> · <span class="text-amber-400"><%= st.lastError %></span><% } %>
+                  </p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <% if (st.live) { %>
+                    <form method="post" action="/admin/events/<%= event._id %>/venues/<%= encodeURIComponent(v.slug) %>/stream/stop">
+                      <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-600">停止直播</button>
+                    </form>
+                  <% } else { %>
+                    <form method="post" action="/admin/events/<%= event._id %>/venues/<%= encodeURIComponent(v.slug) %>/stream/start">
+                      <button type="submit" class="rounded bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-40" <%= st.hasConfig ? '' : 'disabled' %>>開始直播</button>
+                    </form>
+                  <% } %>
+                </div>
+              </li>
             <% }); %>
           </ul>
         </div>
-      <% } %>
-      <div>
-        <label class="block text-sm text-slate-400">簡介（比賽列表顯示）</label>
-        <textarea name="description" rows="3" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2"><%= event.description || '' %></textarea>
-      </div>
-      <div>
-        <label class="block text-sm text-slate-400">封面圖 URL（選填）</label>
-        <input name="coverImageUrl" value="<%= event.coverImageUrl || '' %>" placeholder="https://…" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
-        <p class="mt-1 text-xs text-slate-500">留空則顯示名稱首字縮圖。</p>
-      </div>
-      <div class="flex items-center gap-2">
-        <input type="checkbox" name="isActive" value="1" id="isActive" <%= event.isActive ? 'checked' : '' %> />
-        <label for="isActive" class="text-sm text-slate-300">啟用中</label>
-      </div>
-      <button type="submit" class="rounded bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500">儲存大會</button>
-    </form>
+      </details>
+    <% } %>
 
-    <form method="post" action="/admin/events/<%= event._id %>/registration" class="mt-8 space-y-4 rounded border border-emerald-900/50 bg-emerald-950/20 p-6">
-      <h2 class="text-lg font-semibold text-emerald-400">線上報名</h2>
-      <div class="flex items-center gap-2">
-        <input type="checkbox" name="registrationEnabled" value="1" id="registrationEnabled" <%= event.registrationEnabled ? 'checked' : '' %> />
-        <label for="registrationEnabled" class="text-sm text-slate-300">開放線上報名</label>
-      </div>
-      <p class="text-xs text-slate-500">開啟後，會員可於 <code class="rounded bg-slate-800 px-1">/e/<%= event.slug %>/register</code> 報名。請先於<a href="/admin/events/<%= event._id %>/divisions" class="text-emerald-400 underline">報名組別</a>建立組別及收費。</p>
-      <div>
-        <label class="block text-sm text-slate-400">報名說明（前台顯示）</label>
-        <textarea name="registrationInfo" rows="4" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2"><%= event.registrationInfo || '' %></textarea>
-      </div>
-      <div>
-        <label class="block text-sm text-slate-400">場地詳情</label>
-        <textarea name="venueDetails" rows="3" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2"><%= event.venueDetails || '' %></textarea>
-      </div>
-      <div>
-        <label class="block text-sm text-slate-400">參賽資格備註</label>
-        <textarea name="eligibilityNotes" rows="3" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2"><%= event.eligibilityNotes || '' %></textarea>
-      </div>
-      <div class="flex flex-wrap gap-3">
-        <button type="submit" class="rounded bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500">儲存報名設定</button>
-        <a href="/admin/events/<%= event._id %>/divisions" class="rounded border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800">管理報名組別</a>
-        <a href="/admin/events/<%= event._id %>/registrations" class="rounded border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800">查看報名紀錄</a>
-      </div>
-    </form>
-
-    <section class="mt-12">
-      <h2 class="text-lg font-semibold text-white">賽事（賽制／晉級）</h2>
-      <p class="mt-1 text-sm text-slate-500">每一筆賽事可為小組賽或淘汰賽；小組賽內再管理組別、隊伍與場次。</p>
-
-      <% if (typeof tournamentImportReport !== 'undefined' && tournamentImportReport) { %>
-        <div class="mt-4 rounded border px-4 py-3 text-sm <%= tournamentImportReport.error ? 'border-rose-500/50 bg-rose-950/30 text-rose-100' : 'border-sky-500/40 bg-sky-950/25 text-sky-100' %>">
-          <% if (tournamentImportReport.error) { %>
-            <p class="font-medium text-rose-300"><%= tournamentImportReport.error %></p>
-          <% } else { %>
-            <p class="font-medium text-sky-300">匯入完成：新增 <%= tournamentImportReport.createdCount %> 筆賽事</p>
-          <% } %>
-          <% if (tournamentImportReport.parseErrors && tournamentImportReport.parseErrors.length) { %>
-            <p class="mt-2 text-xs text-slate-400">解析／略過：</p>
-            <% tournamentImportReport.parseErrors.forEach(function (line) { %>
-              <p class="text-xs text-slate-400"><%= line %></p>
-            <% }); %>
-          <% } %>
-          <% if (tournamentImportReport.rowErrors && tournamentImportReport.rowErrors.length) { %>
-            <ul class="mt-2 list-inside list-disc text-xs text-amber-200/90">
-              <% tournamentImportReport.rowErrors.slice(0, 15).forEach(function (line) { %>
-                <li><%= line %></li>
-              <% }); %>
-            </ul>
-            <% if (tournamentImportReport.rowErrors.length > 15) { %>
-              <p class="mt-1 text-xs text-slate-500">…共 <%= tournamentImportReport.rowErrors.length %> 筆提示</p>
-            <% } %>
-          <% } %>
+    <details class="admin-fold mt-6 rounded border border-emerald-900/50 bg-emerald-950/20" data-fold-key="registration" <%= event.registrationEnabled ? 'open' : '' %>>
+      <summary class="flex cursor-pointer items-center justify-between gap-3 px-6 py-4">
+        <div>
+          <h2 class="text-lg font-semibold text-emerald-400">線上報名</h2>
+          <p class="mt-0.5 text-xs text-slate-500"><%= event.registrationEnabled ? '已開放' : '未開放' %></p>
         </div>
-      <% } %>
-
-      <section class="mt-6 rounded border border-sky-900/60 bg-sky-950/25 p-4">
-        <h3 class="text-sm font-semibold text-sky-300">Excel 匯入賽事（一次建立多個項目）</h3>
-        <p class="mt-1 text-xs text-slate-400">第一列為表頭、讀取第一個工作表；同名賽事（同一大會底下）會略過。</p>
-        <p class="mt-2 text-sm">
-          <a href="/admin/events/<%= event._id %>/import-tournaments-template" class="text-sky-400 underline">下載賽事 xlsx 範本</a>
-        </p>
-        <form method="post" action="/admin/events/<%= event._id %>/import-tournaments" enctype="multipart/form-data" class="mt-3 flex flex-wrap items-end gap-3">
-          <div>
-            <label class="block text-xs text-slate-500">選擇檔案</label>
-            <input type="file" name="file" accept=".xlsx,.xls,.csv" required class="mt-1 block w-full text-sm text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-slate-200" />
-          </div>
-          <button type="submit" class="rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-600">上傳匯入</button>
-        </form>
-      </section>
-
-      <ul class="mt-4 space-y-2">
-        <% tournaments.forEach(function (t) { %>
-          <li class="flex flex-wrap items-center gap-3 rounded border border-slate-800 bg-slate-900/50 px-4 py-3">
-            <span class="font-medium"><%= t.name %></span>
-            <span class="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400"><%= t.phase === 'group' ? '小組賽' : t.phase === 'double_elim' ? '雙敗淘汰' : '淘汰賽' %></span>
-            <% if (t.phase === 'group') { %>
-              <span class="text-xs text-slate-500">各組前 <%= t.advancePerGroup %> 名</span>
-            <% } %>
-            <% if (t.competitionDate) { %>
-              <span class="text-xs text-sky-400/90"><%= typeof formatDateDisplayZh === 'function' ? formatDateDisplayZh(t.competitionDate) : t.competitionDate %></span>
-            <% } %>
-            <a href="/admin/tournaments/<%= t._id %>" class="ml-auto text-emerald-400 underline">管理賽程與隊伍</a>
-            <form method="post" action="/admin/tournaments/<%= t._id %>/delete" class="inline" onsubmit="return confirm('確定刪除此賽事？將一併刪除底下的組別、隊伍、場次與球證指派，無法復原。');">
-              <button type="submit" class="text-sm text-rose-400 underline hover:text-rose-300">刪除</button>
-            </form>
-          </li>
-        <% }); %>
-      </ul>
-
-      <form method="post" action="/admin/events/<%= event._id %>/tournaments" class="mt-6 space-y-3 rounded border border-dashed border-slate-700 p-4" id="new-tournament-form">
-        <h3 class="text-sm font-semibold text-slate-300">新增賽事</h3>
+        <span class="fold-chevron text-emerald-600/70" aria-hidden="true">▼</span>
+      </summary>
+      <form method="post" action="/admin/events/<%= event._id %>/registration" class="space-y-4 border-t border-emerald-900/40 px-6 pb-6 pt-4">
+        <div class="flex items-center gap-2">
+          <input type="checkbox" name="registrationEnabled" value="1" id="registrationEnabled" <%= event.registrationEnabled ? 'checked' : '' %> />
+          <label for="registrationEnabled" class="text-sm text-slate-300">開放線上報名</label>
+        </div>
+        <p class="text-xs text-slate-500">開啟後，會員可於 <code class="rounded bg-slate-800 px-1">/e/<%= event.slug %>/register</code> 報名。請先於<a href="/admin/events/<%= event._id %>/divisions" class="text-emerald-400 underline">報名組別</a>建立組別及收費。</p>
+        <div>
+          <label class="block text-sm text-slate-400">報名說明（前台顯示）</label>
+          <textarea name="registrationInfo" rows="4" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2"><%= event.registrationInfo || '' %></textarea>
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400">場地詳情</label>
+          <textarea name="venueDetails" rows="3" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2"><%= event.venueDetails || '' %></textarea>
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400">參賽資格備註</label>
+          <textarea name="eligibilityNotes" rows="3" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2"><%= event.eligibilityNotes || '' %></textarea>
+        </div>
         <div class="flex flex-wrap gap-3">
-          <input name="name" required placeholder="賽事名稱" class="min-w-[200px] flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2" />
-          <select name="phase" id="new-tournament-phase" class="rounded border border-slate-700 bg-slate-900 px-3 py-2">
-            <option value="group">小組賽</option>
-            <option value="knockout">淘汰賽（單敗）</option>
-            <option value="double_elim">雙敗淘汰賽</option>
-          </select>
-          <input
-            id="new-tournament-advance"
-            name="advancePerGroup"
-            type="number"
-            min="1"
-            value="2"
-            class="w-24 rounded border border-slate-700 bg-slate-900 px-3 py-2"
-            title="各組前 N 名（僅小組賽）"
-            aria-label="各組前 N 名"
-          />
-          <input name="competitionDate" type="date" class="rounded border border-slate-700 bg-slate-900 px-3 py-2" title="比賽日期" />
-          <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-600">新增</button>
+          <button type="submit" class="rounded bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500">儲存報名設定</button>
+          <a href="/admin/events/<%= event._id %>/divisions" class="rounded border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800">管理報名組別</a>
+          <a href="/admin/events/<%= event._id %>/registrations" class="rounded border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800">查看報名紀錄</a>
         </div>
-        <p id="new-tournament-advance-hint" class="text-xs text-slate-500">「各組前 N 名」僅小組賽晉級用；淘汰／雙敗唔使填。</p>
       </form>
-      <script>
-        (function () {
-          var phase = document.getElementById('new-tournament-phase');
-          var advance = document.getElementById('new-tournament-advance');
-          var hint = document.getElementById('new-tournament-advance-hint');
-          if (!phase || !advance) return;
-          function sync() {
-            var isGroup = phase.value === 'group';
-            advance.classList.toggle('hidden', !isGroup);
-            advance.disabled = !isGroup;
-            if (hint) hint.classList.toggle('hidden', !isGroup);
-          }
-          phase.addEventListener('change', sync);
-          sync();
-        })();
-      </script>
-    </section>
+    </details>
 
-    <section class="mt-10">
-      <p class="flex flex-wrap gap-4">
+    <details class="admin-fold mt-6 rounded border border-slate-800 bg-slate-900/30" data-fold-key="tournaments" open>
+      <summary class="flex cursor-pointer items-center justify-between gap-3 px-6 py-4">
+        <div>
+          <h2 class="text-lg font-semibold text-white">賽事（賽制／晉級）</h2>
+          <p class="mt-0.5 text-xs text-slate-500"><%= tournaments.length %> 筆賽事</p>
+        </div>
+        <span class="fold-chevron text-slate-500" aria-hidden="true">▼</span>
+      </summary>
+      <div class="border-t border-slate-800 px-6 pb-6 pt-4">
+        <p class="text-sm text-slate-500">每一筆賽事可為小組賽或淘汰賽；小組賽內再管理組別、隊伍與場次。</p>
+
+        <% if (typeof tournamentImportReport !== 'undefined' && tournamentImportReport) { %>
+          <div class="mt-4 rounded border px-4 py-3 text-sm <%= tournamentImportReport.error ? 'border-rose-500/50 bg-rose-950/30 text-rose-100' : 'border-sky-500/40 bg-sky-950/25 text-sky-100' %>">
+            <% if (tournamentImportReport.error) { %>
+              <p class="font-medium text-rose-300"><%= tournamentImportReport.error %></p>
+            <% } else { %>
+              <p class="font-medium text-sky-300">匯入完成：新增 <%= tournamentImportReport.createdCount %> 筆賽事</p>
+            <% } %>
+            <% if (tournamentImportReport.parseErrors && tournamentImportReport.parseErrors.length) { %>
+              <p class="mt-2 text-xs text-slate-400">解析／略過：</p>
+              <% tournamentImportReport.parseErrors.forEach(function (line) { %>
+                <p class="text-xs text-slate-400"><%= line %></p>
+              <% }); %>
+            <% } %>
+            <% if (tournamentImportReport.rowErrors && tournamentImportReport.rowErrors.length) { %>
+              <ul class="mt-2 list-inside list-disc text-xs text-amber-200/90">
+                <% tournamentImportReport.rowErrors.slice(0, 15).forEach(function (line) { %>
+                  <li><%= line %></li>
+                <% }); %>
+              </ul>
+              <% if (tournamentImportReport.rowErrors.length > 15) { %>
+                <p class="mt-1 text-xs text-slate-500">…共 <%= tournamentImportReport.rowErrors.length %> 筆提示</p>
+              <% } %>
+            <% } %>
+          </div>
+        <% } %>
+
+        <details class="admin-fold mt-4 rounded border border-sky-900/60 bg-sky-950/25" data-fold-key="tournament-import" <%= (typeof tournamentImportReport !== 'undefined' && tournamentImportReport) ? 'open' : '' %>>
+          <summary class="flex cursor-pointer items-center justify-between gap-2 px-4 py-3">
+            <h3 class="text-sm font-semibold text-sky-300">Excel 匯入賽事</h3>
+            <span class="fold-chevron text-sky-600/80" aria-hidden="true">▼</span>
+          </summary>
+          <div class="border-t border-sky-900/40 px-4 pb-4 pt-3">
+            <p class="text-xs text-slate-400">第一列為表頭、讀取第一個工作表；同名賽事（同一大會底下）會略過。</p>
+            <p class="mt-2 text-sm">
+              <a href="/admin/events/<%= event._id %>/import-tournaments-template" class="text-sky-400 underline">下載賽事 xlsx 範本</a>
+            </p>
+            <form method="post" action="/admin/events/<%= event._id %>/import-tournaments" enctype="multipart/form-data" class="mt-3 flex flex-wrap items-end gap-3">
+              <div>
+                <label class="block text-xs text-slate-500">選擇檔案</label>
+                <input type="file" name="file" accept=".xlsx,.xls,.csv" required class="mt-1 block w-full text-sm text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-slate-200" />
+              </div>
+              <button type="submit" class="rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-600">上傳匯入</button>
+            </form>
+          </div>
+        </details>
+
+        <ul class="mt-4 space-y-2">
+          <% if (!tournaments.length) { %>
+            <li class="rounded border border-dashed border-slate-700 px-4 py-3 text-sm text-slate-500">尚未建立賽事。</li>
+          <% } %>
+          <% tournaments.forEach(function (t) { %>
+            <li class="flex flex-wrap items-center gap-3 rounded border border-slate-800 bg-slate-900/50 px-4 py-3">
+              <span class="font-medium"><%= t.name %></span>
+              <span class="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400"><%= t.phase === 'group' ? '小組賽' : t.phase === 'double_elim' ? '雙敗淘汰' : t.phase === 'league' ? '聯賽' : '淘汰賽' %></span>
+              <% if (t.showOnWebsite === false) { %>
+                <span class="rounded bg-amber-950/60 px-2 py-0.5 text-xs text-amber-300">網站隱藏</span>
+              <% } %>
+              <% if (t.phase === 'group') { %>
+                <span class="text-xs text-slate-500">各組前 <%= t.advancePerGroup %> 名</span>
+              <% } %>
+              <% if (t.competitionDate) { %>
+                <span class="text-xs text-sky-400/90"><%= typeof formatDateDisplayZh === 'function' ? formatDateDisplayZh(t.competitionDate) : t.competitionDate %></span>
+              <% } %>
+              <a href="/admin/tournaments/<%= t._id %>" class="ml-auto text-emerald-400 underline">管理賽程與隊伍</a>
+              <form method="post" action="/admin/tournaments/<%= t._id %>/delete" class="inline" onsubmit="return confirm('確定刪除此賽事？將一併刪除底下的組別、隊伍、場次與球證指派，無法復原。');">
+                <button type="submit" class="text-sm text-rose-400 underline hover:text-rose-300">刪除</button>
+              </form>
+            </li>
+          <% }); %>
+        </ul>
+
+        <details class="admin-fold mt-4 rounded border border-dashed border-slate-700" data-fold-key="tournament-new" <%= tournaments.length ? '' : 'open' %>>
+          <summary class="flex cursor-pointer items-center justify-between gap-2 px-4 py-3">
+            <h3 class="text-sm font-semibold text-slate-300">新增賽事</h3>
+            <span class="fold-chevron text-slate-600" aria-hidden="true">▼</span>
+          </summary>
+          <form method="post" action="/admin/events/<%= event._id %>/tournaments" class="space-y-3 border-t border-slate-800 px-4 pb-4 pt-3" id="new-tournament-form">
+            <div class="flex flex-wrap gap-3">
+              <input name="name" required placeholder="賽事名稱" class="min-w-[200px] flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+              <select name="phase" id="new-tournament-phase" class="rounded border border-slate-700 bg-slate-900 px-3 py-2">
+                <option value="group">小組賽</option>
+                <option value="knockout">淘汰賽（單敗）</option>
+                <option value="double_elim">雙敗淘汰賽</option>
+                <option value="league">聯賽（跨週／雙循環）</option>
+              </select>
+              <input
+                id="new-tournament-advance"
+                name="advancePerGroup"
+                type="number"
+                min="1"
+                value="2"
+                class="w-24 rounded border border-slate-700 bg-slate-900 px-3 py-2"
+                title="各組前 N 名（僅小組賽）"
+                aria-label="各組前 N 名"
+              />
+              <input name="competitionDate" type="date" class="rounded border border-slate-700 bg-slate-900 px-3 py-2" title="比賽日期" />
+              <label class="inline-flex items-center gap-2 text-sm text-slate-300">
+                <input type="hidden" name="showOnWebsite" value="0" />
+                <input type="checkbox" name="showOnWebsite" value="1" checked />
+                在網站顯示
+              </label>
+              <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-600">新增</button>
+            </div>
+            <p id="new-tournament-advance-hint" class="text-xs text-slate-500">「各組前 N 名」僅小組賽晉級用；淘汰／雙敗／聯賽唔使填。聯賽：每場五回合 21 分，五場總分較高者勝，排名先得失球再勝場。</p>
+          </form>
+        </details>
+      </div>
+    </details>
+
+    <section class="mt-8">
+      <p class="flex flex-wrap gap-4 text-sm">
         <a href="/admin/events/<%= event._id %>/matches-summary" class="text-emerald-400 underline">賽果總覽／小組報分表</a>
+        <span class="text-slate-500">聯賽排陣：入該聯賽賽事頁開「iPad 排陣」</span>
         <a href="/e/<%= event.slug %>" target="_blank" rel="noopener" class="text-sky-400 underline">開啟前台 ↗</a>
       </p>
     </section>
   </main>
+  <script>
+    (function () {
+      var phase = document.getElementById('new-tournament-phase');
+      var advance = document.getElementById('new-tournament-advance');
+      var hint = document.getElementById('new-tournament-advance-hint');
+      if (phase && advance) {
+        function sync() {
+          var isGroup = phase.value === 'group';
+          advance.classList.toggle('hidden', !isGroup);
+          advance.disabled = !isGroup;
+          if (hint) hint.classList.toggle('hidden', !isGroup);
+        }
+        phase.addEventListener('change', sync);
+        sync();
+      }
+
+      var storageKey = 'admin-event-folds:<%= event._id %>';
+      var folds = Array.prototype.slice.call(document.querySelectorAll('details.admin-fold[data-fold-key]'));
+
+      function saveFolds() {
+        var state = {};
+        folds.forEach(function (el) {
+          state[el.getAttribute('data-fold-key')] = el.open;
+        });
+        try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (e) {}
+      }
+
+      function restoreFolds() {
+        var raw = null;
+        try { raw = localStorage.getItem(storageKey); } catch (e) {}
+        if (!raw) return;
+        var state = {};
+        try { state = JSON.parse(raw) || {}; } catch (e) { return; }
+        folds.forEach(function (el) {
+          var key = el.getAttribute('data-fold-key');
+          if (Object.prototype.hasOwnProperty.call(state, key)) el.open = !!state[key];
+        });
+      }
+
+      restoreFolds();
+      folds.forEach(function (el) {
+        el.addEventListener('toggle', saveFolds);
+      });
+
+      var expandBtn = document.getElementById('fold-expand-all');
+      var collapseBtn = document.getElementById('fold-collapse-all');
+      if (expandBtn) expandBtn.addEventListener('click', function () {
+        folds.forEach(function (el) { el.open = true; });
+        saveFolds();
+      });
+      if (collapseBtn) collapseBtn.addEventListener('click', function () {
+        folds.forEach(function (el) { el.open = false; });
+        saveFolds();
+      });
+    })();
+  </script>
 <%- include('../partials/admin-frame-end') %>

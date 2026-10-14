@@ -3,6 +3,7 @@ import { buildDoubleElimTracks } from './doubleElimGenerator.js';
 import { buildDoubleElimTreeLayout } from './doubleElimTree.js';
 import { getPodiumFromKnockoutMatches } from './knockoutPodium.js';
 import { formatDateDisplayZh, normalizeDateOnly } from './datetime.js';
+import { compareMatchesBySchedule } from './matchTime.js';
 
 function competitionDateLabel(groupTournament, knockoutTournament) {
   const g = normalizeDateOnly(groupTournament?.competitionDate);
@@ -29,12 +30,7 @@ export function guessKnockoutSourceGroupId(knockout, groupTournaments) {
 }
 
 function sortMatches(a, b) {
-  const ta = a.scheduledTime || '';
-  const tb = b.scheduledTime || '';
-  if (ta !== tb) return ta.localeCompare(tb);
-  const ca = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-  const cb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-  return ca - cb;
+  return compareMatchesBySchedule(a, b);
 }
 
 /**
@@ -43,15 +39,20 @@ function sortMatches(a, b) {
 export function buildEventCompetitions({
   tournaments,
   groupStandingsList,
+  leagueStandingsList,
   matches,
   knockoutMatchesByTournamentId,
 }) {
   const groups = (tournaments || []).filter((t) => t.phase === 'group');
   const knockouts = (tournaments || []).filter((t) => t.phase === 'knockout');
   const doubleElims = (tournaments || []).filter((t) => t.phase === 'double_elim');
+  const leagues = (tournaments || []).filter((t) => t.phase === 'league');
 
   const standingsByGroupId = new Map(
     (groupStandingsList || []).map((s) => [String(s.tournament._id), s])
+  );
+  const standingsByLeagueId = new Map(
+    (leagueStandingsList || []).map((s) => [String(s.tournament._id), s])
   );
 
   const koByGroupId = new Map();
@@ -148,6 +149,29 @@ export function buildEventCompetitions({
           isDoubleElim: true,
           podium: null,
           matches: [...deMs].sort(sortMatches),
+        };
+      })
+    )
+    .concat(
+      leagues.map((lg) => {
+        const lgId = String(lg._id);
+        const lgMs = matchesByTid.get(lgId) || [];
+        const label = formatDateDisplayZh(lg.competitionDate);
+        const competitionDate = normalizeDateOnly(lg.competitionDate) || '';
+        return {
+          key: lgId,
+          name: lg.name,
+          order: lg.order ?? 0,
+          competitionDate,
+          competitionDateLabel: label,
+          isLeague: true,
+          leagueStandings: standingsByLeagueId.get(lgId) || null,
+          knockoutLadderColumns: [],
+          knockoutBracket: null,
+          doubleElimTracks: null,
+          isDoubleElim: false,
+          podium: null,
+          matches: [...lgMs].sort(sortMatches),
         };
       })
     );

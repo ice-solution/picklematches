@@ -1,3 +1,7 @@
+import { gameLineupNote, LEAGUE_GAME_LABELS } from './leagueRules.js';
+import { resolveGamePlayers, resolveCurrentPlayers, playersFromConfirmedLineup } from './leagueLineup.js';
+import { normalizeDateOnly } from './datetime.js';
+
 /** 依已完成局計算雙方贏局數 */
 export function countGamesWon(completedGames) {
   let gamesA = 0;
@@ -22,14 +26,47 @@ export function completedGamesDetail(completedGames) {
   return real.map((g) => `${g.a}-${g.b}`).join(' · ');
 }
 
-/**
- * 比分顯示：main = 大比分贏局數（2-1），detail = 各局細分（15-12 · 10-15）
- */
+/** 比分顯示：main = 大比分贏局數（2-1），聯賽則為五回合總分 */
 export function scoreDisplayParts(m) {
   if (!m) return { main: '—', detail: '' };
   const ca = m.currentPoints?.a ?? 0;
   const cb = m.currentPoints?.b ?? 0;
   const completed = m.completedGames || [];
+
+  if (m.matchFormat === 'leagueFive') {
+    let ptsA = 0;
+    let ptsB = 0;
+    const bits = [];
+    const live = m.status === 'live' || (m.status === 'scheduled' && (ca > 0 || cb > 0));
+    const boardPreview = LEAGUE_GAME_LABELS.some((_, i) => {
+      const p = playersFromConfirmedLineup(m, i);
+      return p.playersA.length || p.playersB.length;
+    });
+
+    for (let i = 0; i < LEAGUE_GAME_LABELS.length; i++) {
+      const g = completed[i];
+      const lab = g?.label || LEAGUE_GAME_LABELS[i] || `第${i + 1}場`;
+      const who = gameLineupNote(resolveGamePlayers(m, i, g));
+      const note = g?.remark ? ` ※${g.remark}` : '';
+      if (g) {
+        ptsA += Number(g.a || 0);
+        ptsB += Number(g.b || 0);
+        bits.push(`${lab} ${g.a}-${g.b}${who ? ' ' + who : ''}${note}`);
+      } else if (live && i === completed.length) {
+        const liveWho = gameLineupNote(resolveCurrentPlayers(m));
+        bits.push(`${lab} [${ca}-${cb}]${liveWho ? ' ' + liveWho : ''}`);
+        ptsA += ca;
+        ptsB += cb;
+      } else if (who) {
+        bits.push(`${lab} ${who}${note}`);
+      }
+    }
+
+    if (!completed.length && !live && !boardPreview) return { main: '—', detail: '' };
+    if (!completed.length && !live && boardPreview) return { main: '—', detail: bits.join(' · ') };
+    return { main: `${ptsA}-${ptsB}`, detail: bits.join(' · ') };
+  }
+
   const { gamesA, gamesB } = countGamesWon(completed);
   let detail = completedGamesDetail(completed);
   let main = '';
@@ -74,7 +111,7 @@ export function formatLabel(matchFormat) {
   const map = {
     bestOf5: '五局三勝',
     bestOf3: '三局兩勝',
-    singleGame: '一局過',
+    leagueFive: '聯賽五回合（21分）',
   };
   return map[matchFormat] || matchFormat;
 }
@@ -130,7 +167,7 @@ export function enrichMatchesForSchedule(matches, tournaments, groups) {
       ...m,
       tournamentName: tName[String(m.tournamentId)] || '',
       tournamentPhase: tPhase[String(m.tournamentId)] || '',
-      competitionDate: tDate[String(m.tournamentId)] || '',
+      competitionDate: normalizeDateOnly(m.scheduledDate) || tDate[String(m.tournamentId)] || '',
       groupName,
       scheduleGroupLabel: groupName || round || '',
     };

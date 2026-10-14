@@ -25,6 +25,7 @@
       <div class="border-b border-slate-800/80 px-6 py-3 text-center md:px-10">
         <p class="text-xs tracking-widest text-slate-500 uppercase"><%= event.name %></p>
         <p class="mt-0.5 text-sm text-slate-400"><%= venue.name %></p>
+        <p id="roundLabel" class="mt-2 hidden text-lg font-semibold tracking-wide text-amber-300/90 md:text-xl"></p>
       </div>
 
       <div id="idle" class="<%= match ? 'hidden' : '' %> flex min-h-[280px] items-center justify-center px-8 py-16 text-center">
@@ -33,14 +34,20 @@
 
       <div id="active" class="<%= match ? '' : 'hidden' %>">
         <div class="divide-y divide-slate-800/80">
-          <div class="flex items-center gap-4 px-6 py-7 md:px-10 md:py-10">
+          <div class="flex items-center gap-4 px-6 py-6 md:px-10 md:py-9">
             <div id="serveA" class="serve-mark opacity-0" aria-hidden="true"></div>
-            <div id="teamA" class="min-w-0 flex-1 truncate text-2xl font-medium tracking-wide text-emerald-400 md:text-4xl lg:text-5xl"><%= match && match.teamA ? match.teamA.name : '' %></div>
+            <div class="min-w-0 flex-1">
+              <div id="teamA" class="truncate text-2xl font-medium tracking-wide text-emerald-400 md:text-4xl lg:text-5xl"><%= match && match.teamA ? match.teamA.name : '' %></div>
+              <div id="playersA" class="mt-1.5 truncate text-base font-medium text-emerald-200/75 md:text-xl lg:text-2xl"></div>
+            </div>
             <div id="scoreA" class="score-num text-5xl font-bold tabular-nums md:text-7xl lg:text-8xl"><%= match && match.currentPoints ? (match.currentPoints.a || 0) : 0 %></div>
           </div>
-          <div class="flex items-center gap-4 px-6 py-7 md:px-10 md:py-10">
+          <div class="flex items-center gap-4 px-6 py-6 md:px-10 md:py-9">
             <div id="serveB" class="serve-mark opacity-0" aria-hidden="true"></div>
-            <div id="teamB" class="min-w-0 flex-1 truncate text-2xl font-medium tracking-wide text-sky-400 md:text-4xl lg:text-5xl"><%= match && match.teamB ? match.teamB.name : '' %></div>
+            <div class="min-w-0 flex-1">
+              <div id="teamB" class="truncate text-2xl font-medium tracking-wide text-sky-400 md:text-4xl lg:text-5xl"><%= match && match.teamB ? match.teamB.name : '' %></div>
+              <div id="playersB" class="mt-1.5 truncate text-base font-medium text-sky-200/75 md:text-xl lg:text-2xl"></div>
+            </div>
             <div id="scoreB" class="score-num text-5xl font-bold tabular-nums md:text-7xl lg:text-8xl"><%= match && match.currentPoints ? (match.currentPoints.b || 0) : 0 %></div>
           </div>
         </div>
@@ -59,14 +66,57 @@
       var eventSlug = <%- JSON.stringify(event.slug) %>;
       var venueSlug = <%- JSON.stringify(venue.slug) %>;
       var eventId = <%- JSON.stringify(eventIdStr) %>;
+      var LEAGUE_LABELS = ['男雙', '女雙', '混雙（1）', '混雙（2）', '混雙（3）'];
 
       function teamName(team) {
         if (!team) return '—';
         return team.name || '—';
       }
 
+      function formatPlayers(arr) {
+        return (arr || []).map(function (n) { return String(n || '').trim(); }).filter(Boolean).join(' · ');
+      }
+
+      function boardSidePlayers(m, side, idx) {
+        var block = m && m.lineupBySide && m.lineupBySide[side];
+        if (!block || !block.confirmed || !Array.isArray(block.games) || !block.games[idx]) return [];
+        return (block.games[idx].players || []).filter(Boolean);
+      }
+
+      /** 當前回合球員：currentLineup 優先，否則已確認排陣；回合 = completedGames.length */
+      function currentRoundInfo(m) {
+        if (!m || m.matchFormat !== 'leagueFive') {
+          return { label: '', playersA: '', playersB: '', idx: -1 };
+        }
+        var idx = (m.completedGames || []).length;
+        var curA = ((m.currentLineup && m.currentLineup.playersA) || []).filter(Boolean);
+        var curB = ((m.currentLineup && m.currentLineup.playersB) || []).filter(Boolean);
+        var a = curA.length ? curA : boardSidePlayers(m, 'a', idx);
+        var b = curB.length ? curB : boardSidePlayers(m, 'b', idx);
+        return {
+          idx: idx,
+          label: LEAGUE_LABELS[idx] || '',
+          playersA: formatPlayers(a),
+          playersB: formatPlayers(b),
+        };
+      }
+
       function gamesText(m) {
-        if (!m || !m.completedGames || !m.completedGames.length) return '—';
+        if (!m) return '—';
+        if (m.matchFormat === 'leagueFive') {
+          var bits = (m.completedGames || []).map(function (g, i) {
+            return (g.label || LEAGUE_LABELS[i] || '') + ' ' + g.a + '-' + g.b;
+          });
+          var ca = (m.currentPoints && m.currentPoints.a) || 0;
+          var cb = (m.currentPoints && m.currentPoints.b) || 0;
+          var totA = 0, totB = 0;
+          (m.completedGames || []).forEach(function (g) { totA += g.a || 0; totB += g.b || 0; });
+          totA += ca; totB += cb;
+          var info = currentRoundInfo(m);
+          if (info.label) bits.push(info.label + ' [' + ca + '-' + cb + ']');
+          return totA + ' : ' + totB + '｜' + bits.filter(Boolean).join(' · ');
+        }
+        if (!m.completedGames || !m.completedGames.length) return '—';
         return m.completedGames.map(function (g) { return g.a + '-' + g.b; }).join(' · ');
       }
 
@@ -77,9 +127,12 @@
       function render(match) {
         var idle = document.getElementById('idle');
         var active = document.getElementById('active');
+        var roundEl = document.getElementById('roundLabel');
         if (!match || match.status !== 'live') {
           idle.classList.remove('hidden');
           active.classList.add('hidden');
+          roundEl.classList.add('hidden');
+          roundEl.textContent = '';
           return;
         }
         idle.classList.add('hidden');
@@ -93,8 +146,29 @@
         document.getElementById('serveA').style.opacity = match.serving === 'a' ? '1' : '0';
         document.getElementById('serveB').style.opacity = match.serving === 'b' ? '1' : '0';
         document.getElementById('gamesLine').textContent = gamesText(match);
+
+        var info = currentRoundInfo(match);
+        var playersA = document.getElementById('playersA');
+        var playersB = document.getElementById('playersB');
+        if (match.matchFormat === 'leagueFive') {
+          playersA.textContent = info.playersA || '（未排陣）';
+          playersB.textContent = info.playersB || '（未排陣）';
+          playersA.classList.toggle('opacity-40', !info.playersA);
+          playersB.classList.toggle('opacity-40', !info.playersB);
+          if (info.label) {
+            roundEl.textContent = '現正：' + info.label;
+            roundEl.classList.remove('hidden');
+          } else {
+            roundEl.classList.add('hidden');
+          }
+        } else {
+          playersA.textContent = '';
+          playersB.textContent = '';
+          roundEl.classList.add('hidden');
+        }
+
         var deuce = document.getElementById('deuce');
-        if (isDeuce(ca, cb)) deuce.classList.remove('hidden');
+        if (match.matchFormat !== 'leagueFive' && isDeuce(ca, cb)) deuce.classList.remove('hidden');
         else deuce.classList.add('hidden');
       }
 
@@ -110,6 +184,10 @@
         .then(function (r) { return r.json(); })
         .then(function (data) { render(data.match); })
         .catch(function () {});
+
+      <% if (match) { %>
+      render(<%- JSON.stringify(match) %>);
+      <% } %>
     })();
   </script>
 </body>

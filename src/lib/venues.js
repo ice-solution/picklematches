@@ -29,8 +29,8 @@ export function slugFromVenueName(name, fallbackIndex = 0) {
 }
 
 /**
- * 將舊字串陣列或混和資料正規成 { slug, name, pinHash }
- * @returns {{ slug: string, name: string, pinHash: string }[]}
+ * 將舊字串陣列或混和資料正規成場地物件
+ * @returns {{ slug: string, name: string, pinHash: string, streamRtspUrl: string, youtubeRtmpServer: string, youtubeStreamKey: string }[]}
  */
 export function normalizeEventVenues(venues) {
   if (!Array.isArray(venues)) return [];
@@ -40,10 +40,16 @@ export function normalizeEventVenues(venues) {
     let slug = '';
     let name = '';
     let pinHash = '';
+    let streamRtspUrl = '';
+    let youtubeRtmpServer = '';
+    let youtubeStreamKey = '';
     if (v && typeof v === 'object') {
       name = String(v.name || '').trim();
       slug = normalizeVenueSlug(v.slug) || slugFromVenueName(name || v.slug, i);
       pinHash = typeof v.pinHash === 'string' ? v.pinHash : '';
+      streamRtspUrl = String(v.streamRtspUrl || '').trim();
+      youtubeRtmpServer = String(v.youtubeRtmpServer || '').trim();
+      youtubeStreamKey = String(v.youtubeStreamKey || '').trim();
       if (!name) name = slug ? slug + ' 號場' : '場地 ' + (i + 1);
     } else {
       name = String(v || '').trim();
@@ -53,7 +59,14 @@ export function normalizeEventVenues(venues) {
     if (!isValidVenueSlug(slug)) return;
     if (seen.has(slug)) return;
     seen.add(slug);
-    out.push({ slug, name, pinHash });
+    out.push({
+      slug,
+      name,
+      pinHash,
+      streamRtspUrl,
+      youtubeRtmpServer,
+      youtubeStreamKey,
+    });
   });
   return out;
 }
@@ -90,7 +103,7 @@ export function courtMatchFilter(venue) {
 
 /**
  * 從表單 body 解析場地列。
- * 支援 venueSlug[] / venueName[] / venuePin[]，或舊版 textarea venues（每行一名稱）。
+ * 支援 venueSlug[] / venueName[] / venuePin[] / stream 欄位，或舊版 textarea venues。
  */
 export async function parseVenuesFromBody(body, existing = []) {
   const existingBySlug = new Map(normalizeEventVenues(existing).map((v) => [v.slug, v]));
@@ -98,11 +111,17 @@ export async function parseVenuesFromBody(body, existing = []) {
   const slugs = body?.venueSlug;
   const names = body?.venueName;
   const pins = body?.venuePin;
+  const rtsps = body?.venueStreamRtsp;
+  const rtmps = body?.venueYoutubeRtmp;
+  const keys = body?.venueYoutubeKey;
 
   if (slugs !== undefined || names !== undefined) {
     const slugArr = Array.isArray(slugs) ? slugs : slugs != null ? [slugs] : [];
     const nameArr = Array.isArray(names) ? names : names != null ? [names] : [];
     const pinArr = Array.isArray(pins) ? pins : pins != null ? [pins] : [];
+    const rtspArr = Array.isArray(rtsps) ? rtsps : rtsps != null ? [rtsps] : [];
+    const rtmpArr = Array.isArray(rtmps) ? rtmps : rtmps != null ? [rtmps] : [];
+    const keyArr = Array.isArray(keys) ? keys : keys != null ? [keys] : [];
     const n = Math.max(slugArr.length, nameArr.length);
     const out = [];
     const seen = new Set();
@@ -128,10 +147,19 @@ export async function parseVenuesFromBody(body, existing = []) {
       if (pinRaw) {
         pinHash = await bcrypt.hash(pinRaw, 10);
       }
+
+      const rtspRaw = String(rtspArr[i] ?? '').trim();
+      const rtmpRaw = String(rtmpArr[i] ?? '').trim();
+      const keyRaw = String(keyArr[i] ?? '').trim();
+
       out.push({
         slug,
         name: name || slug + ' 號場',
         pinHash,
+        streamRtspUrl: rtspRaw,
+        youtubeRtmpServer: rtmpRaw,
+        // 金鑰同 PIN：留空＝維持原值；填「-」可清除
+        youtubeStreamKey: keyRaw === '-' ? '' : keyRaw || prev?.youtubeStreamKey || '',
       });
     }
     return out;
@@ -155,6 +183,9 @@ export async function parseVenuesFromBody(body, existing = []) {
       slug,
       name,
       pinHash: prev?.pinHash || '',
+      streamRtspUrl: prev?.streamRtspUrl || '',
+      youtubeRtmpServer: prev?.youtubeRtmpServer || '',
+      youtubeStreamKey: prev?.youtubeStreamKey || '',
     });
   }
   return out;

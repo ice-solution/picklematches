@@ -4,8 +4,8 @@ const tournamentSchema = new mongoose.Schema(
   {
     eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true },
     name: { type: String, required: true, trim: true },
-    /** group: 小組賽, knockout: 單敗淘汰, double_elim: 雙敗淘汰 */
-    phase: { type: String, enum: ['group', 'knockout', 'double_elim'], required: true },
+    /** group: 小組賽, knockout: 單敗淘汰, double_elim: 雙敗淘汰, league: 聯賽（跨週雙循環） */
+    phase: { type: String, enum: ['group', 'knockout', 'double_elim', 'league'], required: true },
     /** 淘汰賽對應的小組賽賽事（產生淘汰或後台綁定） */
     sourceGroupTournamentId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -23,6 +23,8 @@ const tournamentSchema = new mongoose.Schema(
     order: { type: Number, default: 0 },
     /** 比賽日期 YYYY-MM-DD（前台賽程顯示用） */
     competitionDate: { type: String, trim: true, default: '' },
+    /** 是否在公開網站顯示此賽事（賽程／積分榜／籤表） */
+    showOnWebsite: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

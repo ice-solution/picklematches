@@ -30,11 +30,93 @@
       .join(' · ');
   }
 
+  var LEAGUE_LABELS = ['男雙', '女雙', '混雙（1）', '混雙（2）', '混雙（3）'];
+
+  function formatNames(arr) {
+    return (arr || []).map(function (n) { return String(n || '').trim(); }).filter(Boolean).join('、');
+  }
+
+  function gameLineupNote(g) {
+    var a = formatNames(g && g.playersA);
+    var b = formatNames(g && g.playersB);
+    if (!a && !b) return '';
+    return (a || '—') + ' vs ' + (b || '—');
+  }
+
+  function sideBoardPlayers(sideBlock, idx) {
+    if (!sideBlock || !sideBlock.confirmed || !Array.isArray(sideBlock.games)) return [];
+    var g = sideBlock.games[idx];
+    return (g && g.players) || [];
+  }
+
+  function boardPlayers(m, idx) {
+    var lb = (m && m.lineupBySide) || {};
+    return {
+      playersA: sideBoardPlayers(lb.a, idx),
+      playersB: sideBoardPlayers(lb.b, idx),
+    };
+  }
+
+  function resolveGamePlayersClient(m, idx, row) {
+    var g = row || (m.completedGames && m.completedGames[idx]) || {};
+    var fromA = (g.playersA || []).filter(Boolean);
+    var fromB = (g.playersB || []).filter(Boolean);
+    var board = boardPlayers(m, idx);
+    return {
+      playersA: fromA.length ? fromA : board.playersA,
+      playersB: fromB.length ? fromB : board.playersB,
+    };
+  }
+
+  function resolveCurrentPlayersClient(m) {
+    var curA = ((m.currentLineup && m.currentLineup.playersA) || []).filter(Boolean);
+    var curB = ((m.currentLineup && m.currentLineup.playersB) || []).filter(Boolean);
+    var board = boardPlayers(m, (m.completedGames || []).length);
+    return {
+      playersA: curA.length ? curA : board.playersA,
+      playersB: curB.length ? curB : board.playersB,
+    };
+  }
+
   function scoreDisplayParts(m) {
     if (!m) return { main: '—', detail: '' };
     var ca = (m.currentPoints && m.currentPoints.a) || 0;
     var cb = (m.currentPoints && m.currentPoints.b) || 0;
     var completed = m.completedGames || [];
+
+    if (m.matchFormat === 'leagueFive') {
+      var ptsA = 0;
+      var ptsB = 0;
+      var bits = [];
+      var liveLeague = m.status === 'live' || (m.status === 'scheduled' && (ca > 0 || cb > 0));
+      var boardPreview = false;
+      for (var bi = 0; bi < LEAGUE_LABELS.length; bi++) {
+        var bp = boardPlayers(m, bi);
+        if ((bp.playersA && bp.playersA.length) || (bp.playersB && bp.playersB.length)) boardPreview = true;
+      }
+      for (var i = 0; i < LEAGUE_LABELS.length; i++) {
+        var g = completed[i];
+        var lab = (g && g.label) || LEAGUE_LABELS[i] || ('第' + (i + 1) + '場');
+        var who = gameLineupNote(resolveGamePlayersClient(m, i, g));
+        var note = g && g.remark ? ' ※' + g.remark : '';
+        if (g) {
+          ptsA += Number(g.a || 0);
+          ptsB += Number(g.b || 0);
+          bits.push(lab + ' ' + g.a + '-' + g.b + (who ? ' ' + who : '') + note);
+        } else if (liveLeague && i === completed.length) {
+          var liveWho = gameLineupNote(resolveCurrentPlayersClient(m));
+          bits.push(lab + ' [' + ca + '-' + cb + ']' + (liveWho ? ' ' + liveWho : ''));
+          ptsA += ca;
+          ptsB += cb;
+        } else if (who) {
+          bits.push(lab + ' ' + who + note);
+        }
+      }
+      if (!completed.length && !liveLeague && !boardPreview) return { main: '—', detail: '' };
+      if (!completed.length && !liveLeague && boardPreview) return { main: '—', detail: bits.join(' · ') };
+      return { main: ptsA + '-' + ptsB, detail: bits.join(' · ') };
+    }
+
     var won = countGamesWon(completed);
     var detail = completedGamesDetail(completed);
     var main = '';

@@ -1,5 +1,14 @@
-import { MATCH_FORMAT } from '../models/Match.js';
+import { Match, MATCH_FORMAT } from '../models/Match.js';
 import { finalizeFinishedMatch } from './matchResult.js';
+import {
+  isLeagueFormat,
+  isLeagueGameComplete,
+  leagueGameLabel,
+  LEAGUE_GAME_COUNT,
+  LEAGUE_POINTS_TO_WIN_GAME,
+  lineupFromCurrent,
+} from './leagueRules.js';
+import { playersFromConfirmedLineup, resolveCurrentPlayers } from './leagueLineup.js';
 
 export function gamesNeededToWinMatch(matchFormat) {
   switch (matchFormat) {
@@ -14,8 +23,9 @@ export function gamesNeededToWinMatch(matchFormat) {
   }
 }
 
-/** 提示用：至少 15 分且領先 2（不再自動換局／完賽） */
-function isGameComplete(scoreA, scoreB) {
+/** 提示用：至少 15 分且領先 2（不再自動換局／完賽）；聯賽回合先到 21 */
+function isGameComplete(scoreA, scoreB, matchFormat) {
+  if (isLeagueFormat(matchFormat)) return isLeagueGameComplete(scoreA, scoreB);
   const hi = Math.max(scoreA, scoreB);
   const lo = Math.min(scoreA, scoreB);
   if (hi < 15) return false;
@@ -49,7 +59,8 @@ export function adjustCurrentPoints(match, side, delta) {
 
   ensureMatchScoringState(match);
   const next = Math.max(0, Number(match.currentPoints[side] || 0) + d);
-  match.currentPoints[side] = next;
+  const cap = isLeagueFormat(match.matchFormat) ? LEAGUE_POINTS_TO_WIN_GAME : null;
+  match.currentPoints[side] = cap == null ? next : Math.min(next, cap);
 
   // 得分後自動換成該隊發球（同 ranking control）
   if (d === 1) {
@@ -67,7 +78,7 @@ export function adjustCurrentPoints(match, side, delta) {
   const b = match.currentPoints.b;
   return {
     ok: true,
-    gameReady: isGameComplete(a, b),
+    gameReady: isGameComplete(a, b, match.matchFormat),
     gameEnded: false,
     matchEnded: false,
   };
@@ -91,24 +102,51 @@ export function commitCurrentGame(match) {
   if (a === 0 && b === 0) {
     return { ok: false, error: 'empty_game' };
   }
-  if (a === b) {
+  if (isLeagueFormat(match.matchFormat)) {
+    if (match.completedGames.length >= LEAGUE_GAME_COUNT) {
+      return { ok: false, error: 'league_games_complete' };
+    }
+    if (!isLeagueGameComplete(a, b)) {
+      return { ok: false, error: 'league_game_not_to_21' };
+    }
+  } else if (a === b) {
     return { ok: false, error: 'tied_game' };
   }
 
-  match.completedGames.push({ a, b });
+  const label = isLeagueFormat(match.matchFormat) ? leagueGameLabel(match.completedGames.length) : '';
+  const fromCurrent = isLeagueFormat(match.matchFormat) ? lineupFromCurrent(match) : { playersA: [], playersB: [] };
+  const fromBoard = isLeagueFormat(match.matchFormat)
+    ? playersFromConfirmedLineup(match, match.completedGames.length)
+    : { playersA: [], playersB: [] };
+  const lineup = {
+    playersA: fromCurrent.playersA.length ? fromCurrent.playersA : fromBoard.playersA,
+    playersB: fromCurrent.playersB.length ? fromCurrent.playersB : fromBoard.playersB,
+  };
+  const row = { a, b };
+  if (label) row.label = label;
+  if (lineup.playersA.length) row.playersA = lineup.playersA;
+  if (lineup.playersB.length) row.playersB = lineup.playersB;
+  match.completedGames.push(row);
   match.currentGameIndex = match.completedGames.length;
   match.currentPoints = { a: 0, b: 0 };
   match.serving = '';
+  if (isLeagueFormat(match.matchFormat)) {
+    const next = playersFromConfirmedLineup(match, match.completedGames.length);
+    match.currentLineup = { playersA: next.playersA, playersB: next.playersB };
+  }
   if (match.status === 'scheduled') match.status = 'live';
   if (typeof match.markModified === 'function') {
     match.markModified('completedGames');
     match.markModified('currentPoints');
+    match.markModified('currentLineup');
   }
 
   const gamesWonA = match.completedGames.filter((g) => g.a > g.b).length;
   const gamesWonB = match.completedGames.filter((g) => g.b > g.a).length;
   const need = gamesNeededToWinMatch(match.matchFormat);
-  const canFinish = gamesWonA >= need || gamesWonB >= need;
+  const canFinish = isLeagueFormat(match.matchFormat)
+    ? match.completedGames.length >= LEAGUE_GAME_COUNT
+    : gamesWonA >= need || gamesWonB >= need;
 
   return { ok: true, gameEnded: true, canFinish, matchEnded: false };
 }
@@ -121,6 +159,38 @@ export function finishMatchManual(match) {
     return { ok: false, error: 'match_cancelled' };
   }
   ensureMatchScoringState(match);
+  if (isLeagueFormat(match.matchFormat)) {
+    const ca = Number(match.currentPoints.a || 0);
+    const cb = Number(match.currentPoints.b || 0);
+    const games = [...(match.completedGames || [])];
+    if (ca > 0 || cb > 0) {
+      if (!isLeagueGameComplete(ca, cb) && games.length < LEAGUE_GAME_COUNT) {
+        return { ok: false, error: 'league_game_not_to_21' };
+      }
+      const resolved = resolveCurrentPlayers(match);
+      games.push({
+        a: ca,
+        b: cb,
+        label: leagueGameLabel(games.length),
+        playersA: resolved.playersA,
+        playersB: resolved.playersB,
+      });
+      match.completedGames = games;
+      match.currentPoints = { a: 0, b: 0 };
+      if (typeof match.markModified === 'function') {
+        match.markModified('completedGames');
+        match.markModified('currentPoints');
+      }
+    }
+    if (games.length < LEAGUE_GAME_COUNT) {
+      return { ok: false, error: 'league_need_five' };
+    }
+    const ptsA = games.reduce((s, g) => s + Number(g.a || 0), 0);
+    const ptsB = games.reduce((s, g) => s + Number(g.b || 0), 0);
+    if (ptsA === ptsB) {
+      return { ok: false, error: 'league_tied' };
+    }
+  }
   const result = finalizeFinishedMatch(match);
   match.serving = '';
   return { ok: true, ...result, matchEnded: true };
@@ -143,6 +213,6 @@ export function isDeuce(scoreA, scoreB) {
   return scoreA >= 14 && scoreB >= 14 && scoreA === scoreB;
 }
 
-export function isGameReadyToCommit(scoreA, scoreB) {
-  return isGameComplete(scoreA, scoreB);
+export function isGameReadyToCommit(scoreA, scoreB, matchFormat) {
+  return isGameComplete(scoreA, scoreB, matchFormat);
 }
