@@ -31,7 +31,97 @@
       <p class="mt-4 rounded border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"><%= error %></p>
     <% } %>
 
-    <details class="admin-fold mt-8 rounded border border-sky-900/60 bg-sky-950/30 text-sm text-slate-300" data-fold-key="guide">
+    <% var _quickVenues = typeof venues !== 'undefined' ? venues : []; %>
+    <% var _leagueTournaments = (typeof tournaments !== 'undefined' ? tournaments : []).filter(function (t) { return t.phase === 'league'; }); %>
+    <details id="quick-links" class="admin-fold mt-6 scroll-mt-4 rounded border border-amber-800/50 bg-amber-950/20" data-fold-key="quick-links" open>
+      <summary class="flex cursor-pointer items-center justify-between gap-3 px-5 py-4">
+        <div>
+          <h2 class="text-lg font-semibold text-amber-300">實用連結</h2>
+          <p class="mt-0.5 text-xs text-slate-500">裁判登入、場地計分、iPad 排陣、Live — 常用入口集中呢度</p>
+        </div>
+        <span class="fold-chevron text-amber-600/80" aria-hidden="true">▼</span>
+      </summary>
+      <div class="border-t border-amber-900/40 px-5 pb-5 pt-4">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="rounded-lg border border-slate-800 bg-slate-950/60 p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">人員登入</p>
+            <ul class="mt-3 space-y-2 text-sm">
+              <li>
+                <a href="/referee/login" target="_blank" rel="noopener" class="font-medium text-sky-400 underline hover:text-sky-300">球證／裁判登入 ↗</a>
+                <p class="mt-0.5 font-mono text-[11px] text-slate-600">/referee/login</p>
+              </li>
+              <li>
+                <a href="/e/<%= event.slug %>/court/login" target="_blank" rel="noopener" class="font-medium text-emerald-400 underline hover:text-emerald-300">場地計分登入 ↗</a>
+                <p class="mt-0.5 font-mono text-[11px] text-slate-600">/e/<%= event.slug %>/court/login</p>
+              </li>
+            </ul>
+          </div>
+
+          <div class="rounded-lg border border-slate-800 bg-slate-950/60 p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">前台／賽果</p>
+            <ul class="mt-3 space-y-2 text-sm">
+              <li>
+                <a href="/e/<%= event.slug %>" target="_blank" rel="noopener" class="font-medium text-sky-400 underline hover:text-sky-300">大會前台（賽程／結果）↗</a>
+              </li>
+              <li>
+                <a href="/admin/events/<%= event._id %>/matches-summary" class="text-slate-300 underline hover:text-white">賽果總覽／報分表</a>
+              </li>
+              <li>
+                <a href="/api/events/<%= event.slug %>" target="_blank" rel="noopener" class="text-slate-300 underline hover:text-white">公開 API ↗</a>
+                <p class="mt-0.5 font-mono text-[11px] text-slate-600">/api/events/<%= event.slug %></p>
+              </li>
+            </ul>
+          </div>
+
+          <div class="rounded-lg border border-slate-800 bg-slate-950/60 p-4 sm:col-span-2">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">iPad 聯賽排陣</p>
+            <% if (!_leagueTournaments.length) { %>
+              <p class="mt-3 text-sm text-slate-500">尚未有聯賽賽事。新增「聯賽」賽事後，排陣連結會出現喺呢度。</p>
+            <% } else { %>
+              <ul class="mt-3 space-y-2 text-sm">
+                <% _leagueTournaments.forEach(function (t) { %>
+                  <li class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span class="text-slate-300"><%= t.name %></span>
+                    <a
+                      href="/e/<%= event.slug %>/lineup-hub/<%= t._id %>"
+                      target="_blank"
+                      rel="noopener"
+                      class="font-medium text-amber-300 underline hover:text-amber-200"
+                    >開啟 iPad 排陣 ↗</a>
+                    <a href="/admin/tournaments/<%= t._id %>" class="text-xs text-slate-500 underline hover:text-slate-300">管理賽事</a>
+                  </li>
+                <% }); %>
+              </ul>
+              <p class="mt-2 text-xs text-slate-500">亦可開 <a href="/admin/events/<%= event._id %>/lineup-day" class="text-slate-400 underline">當日排陣連結</a>（跨聯賽賽事、依日期列 A／B 隊）。</p>
+            <% } %>
+          </div>
+
+          <div class="rounded-lg border border-slate-800 bg-slate-950/60 p-4 sm:col-span-2">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">場地 Live 畫面</p>
+            <% if (!_quickVenues.length) { %>
+              <p class="mt-3 text-sm text-slate-500">請先喺「基本資料／場地」新增場地並儲存。</p>
+            <% } else { %>
+              <ul class="mt-3 grid gap-2 sm:grid-cols-2 text-sm">
+                <% _quickVenues.forEach(function (v) { %>
+                  <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded border border-slate-800/80 bg-slate-900/40 px-3 py-2">
+                    <span class="font-medium text-white"><%= v.name %></span>
+                    <a
+                      href="/e/<%= event.slug %>/court/<%= v.slug %>/live"
+                      target="_blank"
+                      rel="noopener"
+                      class="text-emerald-400 underline hover:text-emerald-300"
+                    >Live ↗</a>
+                    <span class="w-full font-mono text-[11px] text-slate-600">/e/<%= event.slug %>/court/<%= v.slug %>/live</span>
+                  </li>
+                <% }); %>
+              </ul>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="admin-fold mt-6 rounded border border-sky-900/60 bg-sky-950/30 text-sm text-slate-300" data-fold-key="guide">
       <summary class="flex cursor-pointer items-center justify-between gap-3 px-4 py-3">
         <h2 class="font-semibold text-sky-300">兩階段賽程：小組賽 → 淘汰賽</h2>
         <span class="fold-chevron text-sky-500/80" aria-hidden="true">▼</span>
@@ -332,12 +422,8 @@
       </div>
     </details>
 
-    <section class="mt-8">
-      <p class="flex flex-wrap gap-4 text-sm">
-        <a href="/admin/events/<%= event._id %>/matches-summary" class="text-emerald-400 underline">賽果總覽／小組報分表</a>
-        <span class="text-slate-500">聯賽排陣：入該聯賽賽事頁開「iPad 排陣」</span>
-        <a href="/e/<%= event.slug %>" target="_blank" rel="noopener" class="text-sky-400 underline">開啟前台 ↗</a>
-      </p>
+    <section class="mt-8 text-sm text-slate-500">
+      <p>常用入口已集中喺頁頂「實用連結」。</p>
     </section>
   </main>
   <script>

@@ -1,0 +1,221 @@
+{
+  "info": {
+    "_postman_id": "pickleball-public-api-v1",
+    "name": "計分系統 — 公開前台 API",
+    "description": "外部網站可呼叫的唯讀公開 API。\n\n## 使用前\n1. 匯入此 Collection\n2. 改 Collection Variables：\n   - `baseUrl`：例如 `http://localhost:5239` 或正式網域\n   - `eventSlug`：大會 slug，例如 `4-croner`\n   - `matchId`：任一公開場次 MongoDB ObjectId（可先打 matches 再填）\n\n## 規則\n- **無需登入／API Key**（公開資料）\n- 只回傳「在網站顯示」嘅大會／賽事／場次\n- 唔會回傳 PIN、串流金鑰等敏感欄位\n- 路徑 `/api/...` 與 `/api/public/...` 相同（相容舊用法）\n\n## 直播連結\n聯賽／有編場地嘅場次，`match.urls.live` = `/e/{slug}/court/{court}/live`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5239" },
+    { "key": "eventSlug", "value": "4-croner" },
+    { "key": "matchId", "value": "" },
+    { "key": "tournamentId", "value": "" },
+    { "key": "date", "value": "2026-10-22" },
+    { "key": "court", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "0. 目錄",
+      "item": [
+        {
+          "name": "GET /api — API 目錄",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api",
+            "description": "列出可用端點說明。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. 大會 Events",
+      "item": [
+        {
+          "name": "GET /api/events — 大會列表",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/events",
+            "description": "所有已公開（isActive）大會。\n\nResponse：`{ events: Event[] }`\n\nEvent 重點欄位：`id`, `name`, `slug`, `description`, `coverImageUrl`, `dateStart`, `dateEnd`, `venues[{slug,name}]`, `urls.page`, `urls.api`"
+          }
+        },
+        {
+          "name": "GET /api/events/:slug — 大會詳情",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/events/{{eventSlug}}",
+            "description": "單一大會 + 其公開賽事列表。\n\nResponse：`{ event, tournaments }`\n\nTournament：`id`, `name`, `phase`（group|knockout|double_elim|league）, `competitionDate`, `advancePerGroup`"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. 賽事 Tournaments",
+      "item": [
+        {
+          "name": "GET /api/events/:slug/tournaments",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/events/{{eventSlug}}/tournaments",
+            "description": "該大會底下公開賽事（小組／淘汰／聯賽）。\n\n可用回傳嘅 `tournaments[].id` 填入 Collection Variable `tournamentId`。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. 賽程／賽果 Matches",
+      "item": [
+        {
+          "name": "GET matches — 全部場次",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/events/{{eventSlug}}/matches",
+            "description": "該大會全部公開場次（含比分、排陣摘要、直播 URL）。\n\nResponse：`{ event, count, matches }`\n\nMatch 重點：\n- `teamA` / `teamB`：`{ id, name, code, players }`\n- `status`：scheduled | live | finished | postponed | cancelled\n- `score.main` / `score.detail`\n- `games[]`：每局／每回合比分＋出場球員\n- `currentRound`：聯賽進行中回合\n- `lineup`：雙方確認排陣\n- `urls.live`：場地 Live 頁（有 court 先有）\n- `urls.screen`：單場 screen 頁\n- `urls.api`：本場 API"
+          }
+        },
+        {
+          "name": "GET matches — 依日期篩選",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/events/{{eventSlug}}/matches?date={{date}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "events", "{{eventSlug}}", "matches"],
+              "query": [
+                { "key": "date", "value": "{{date}}", "description": "YYYY-MM-DD" }
+              ]
+            },
+            "description": "只取指定日期場次（場次 scheduledDate，否則跟賽事 competitionDate）。"
+          }
+        },
+        {
+          "name": "GET matches — 進行中 live",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/events/{{eventSlug}}/matches?status=live",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "events", "{{eventSlug}}", "matches"],
+              "query": [
+                { "key": "status", "value": "live", "description": "scheduled | live | finished | postponed | cancelled" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET matches — 依場地 court",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/events/{{eventSlug}}/matches?court={{court}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "events", "{{eventSlug}}", "matches"],
+              "query": [
+                { "key": "court", "value": "{{court}}", "description": "場地 slug，例如 1" }
+              ]
+            },
+            "description": "Live URL 例：`/e/{{eventSlug}}/court/{{court}}/live`"
+          }
+        },
+        {
+          "name": "GET matches — 依賽事 tournamentId",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/events/{{eventSlug}}/matches?tournamentId={{tournamentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "events", "{{eventSlug}}", "matches"],
+              "query": [
+                { "key": "tournamentId", "value": "{{tournamentId}}" }
+              ]
+            },
+            "description": "可組合：`?date=&tournamentId=&status=&court=`"
+          }
+        },
+        {
+          "name": "GET /api/matches/:id — 單一場次",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/matches/{{matchId}}",
+            "description": "先打「全部場次」攞一個 `matches[].id` 填入 `matchId`。\n\nResponse：`{ event, tournament, match }`"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. 積分榜 Standings",
+      "item": [
+        {
+          "name": "GET /api/events/:slug/standings",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/events/{{eventSlug}}/standings",
+            "description": "小組賽榜 + 聯賽榜。\n\nResponse：\n- `group[]`：各小組賽事，內有 `groups[].rows[]`（rank, wins, losses, points, pointDiff…）\n- `league[]`：各聯賽賽事，`rows[]`（rank, wins, losses, pointsFor, pointsAgainst, pointDiff…）\n- `standings`：舊格式相容欄位（小組）"
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. 隊伍 Teams",
+      "item": [
+        {
+          "name": "GET /api/events/:slug/teams",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/events/{{eventSlug}}/teams",
+            "description": "公開賽事底下嘅隊伍（含聯賽固定隊員 `players`）。"
+          }
+        },
+        {
+          "name": "GET teams — 依賽事篩選",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/events/{{eventSlug}}/teams?tournamentId={{tournamentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "events", "{{eventSlug}}", "teams"],
+              "query": [
+                { "key": "tournamentId", "value": "{{tournamentId}}" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. 其他",
+      "item": [
+        {
+          "name": "GET /api/events/:slug/display",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/events/{{eventSlug}}/display",
+            "description": "已發布嘅顯示內容（大螢幕／公告類，如有使用）。"
+          }
+        },
+        {
+          "name": "（相容）GET /api/public/events/:slug/matches",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/public/events/{{eventSlug}}/matches",
+            "description": "與 `/api/events/:slug/matches` 相同，舊路徑相容。"
+          }
+        }
+      ]
+    }
+  ]
+}

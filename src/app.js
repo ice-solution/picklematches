@@ -126,9 +126,11 @@ export function createApp() {
   app.use('/e', lineupWebRouter);
   app.use('/e', publicWebRouter);
   app.use('/e', registerWebRouter);
+  // 外部網站／前台資料 API（亦相容舊路徑 /api/public/...）
+  app.use('/api', publicApiRouter);
+  app.use('/api/public', publicApiRouter);
   app.use('/api/public', courtApiRouter);
   app.use('/api/public', lineupApiRouter);
-  app.use('/api/public', publicApiRouter);
   app.use('/api/public', registerApiRouter);
   app.use('/webhook', paymentWebhookRouter);
   app.use('/admin', adminRouter);
