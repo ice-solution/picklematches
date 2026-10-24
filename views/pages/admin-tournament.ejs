@@ -267,6 +267,11 @@
       <% if (typeof query !== 'undefined' && query && query.team_saved === '1') { %>
         <p class="mt-2 text-sm text-emerald-300">已更新隊伍。</p>
       <% } %>
+      <% if (typeof query !== 'undefined' && query && query.team_deleted === '1') { %>
+        <p class="mt-2 text-sm text-emerald-300">
+          已刪除隊伍<% if (query.team_matches_cleared) { %>（一併移除 <%= query.team_matches_cleared %> 場相關場次）<% } %>。
+        </p>
+      <% } %>
       <% if (typeof query !== 'undefined' && query && query.team_err === 'code_dup') { %>
         <p class="mt-2 text-sm text-rose-300">代號與其他隊伍重複，請改用其他代號。</p>
       <% } %>
@@ -274,14 +279,19 @@
         <p class="mt-2 text-sm text-rose-300">隊伍名稱不可為空。</p>
       <% } %>
 
-      <% if (!teams.length) { %>
+      <% var realTeamsList = (teams || []).filter(function (t) { return !t.isPlaceholder; }); %>
+      <% if (!realTeamsList.length) { %>
         <p class="mt-3 rounded border border-slate-800 px-3 py-4 text-center text-sm text-slate-500">尚無隊伍</p>
       <% } %>
 
       <% var teamGroupSections = []; %>
-      <% groups.forEach(function (gx) { teamGroupSections.push({ key: String(gx._id), label: gx.name, items: teams.filter(function (t) { return String(t.groupId) === String(gx._id); }) }); }); %>
-      <% var ungroupedTeams = teams.filter(function (t) { return !t.groupId; }); %>
-      <% if (ungroupedTeams.length) { teamGroupSections.push({ key: '__none__', label: '未分組', items: ungroupedTeams }); } %>
+      <% if (!groups.length) { %>
+        <% if (realTeamsList.length) { teamGroupSections.push({ key: '__all__', label: '隊伍', items: realTeamsList }); } %>
+      <% } else { %>
+        <% groups.forEach(function (gx) { teamGroupSections.push({ key: String(gx._id), label: gx.name, items: realTeamsList.filter(function (t) { return String(t.groupId) === String(gx._id); }) }); }); %>
+        <% var ungroupedTeams = realTeamsList.filter(function (t) { return !t.groupId; }); %>
+        <% if (ungroupedTeams.length) { teamGroupSections.push({ key: '__none__', label: '未分組', items: ungroupedTeams }); } %>
+      <% } %>
 
       <% teamGroupSections.forEach(function (sec) { %>
         <% if (!sec.items.length) { return; } %>
@@ -295,11 +305,17 @@
                   <th class="w-14 px-3 py-2">代號</th>
                   <th class="px-3 py-2">隊伍名稱</th>
                   <% if (tournament.phase === 'league') { %><th class="px-3 py-2">隊員</th><% } %>
-                  <th class="w-24 px-3 py-2 text-right">操作</th>
+                  <th class="w-36 px-3 py-2 text-right">操作</th>
                 </tr>
               </thead>
               <tbody>
-                <% sec.items.forEach(function (t) { %>
+                <% sec.items.forEach(function (t) {
+                  var teamMatchCount = (matches || []).filter(function (m) {
+                    var a = m.teamA && (m.teamA._id || m.teamA);
+                    var b = m.teamB && (m.teamB._id || m.teamB);
+                    return String(a) === String(t._id) || String(b) === String(t._id);
+                  }).length;
+                %>
                   <tr class="border-b border-slate-800/50 hover:bg-slate-800/20 <%= t.checkedIn ? 'team-checked-in bg-emerald-950/25' : '' %>">
                     <%- include('../partials/team-checkin-cell', { team: t }) %>
                     <td class="team-code-cell px-3 py-2 font-mono text-sm font-bold <%= t.checkedIn ? 'text-emerald-400' : 'text-sky-300' %>"><%= t.code || '—' %></td>
@@ -307,8 +323,16 @@
                     <% if (tournament.phase === 'league') { %>
                       <td class="px-3 py-2 text-xs text-slate-400"><%= (t.players && t.players.length) ? t.players.map(function (p) { return p.name; }).join('、') : '—' %></td>
                     <% } %>
-                    <td class="px-3 py-2 text-right">
+                    <td class="px-3 py-2 text-right whitespace-nowrap">
                       <button type="button" class="team-edit-toggle text-xs text-emerald-400 underline" data-team-id="<%= t._id %>">編輯</button>
+                      <form
+                        method="post"
+                        action="/admin/teams/<%= t._id %>/delete"
+                        class="ml-2 inline"
+                        onsubmit="return confirm('確定刪除隊伍「<%= String(t.name || '').replace(/'/g, '') %>」？<%= teamMatchCount ? ('\\n\\n會一併刪除 ' + teamMatchCount + ' 場相關場次。') : '' %>');"
+                      >
+                        <button type="submit" class="text-xs text-rose-400 underline hover:text-rose-300">刪除</button>
+                      </form>
                     </td>
                   </tr>
                   <tr class="team-edit-row hidden border-b border-slate-800/50 bg-slate-950/50" data-team-id="<%= t._id %>">

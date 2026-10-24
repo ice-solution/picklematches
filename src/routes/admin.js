@@ -1544,6 +1544,41 @@ adminRouter.post('/teams/:teamId/update', requireStaff, async (req, res, next) =
   }
 });
 
+/** 刪除隊伍；若有相關場次會一併刪除 */
+adminRouter.post('/teams/:teamId/delete', requireStaff, async (req, res, next) => {
+  try {
+    const { teamId } = req.params;
+    if (!mongoose.isValidObjectId(teamId)) return res.status(404).send('Not found');
+
+    const team = await Team.findById(teamId);
+    if (!team || team.isPlaceholder) {
+      return res.redirect('/admin?team_err=not_found');
+    }
+
+    const tournament = await findAccessibleTournament(req.session, team.tournamentId);
+    if (!tournament) return forbidAccess(req, res);
+
+    const relatedMatches = await Match.find({
+      tournamentId: team.tournamentId,
+      $or: [{ teamA: team._id }, { teamB: team._id }],
+    })
+      .select('_id')
+      .lean();
+    const matchIds = relatedMatches.map((m) => m._id);
+    if (matchIds.length) {
+      await MatchAssignment.deleteMany({ matchId: { $in: matchIds } });
+      await Match.deleteMany({ _id: { $in: matchIds } });
+    }
+    await Team.deleteOne({ _id: team._id });
+
+    const qs = ['team_deleted=1'];
+    if (matchIds.length) qs.push(`team_matches_cleared=${matchIds.length}`);
+    res.redirect(`/admin/tournaments/${team.tournamentId}?${qs.join('&')}`);
+  } catch (e) {
+    next(e);
+  }
+});
+
 adminRouter.post('/tournaments/:tournamentId/matches', requireStaff, async (req, res, next) => {
   try {
     const { tournamentId } = req.params;
