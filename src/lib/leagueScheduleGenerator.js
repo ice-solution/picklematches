@@ -58,7 +58,7 @@ function pairKey(a, b) {
 /**
  * 聯賽雙循環。fillMissing=true 時只補尚未出現嘅定向對賽（方便每週人手加場後再補齊）。
  */
-export async function generateLeagueDoubleRoundRobin({ tournamentId, fillMissing = false, timing = null }) {
+export async function generateLeagueDoubleRoundRobin({ tournamentId, fillMissing = false, timing = null, courts }) {
   if (!mongoose.isValidObjectId(tournamentId)) {
     return { ok: false, error: 'invalid_id' };
   }
@@ -80,9 +80,12 @@ export async function generateLeagueDoubleRoundRobin({ tournamentId, fillMissing
   const rounds = buildDoubleRoundRobinRounds(teams.map((t) => t._id));
   const existingPairs = new Set(existing.map((m) => pairKey(m.teamA, m.teamB)));
 
-  const event = await Event.findById(tournament.eventId).select('venues').lean();
-  const courts = resolveCourtSlugs(event?.venues);
-  const assign = makeCourtAssigner(courts);
+  let venueList = Array.isArray(courts) ? resolveCourtSlugs(courts) : null;
+  if (!venueList) {
+    const event = await Event.findById(tournament.eventId).select('venues').lean();
+    venueList = venueSlugList(event?.venues);
+  }
+  const assign = makeCourtAssigner(venueList);
   const seedByCourt = fillMissing ? latestTimeByCourt(existing) : null;
   const timeAssign = createCourtTimeAssigner({
     startTime: timing?.startTime,
@@ -116,7 +119,14 @@ export async function generateLeagueDoubleRoundRobin({ tournamentId, fillMissing
   });
 
   if (!docs.length) {
-    return { ok: true, createdMatches: 0, rounds: rounds.length, teams: teams.length, courtsUsed: courts.length, filled: true };
+    return {
+      ok: true,
+      createdMatches: 0,
+      rounds: rounds.length,
+      teams: teams.length,
+      courtsUsed: (venueList || []).length,
+      filled: true,
+    };
   }
 
   await Match.insertMany(docs);
@@ -125,7 +135,7 @@ export async function generateLeagueDoubleRoundRobin({ tournamentId, fillMissing
     createdMatches: docs.length,
     rounds: rounds.length,
     teams: teams.length,
-    courtsUsed: courts.length,
+    courtsUsed: (venueList || []).length,
     matchFormat: MATCH_FORMAT.LEAGUE_FIVE,
     filled: !!fillMissing,
     timingApplied: timeAssign.enabled,

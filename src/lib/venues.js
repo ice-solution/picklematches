@@ -76,6 +76,23 @@ export function venueSlugList(venues) {
   return normalizeEventVenues(venues).map((v) => v.slug);
 }
 
+/**
+ * 從產生賽程表單勾選嘅 courts[] 解析要用嘅場地 slug。
+ * 無勾選／未傳 → null（呼叫端用大會全部場地）；
+ * 有勾選 → 只回傳大會場地內有效嘅 slug（維持大會順序）。
+ */
+export function parseSelectedCourtsFromBody(body, eventVenues) {
+  const allowed = venueSlugList(eventVenues);
+  if (!allowed.length) return [];
+  const raw = body?.courts ?? body?.court;
+  if (raw == null || raw === '') return null;
+  const picked = new Set(
+    (Array.isArray(raw) ? raw : [raw]).map((s) => String(s || '').trim()).filter(Boolean)
+  );
+  if (!picked.size) return null;
+  return allowed.filter((slug) => picked.has(slug));
+}
+
 export function findVenue(venues, courtKey) {
   const key = String(courtKey || '').trim();
   if (!key) return null;

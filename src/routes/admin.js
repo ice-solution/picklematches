@@ -59,7 +59,13 @@ import {
 } from '../lib/registrationTeamService.js';
 import { Alliance } from '../models/Alliance.js';
 import { approveAlliance, rejectAlliance } from '../lib/allianceService.js';
-import { normalizeEventVenues, parseVenuesFromBody, findVenue, venueLabel } from '../lib/venues.js';
+import {
+  normalizeEventVenues,
+  parseVenuesFromBody,
+  findVenue,
+  venueLabel,
+  parseSelectedCourtsFromBody,
+} from '../lib/venues.js';
 import { demoteOtherLiveOnCourt } from '../lib/courtLive.js';
 import {
   startVenueStream,
@@ -1104,11 +1110,13 @@ adminRouter.post('/tournaments/:tournamentId/generate-knockout', requireStaff, a
     }
     const advancePerGroup = parseInt(String(req.body.advancePerGroup || '').trim(), 10);
     const timing = parseScheduleTimingBody(req.body);
+    const courts = await resolveGenerateCourts(tournamentId, req.body);
     const r = await generateKnockoutFromGroup({
       sourceTournamentId,
       knockoutTournamentId: tournamentId,
       advancePerGroup: Number.isNaN(advancePerGroup) ? undefined : advancePerGroup,
       timing,
+      courts,
     });
     if (!r.ok) {
       const code = r.error || 'error';
@@ -1148,10 +1156,11 @@ adminRouter.post('/tournaments/:tournamentId/generate-knockout-bracket', require
     }
 
     const timing = parseScheduleTimingBody(req.body);
+    const courts = await resolveGenerateCourts(tournamentId, req.body);
     const r = await generateKnockoutFromTeams({
       knockoutTournamentId: tournamentId,
       matchFormat: req.body.matchFormat,
-      courts: undefined,
+      courts,
       timing,
     });
     if (!r.ok) {
@@ -1190,10 +1199,11 @@ adminRouter.post('/tournaments/:tournamentId/generate-double-elim', requireStaff
     }
 
     const timing = parseScheduleTimingBody(req.body);
+    const courts = await resolveGenerateCourts(tournamentId, req.body);
     const r = await generateDoubleElimFromTeams({
       tournamentId,
       matchFormat: req.body.matchFormat,
-      courts: undefined,
+      courts,
       timing,
     });
     if (!r.ok) {
@@ -1231,9 +1241,11 @@ adminRouter.post('/tournaments/:tournamentId/generate-group-schedule', requireSt
     }
 
     const timing = parseScheduleTimingBody(req.body);
+    const courts = await resolveGenerateCourts(tournamentId, req.body);
     const r = await generateGroupRoundRobin({
       tournamentId,
       matchFormat: req.body.matchFormat,
+      courts,
       timing,
     });
     if (!r.ok) {
@@ -1272,10 +1284,12 @@ adminRouter.post('/tournaments/:tournamentId/generate-league-schedule', requireS
     }
 
     const timing = parseScheduleTimingBody(req.body);
+    const courts = await resolveGenerateCourts(tournamentId, req.body);
     const r = await generateLeagueDoubleRoundRobin({
       tournamentId,
       fillMissing: fillMissing && !force,
       timing,
+      courts,
     });
     if (!r.ok) {
       const code = r.error || 'error';
@@ -1421,6 +1435,41 @@ adminRouter.post('/tournaments/:tournamentId/groups', requireStaff, async (req, 
     next(e);
   }
 });
+
+/** 刪除組別：組內隊伍改為未分組；該組場次一併刪除 */
+adminRouter.post('/tournaments/:tournamentId/groups/:groupId/delete', requireStaff, async (req, res, next) => {
+  try {
+    const { tournamentId, groupId } = req.params;
+    if (!mongoose.isValidObjectId(tournamentId) || !mongoose.isValidObjectId(groupId)) {
+      return res.redirect(`/admin/tournaments/${tournamentId}?group_err=not_found`);
+    }
+    const group = await Group.findOne({ _id: groupId, tournamentId });
+    if (!group) {
+      return res.redirect(`/admin/tournaments/${tournamentId}?group_err=not_found`);
+    }
+
+    const groupMatches = await Match.find({ tournamentId, groupId }).select('_id').lean();
+    const matchIds = groupMatches.map((m) => m._id);
+    if (matchIds.length) {
+      await MatchAssignment.deleteMany({ matchId: { $in: matchIds } });
+      await Match.deleteMany({ _id: { $in: matchIds } });
+    }
+    await Team.updateMany({ tournamentId, groupId }, { $unset: { groupId: 1 } });
+    await Group.deleteOne({ _id: group._id });
+
+    res.redirect(`/admin/tournaments/${tournamentId}?group_deleted=1`);
+  } catch (e) {
+    next(e);
+  }
+});
+
+async function resolveGenerateCourts(tournamentId, body) {
+  const t = await Tournament.findById(tournamentId).select('eventId').lean();
+  if (!t) return undefined;
+  const event = await Event.findById(t.eventId).select('venues').lean();
+  const selected = parseSelectedCourtsFromBody(body, event?.venues);
+  return selected == null ? undefined : selected;
+}
 
 adminRouter.post('/tournaments/:tournamentId/teams', requireStaff, async (req, res, next) => {
   try {

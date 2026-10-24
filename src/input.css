@@ -29,20 +29,47 @@
     @apply align-middle;
   }
 
+  /* col1 = 拖曳手柄；col2 = 對戰 */
   .admin-matches-table th:first-child,
   .admin-matches-table td:first-child {
+    width: 2rem;
+    min-width: 2rem;
+  }
+
+  .admin-matches-table th:nth-child(2),
+  .admin-matches-table td:nth-child(2) {
     width: 38%;
     min-width: 14rem;
   }
 
-  .admin-matches-table th:nth-child(5),
-  .admin-matches-table td:nth-child(5) {
+  .admin-matches-table th:nth-child(6),
+  .admin-matches-table td:nth-child(6) {
     min-width: 12rem;
   }
 
-  .admin-matches-table th:nth-child(7),
-  .admin-matches-table td:nth-child(7) {
+  .admin-matches-table th:nth-child(8),
+  .admin-matches-table td:nth-child(8) {
     width: 14rem;
+  }
+
+  .admin-matches-table tr.match-quick-row.mq-drag-over > td {
+    @apply bg-sky-950/40;
+  }
+
+  .admin-matches-table tr.match-quick-row.mq-dragging {
+    @apply opacity-50;
+  }
+
+  .admin-matches-table .mq-drag-handle {
+    @apply cursor-grab select-none text-slate-500 hover:text-slate-300;
+  }
+
+  .admin-matches-table .mq-drag-handle:active {
+    @apply cursor-grabbing;
+  }
+
+  .admin-matches-table .mq-drag-handle.is-locked {
+    @apply cursor-not-allowed text-slate-700 hover:text-slate-700;
   }
 
   /* 對戰欄：左 | vs | 右，名字可換行唔截斷 */

@@ -121,6 +121,87 @@ adminApiRouter.post('/matches/:matchId/status', async (req, res, next) => {
   }
 });
 
+const SLOT_LOCKED_STATUSES = new Set(['live', 'finished']);
+
+/**
+ * 對調兩場嘅日期／時間／場地（現場臨時換場用）。
+ * 進行中或完賽唔畀對調。
+ */
+adminApiRouter.post('/matches/:matchId/swap-slot', async (req, res, next) => {
+  try {
+    const matchA = req.matchDoc;
+    const otherId = String(req.body?.otherMatchId || '').trim();
+    if (!mongoose.isValidObjectId(otherId)) {
+      return res.status(400).json({ error: 'invalid_other_id' });
+    }
+    if (String(matchA._id) === otherId) {
+      return res.status(400).json({ error: 'same_match' });
+    }
+
+    const matchB = await findAccessibleMatch(req.session, otherId);
+    if (!matchB) {
+      return res.status(404).json({ error: 'other_not_found' });
+    }
+    if (String(matchA.tournamentId) !== String(matchB.tournamentId)) {
+      return res.status(400).json({ error: 'different_tournament' });
+    }
+    if (SLOT_LOCKED_STATUSES.has(matchA.status) || SLOT_LOCKED_STATUSES.has(matchB.status)) {
+      return res.status(400).json({ error: 'locked_status' });
+    }
+
+    const slotA = {
+      scheduledDate: matchA.scheduledDate || '',
+      scheduledTime: matchA.scheduledTime || '',
+      court: matchA.court || '',
+    };
+    const slotB = {
+      scheduledDate: matchB.scheduledDate || '',
+      scheduledTime: matchB.scheduledTime || '',
+      court: matchB.court || '',
+    };
+
+    matchA.scheduledDate = slotB.scheduledDate;
+    matchA.scheduledTime = slotB.scheduledTime;
+    matchA.court = slotB.court;
+    matchA.scheduledAt = null;
+
+    matchB.scheduledDate = slotA.scheduledDate;
+    matchB.scheduledTime = slotA.scheduledTime;
+    matchB.court = slotA.court;
+    matchB.scheduledAt = null;
+
+    await matchA.save();
+    await matchB.save();
+
+    try {
+      await broadcastMatchUpdate(req.app, matchA._id);
+      await broadcastMatchUpdate(req.app, matchB._id);
+    } catch (err) {
+      console.error('broadcastMatchUpdate failed after swap-slot:', err);
+    }
+
+    res.json({
+      ok: true,
+      a: {
+        _id: String(matchA._id),
+        scheduledDate: matchA.scheduledDate || '',
+        scheduledTime: matchA.scheduledTime || '',
+        court: matchA.court || '',
+        status: matchA.status,
+      },
+      b: {
+        _id: String(matchB._id),
+        scheduledDate: matchB.scheduledDate || '',
+        scheduledTime: matchB.scheduledTime || '',
+        court: matchB.court || '',
+        status: matchB.status,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
 /** 賽事列表內聯快速更新：時間、場地、各局比分 */
 adminApiRouter.post('/matches/:matchId/quick-update', async (req, res, next) => {
   try {

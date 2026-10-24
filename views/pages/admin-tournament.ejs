@@ -183,10 +183,42 @@
     <% if (tournament.phase === 'group') { %>
     <section class="mt-12">
       <h2 class="text-lg font-semibold text-white">組別</h2>
+      <% if (typeof query !== 'undefined' && query && query.group_deleted === '1') { %>
+        <p class="mt-3 rounded border border-emerald-500/40 bg-emerald-950/25 px-3 py-2 text-sm text-emerald-200">已刪除組別。</p>
+      <% } %>
+      <% if (typeof query !== 'undefined' && query && query.group_err) { %>
+        <p class="mt-3 rounded border border-rose-500/50 bg-rose-950/25 px-3 py-2 text-sm text-rose-200">
+          <%
+            var groupErrMap = {
+              not_found: '找不到組別。',
+              has_matches: '此組別仍有場次，請先清空賽程或刪除相關場次後再刪組。',
+            };
+          %><%= groupErrMap[query.group_err] || query.group_err %>
+        </p>
+      <% } %>
       <ul class="mt-3 space-y-2">
-        <% groups.forEach(function (g) { %>
-          <li class="rounded border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm"><%= g.name %></li>
+        <% groups.forEach(function (g) {
+          var teamCountInGroup = (teams || []).filter(function (t) { return !t.isPlaceholder && t.groupId && String(t.groupId) === String(g._id); }).length;
+          var matchCountInGroup = (matches || []).filter(function (m) { return m.groupId && String(m.groupId) === String(g._id); }).length;
+        %>
+          <li class="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm">
+            <span>
+              <%= g.name %>
+              <span class="ml-2 text-xs text-slate-500"><%= teamCountInGroup %> 隊<% if (matchCountInGroup) { %> · <%= matchCountInGroup %> 場<% } %></span>
+            </span>
+            <form
+              method="post"
+              action="/admin/tournaments/<%= tournament._id %>/groups/<%= g._id %>/delete"
+              class="shrink-0"
+              onsubmit="return confirm('確定刪除組別「<%= g.name.replace(/'/g, '\\\'') %>」？\n\n組內 <%= teamCountInGroup %> 隊會變為未分組；若仍有場次會一併刪除該組場次。');"
+            >
+              <button type="submit" class="rounded border border-rose-800/80 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-950/40">刪除</button>
+            </form>
+          </li>
         <% }); %>
+        <% if (!groups.length) { %>
+          <li class="text-sm text-slate-500">尚未建立組別。</li>
+        <% } %>
       </ul>
       <form method="post" action="/admin/tournaments/<%= tournament._id %>/groups" class="mt-4 flex flex-wrap gap-2">
         <input name="name" required placeholder="組別名稱，例如：A 組" class="min-w-[180px] flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2" />
@@ -497,6 +529,7 @@
           <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-league-schedule" class="mt-3">
             <input type="hidden" name="force" value="<%= hasLeagueMatches ? '1' : '0' %>" />
             <%- include('../partials/schedule-timing-fields') %>
+            <%- include('../partials/schedule-courts-fields', { event: event, venues: typeof venues !== 'undefined' ? venues : [] }) %>
             <button
               type="submit"
               class="mt-3 rounded bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
@@ -507,6 +540,7 @@
             <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-league-schedule" class="mt-2">
               <input type="hidden" name="fillMissing" value="1" />
               <%- include('../partials/schedule-timing-fields') %>
+              <%- include('../partials/schedule-courts-fields', { event: event, venues: typeof venues !== 'undefined' ? venues : [] }) %>
               <button type="submit" class="mt-3 rounded border border-amber-700/70 px-4 py-2 text-sm text-amber-200 hover:bg-amber-950/40" onclick="return confirm('會為尚未排對的比賽補場，並接續各場地已有最晚時間排程。確定？');">補齊未排對賽（保留已有場次）</button>
             </form>
           <% } %>
@@ -621,6 +655,7 @@
                 </div>
               </div>
               <%- include('../partials/schedule-timing-fields') %>
+              <%- include('../partials/schedule-courts-fields', { event: event, venues: typeof venues !== 'undefined' ? venues : [] }) %>
               <button type="submit" class="mt-3 rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-600" onclick="return confirm('確定要由小組賽產生淘汰賽？\\n\\n新建籤表時會按場地並行排時間；若已有預排場次則只填入隊伍、不改時間。');">由小組產生</button>
             </form>
 
@@ -654,6 +689,7 @@
       <%- include('../partials/knockout-ladder', { tournament, knockoutLadderColumns }) %>
       <%- include('../partials/double-elim-ladder', { tournament, doubleElimTracks: typeof doubleElimTracks !== 'undefined' ? doubleElimTracks : null, adminLinks: true }) %>
       <p class="mt-1 text-sm text-slate-500">可直接在表內改時間、場地與各局比分（失焦即儲存）；出場球員同備註請點「詳情」。</p>
+      <p class="mt-1 text-xs text-slate-500">列表<strong class="text-slate-400">按場地分組</strong>，組內按時間排。拖左手柄到另一場放開＝對調日期／時間／場地（進行中／完賽唔可以拖）。</p>
       <p class="mt-1 text-xs text-slate-500">比分由左至右為第 1 局起（A–B）；未打的局留空。時間請用 24 小時制，例如 <span class="font-mono text-slate-400">14:30</span>。</p>
       <% if (matches && matches.length) { %>
       <div class="mt-3 flex flex-wrap gap-2">
@@ -668,9 +704,81 @@
       </div>
       <% } %>
       <div class="mt-4 max-w-full overflow-x-auto">
+        <%
+          var _venueList = typeof venues !== 'undefined' ? venues : [];
+          var _courtBuckets = {};
+          var _noCourtMatches = [];
+          function _matchTimeVal(m) {
+            if (m.scheduledTime) return String(m.scheduledTime).trim();
+            if (m.scheduledAt) {
+              var _d = new Date(m.scheduledAt);
+              if (!isNaN(_d.getTime())) {
+                return String(_d.getHours()).padStart(2, '0') + ':' + String(_d.getMinutes()).padStart(2, '0');
+              }
+            }
+            return '';
+          }
+          function _sortMatchesBySchedule(arr) {
+            arr.sort(function (a, b) {
+              var da = String(a.scheduledDate || '').trim();
+              var db = String(b.scheduledDate || '').trim();
+              if (da !== db) {
+                if (!da) return 1;
+                if (!db) return -1;
+                if (da < db) return -1;
+                if (da > db) return 1;
+              }
+              var ta = _matchTimeVal(a);
+              var tb = _matchTimeVal(b);
+              if (!ta && !tb) return 0;
+              if (!ta) return 1;
+              if (!tb) return -1;
+              if (ta < tb) return -1;
+              if (ta > tb) return 1;
+              return 0;
+            });
+          }
+          (matches || []).forEach(function (m) {
+            var raw = String(m.court || '').trim();
+            if (!raw) {
+              _noCourtMatches.push(m);
+              return;
+            }
+            var key = raw;
+            for (var vi = 0; vi < _venueList.length; vi++) {
+              var vv = _venueList[vi];
+              if (vv.slug === raw || vv.name === raw) { key = vv.slug; break; }
+            }
+            if (!_courtBuckets[key]) _courtBuckets[key] = [];
+            _courtBuckets[key].push(m);
+          });
+          var _courtSections = [];
+          _venueList.forEach(function (v) {
+            var list = _courtBuckets[v.slug];
+            if (list && list.length) {
+              _sortMatchesBySchedule(list);
+              _courtSections.push({ key: v.slug, label: v.name || v.slug, matches: list });
+              delete _courtBuckets[v.slug];
+            }
+          });
+          Object.keys(_courtBuckets).sort().forEach(function (k) {
+            var list = _courtBuckets[k];
+            _sortMatchesBySchedule(list);
+            _courtSections.push({
+              key: k,
+              label: (typeof venueLabel === 'function' ? venueLabel(_venueList, k) : k) || k,
+              matches: list,
+            });
+          });
+          if (_noCourtMatches.length) {
+            _sortMatchesBySchedule(_noCourtMatches);
+            _courtSections.push({ key: '', label: '未排場地', matches: _noCourtMatches });
+          }
+        %>
         <table class="admin-matches-table">
           <thead>
             <tr class="border-b border-slate-800 text-slate-400">
+              <th class="px-1 py-2 font-medium" title="拖曳對調時段"></th>
               <th class="px-2 py-2 font-medium">對戰</th>
               <th class="whitespace-nowrap px-2 py-2 font-medium">輪次</th>
               <th class="whitespace-nowrap px-2 py-2 font-medium">日期</th>
@@ -683,109 +791,128 @@
             </tr>
           </thead>
           <tbody>
-            <% matches.forEach(function (m) {
-              var gameSlots = m.matchFormat === 'leagueFive' ? 5 : (m.matchFormat === 'bestOf5' ? 5 : (m.matchFormat === 'singleGame' ? 1 : 3));
-              var leagueLabels = ['男雙', '女雙', '混雙1', '混雙2', '混雙3'];
-              var completed = m.completedGames || [];
-              var timeVal = '';
-              if (m.scheduledTime) timeVal = String(m.scheduledTime).trim();
-              else if (m.scheduledAt) {
-                var _d = new Date(m.scheduledAt);
-                if (!isNaN(_d.getTime())) {
-                  timeVal = String(_d.getHours()).padStart(2, '0') + ':' + String(_d.getMinutes()).padStart(2, '0');
-                }
-              }
-            %>
-              <tr class="match-quick-row border-b border-slate-800/80" data-match-id="<%= m._id %>">
-                <td class="px-2 py-2.5">
-                  <%- include('../partials/team-matchup', { teamA: m.teamA, teamB: m.teamB, layout: 'grid' }) %>
-                  <p class="mt-1 text-[10px] text-slate-500"><%= formatLabel(m.matchFormat) %></p>
+            <% _courtSections.forEach(function (section) { %>
+              <tr class="court-group-header border-b border-slate-800 bg-slate-950/90" data-court-key="<%= section.key %>">
+                <td colspan="10" class="px-3 py-2 text-xs font-semibold text-amber-300/90">
+                  <%= section.label %>
+                  <span class="ml-2 font-normal text-slate-500"><%= section.matches.length %> 場</span>
                 </td>
-                <td class="whitespace-nowrap px-2 py-2 align-middle text-xs text-slate-400"><%= m.round || '—' %></td>
-                <td class="whitespace-nowrap px-2 py-2 align-middle">
-                  <input
-                    type="date"
-                    class="mq-date rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-200"
-                    value="<%= m.scheduledDate || '' %>"
-                    aria-label="開賽日期"
-                  />
-                </td>
-                <td class="whitespace-nowrap px-2 py-2 align-middle">
-                  <input
-                    type="text"
-                    class="mq-time w-[4.75rem] rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-200"
-                    value="<%= timeVal %>"
-                    placeholder="00:00"
-                    maxlength="5"
-                    inputmode="numeric"
-                    pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
-                    title="24 小時制，例如 14:30"
-                    aria-label="開賽時間（24小時）"
-                  />
-                </td>
-                <td class="whitespace-nowrap px-2 py-2 align-middle">
-                  <%- include('../partials/court-select', {
-                    venues: typeof venues !== 'undefined' ? venues : [],
-                    name: '',
-                    value: m.court || '',
-                    className: 'mq-court w-[7.5rem] rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200',
-                    allowEmpty: true,
-                    emptyLabel: '—',
-                    extraAttrs: 'aria-label="場地"'
-                  }) %>
-                </td>
-                <td class="px-2 py-2 align-middle">
-                  <div class="mq-games flex flex-nowrap items-end gap-2">
-                    <% for (var gi = 0; gi < gameSlots; gi++) {
-                      var ga = completed[gi] ? completed[gi].a : '';
-                      var gb = completed[gi] ? completed[gi].b : '';
-                    %>
-                      <div class="mq-game inline-flex shrink-0 flex-col items-center gap-0.5">
-                        <span class="text-[10px] font-medium leading-none text-slate-500"><%= m.matchFormat === 'leagueFive' ? leagueLabels[gi] : ('第' + (gi + 1) + '局') %></span>
-                        <span class="inline-flex items-center gap-0.5 rounded border border-slate-800 bg-slate-950/60 px-1 py-0.5">
-                          <input type="number" min="0" class="mq-ga w-9 rounded border border-slate-700 bg-slate-900 px-0.5 py-1 text-center font-mono text-xs" data-gi="<%= gi %>" value="<%= ga %>" aria-label="第<%= gi + 1 %>局 A" title="A 隊" />
-                          <span class="text-[10px] text-slate-600">–</span>
-                          <input type="number" min="0" class="mq-gb w-9 rounded border border-slate-700 bg-slate-900 px-0.5 py-1 text-center font-mono text-xs" data-gi="<%= gi %>" value="<%= gb %>" aria-label="第<%= gi + 1 %>局 B" title="B 隊" />
-                        </span>
-                        <% if (m.matchFormat === 'leagueFive') { %>
-                          <% var gpQuick = typeof resolveGamePlayers === 'function' ? resolveGamePlayers(m, gi, completed[gi] || null) : { playersA: (completed[gi] && completed[gi].playersA) || [], playersB: (completed[gi] && completed[gi].playersB) || [] }; %>
-                          <% var whoA = (gpQuick.playersA || []).filter(Boolean).join('、'); %>
-                          <% var whoB = (gpQuick.playersB || []).filter(Boolean).join('、'); %>
-                          <% if (whoA || whoB) { %>
-                            <span class="max-w-[5.5rem] truncate text-[9px] leading-tight text-slate-500" title="<%= whoA || '—' %> vs <%= whoB || '—' %>"><%= whoA || '—' %> / <%= whoB || '—' %></span>
-                          <% } %>
-                        <% } %>
-                      </div>
-                    <% } %>
-                  </div>
-                  <p class="mq-msg mt-1 hidden text-[10px] text-emerald-400">已儲存</p>
-                </td>
-                <td class="whitespace-nowrap px-2 py-2 align-middle">
-                  <select
-                    class="match-status-select w-full min-w-[5.5rem] rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200"
-                    data-match-id="<%= m._id %>"
-                    data-prev="<%= m.status %>"
-                    aria-label="場次狀態"
-                  >
-                    <% ['scheduled', 'live', 'finished', 'postponed', 'cancelled'].forEach(function (s) { %>
-                      <option value="<%= s %>" <%= m.status === s ? 'selected' : '' %>><%= typeof matchStatusLabel === 'function' ? matchStatusLabel(s) : s %></option>
-                    <% }); %>
-                  </select>
-                </td>
-                <td class="whitespace-nowrap px-2 py-2 align-middle">
-                  <label class="inline-flex items-center gap-1.5 text-xs text-slate-300">
-                    <input
-                      type="checkbox"
-                      class="mq-web"
-                      <%= m.showOnWebsite !== false ? 'checked' : '' %>
-                      aria-label="在網站顯示"
-                    />
-                    顯示
-                  </label>
-                </td>
-                <td class="whitespace-nowrap px-2 py-2 text-right align-middle"><a href="/admin/matches/<%= m._id %>/edit" class="text-emerald-400 underline">詳情</a></td>
               </tr>
+              <% section.matches.forEach(function (m) {
+                var gameSlots = m.matchFormat === 'leagueFive' ? 5 : (m.matchFormat === 'bestOf5' ? 5 : (m.matchFormat === 'singleGame' ? 1 : 3));
+                var leagueLabels = ['男雙', '女雙', '混雙1', '混雙2', '混雙3'];
+                var completed = m.completedGames || [];
+                var timeVal = _matchTimeVal(m);
+                var slotLocked = m.status === 'live' || m.status === 'finished';
+              %>
+                <tr
+                  class="match-quick-row border-b border-slate-800/80"
+                  data-match-id="<%= m._id %>"
+                  data-slot-locked="<%= slotLocked ? '1' : '0' %>"
+                >
+                  <td class="px-1 py-2.5 align-middle text-center">
+                    <span
+                      class="mq-drag-handle <%= slotLocked ? 'is-locked' : '' %>"
+                      draggable="<%= slotLocked ? 'false' : 'true' %>"
+                      title="<%= slotLocked ? '進行中／完賽不可對調' : '拖到另一場放開＝對調時段' %>"
+                      aria-label="拖曳對調時段"
+                    >⠿</span>
+                  </td>
+                  <td class="px-2 py-2.5">
+                    <%- include('../partials/team-matchup', { teamA: m.teamA, teamB: m.teamB, layout: 'grid' }) %>
+                    <p class="mt-1 text-[10px] text-slate-500"><%= formatLabel(m.matchFormat) %></p>
+                  </td>
+                  <td class="whitespace-nowrap px-2 py-2 align-middle text-xs text-slate-400"><%= m.round || '—' %></td>
+                  <td class="whitespace-nowrap px-2 py-2 align-middle">
+                    <input
+                      type="date"
+                      class="mq-date rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-200"
+                      value="<%= m.scheduledDate || '' %>"
+                      aria-label="開賽日期"
+                    />
+                  </td>
+                  <td class="whitespace-nowrap px-2 py-2 align-middle">
+                    <input
+                      type="text"
+                      class="mq-time w-[4.75rem] rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-200"
+                      value="<%= timeVal %>"
+                      placeholder="00:00"
+                      maxlength="5"
+                      inputmode="numeric"
+                      pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
+                      title="24 小時制，例如 14:30"
+                      aria-label="開賽時間（24小時）"
+                    />
+                  </td>
+                  <td class="whitespace-nowrap px-2 py-2 align-middle">
+                    <%- include('../partials/court-select', {
+                      venues: typeof venues !== 'undefined' ? venues : [],
+                      name: '',
+                      value: m.court || '',
+                      className: 'mq-court w-[7.5rem] rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200',
+                      allowEmpty: true,
+                      emptyLabel: '—',
+                      extraAttrs: 'aria-label="場地"'
+                    }) %>
+                  </td>
+                  <td class="px-2 py-2 align-middle">
+                    <div class="mq-games flex flex-nowrap items-end gap-2">
+                      <% for (var gi = 0; gi < gameSlots; gi++) {
+                        var ga = completed[gi] ? completed[gi].a : '';
+                        var gb = completed[gi] ? completed[gi].b : '';
+                      %>
+                        <div class="mq-game inline-flex shrink-0 flex-col items-center gap-0.5">
+                          <span class="text-[10px] font-medium leading-none text-slate-500"><%= m.matchFormat === 'leagueFive' ? leagueLabels[gi] : ('第' + (gi + 1) + '局') %></span>
+                          <span class="inline-flex items-center gap-0.5 rounded border border-slate-800 bg-slate-950/60 px-1 py-0.5">
+                            <input type="number" min="0" class="mq-ga w-9 rounded border border-slate-700 bg-slate-900 px-0.5 py-1 text-center font-mono text-xs" data-gi="<%= gi %>" value="<%= ga %>" aria-label="第<%= gi + 1 %>局 A" title="A 隊" />
+                            <span class="text-[10px] text-slate-600">–</span>
+                            <input type="number" min="0" class="mq-gb w-9 rounded border border-slate-700 bg-slate-900 px-0.5 py-1 text-center font-mono text-xs" data-gi="<%= gi %>" value="<%= gb %>" aria-label="第<%= gi + 1 %>局 B" title="B 隊" />
+                          </span>
+                          <% if (m.matchFormat === 'leagueFive') { %>
+                            <% var gpQuick = typeof resolveGamePlayers === 'function' ? resolveGamePlayers(m, gi, completed[gi] || null) : { playersA: (completed[gi] && completed[gi].playersA) || [], playersB: (completed[gi] && completed[gi].playersB) || [] }; %>
+                            <% var whoA = (gpQuick.playersA || []).filter(Boolean).join('、'); %>
+                            <% var whoB = (gpQuick.playersB || []).filter(Boolean).join('、'); %>
+                            <% if (whoA || whoB) { %>
+                              <span class="max-w-[5.5rem] truncate text-[9px] leading-tight text-slate-500" title="<%= whoA || '—' %> vs <%= whoB || '—' %>"><%= whoA || '—' %> / <%= whoB || '—' %></span>
+                            <% } %>
+                          <% } %>
+                        </div>
+                      <% } %>
+                    </div>
+                    <p class="mq-msg mt-1 hidden text-[10px] text-emerald-400">已儲存</p>
+                  </td>
+                  <td class="whitespace-nowrap px-2 py-2 align-middle">
+                    <select
+                      class="match-status-select w-full min-w-[5.5rem] rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200"
+                      data-match-id="<%= m._id %>"
+                      data-prev="<%= m.status %>"
+                      aria-label="場次狀態"
+                    >
+                      <% ['scheduled', 'live', 'finished', 'postponed', 'cancelled'].forEach(function (s) { %>
+                        <option value="<%= s %>" <%= m.status === s ? 'selected' : '' %>><%= typeof matchStatusLabel === 'function' ? matchStatusLabel(s) : s %></option>
+                      <% }); %>
+                    </select>
+                  </td>
+                  <td class="whitespace-nowrap px-2 py-2 align-middle">
+                    <label class="inline-flex items-center gap-1.5 text-xs text-slate-300">
+                      <input
+                        type="checkbox"
+                        class="mq-web"
+                        <%= m.showOnWebsite !== false ? 'checked' : '' %>
+                        aria-label="在網站顯示"
+                      />
+                      顯示
+                    </label>
+                  </td>
+                  <td class="whitespace-nowrap px-2 py-2 text-right align-middle"><a href="/admin/matches/<%= m._id %>/edit" class="text-emerald-400 underline">詳情</a></td>
+                </tr>
+              <% }); %>
             <% }); %>
+            <% if (!(matches && matches.length)) { %>
+              <tr>
+                <td colspan="10" class="px-3 py-8 text-center text-slate-500">尚未有場次</td>
+              </tr>
+            <% } %>
           </tbody>
         </table>
       </div>
@@ -922,7 +1049,12 @@
                 alert(typeof ref.j.error === 'string' ? ref.j.error : '更新狀態失敗');
                 return;
               }
-              sel.setAttribute('data-prev', ref.j.status || next);
+              var status = ref.j.status || next;
+              sel.setAttribute('data-prev', status);
+              var row = sel.closest('tr.match-quick-row');
+              if (row && typeof setRowSlotLocked === 'function') {
+                setRowSlotLocked(row, status === 'live' || status === 'finished');
+              }
               sel.classList.remove('border-rose-600');
               sel.classList.add('border-emerald-600/60');
               setTimeout(function () {
@@ -973,34 +1105,226 @@
         }
       }
 
-      /** 依開賽時間（HH:mm）重排場次表；空白時間排最後 */
-      function sortMatchRowsByTime() {
+      function courtLabelFromSelect(courtSel, key) {
+        if (!courtSel) return key || '未排場地';
+        var k = String(key || '').trim();
+        if (!k) return '未排場地';
+        var opt = Array.prototype.find.call(courtSel.options || [], function (o) {
+          return String(o.value) === k;
+        });
+        if (opt && opt.textContent) return String(opt.textContent).trim();
+        return k;
+      }
+
+      function compareMatchRowsBySchedule(a, b) {
+        var da = String((a.querySelector('.mq-date') || {}).value || '').trim();
+        var db = String((b.querySelector('.mq-date') || {}).value || '').trim();
+        if (da !== db) {
+          if (!da) return 1;
+          if (!db) return -1;
+          if (da < db) return -1;
+          if (da > db) return 1;
+        }
+        var ta = String((a.querySelector('.mq-time') || {}).value || '').trim();
+        var tb = String((b.querySelector('.mq-time') || {}).value || '').trim();
+        if (!ta && !tb) return 0;
+        if (!ta) return 1;
+        if (!tb) return -1;
+        if (ta < tb) return -1;
+        if (ta > tb) return 1;
+        return 0;
+      }
+
+      /** 按場地分組，組內按日期／時間排 */
+      function regroupMatchRowsByCourt() {
         var table = document.querySelector('.admin-matches-table');
         if (!table) return;
         var tbody = table.querySelector('tbody');
         if (!tbody) return;
         var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr.match-quick-row'));
-        if (rows.length < 2) return;
-        rows.sort(function (a, b) {
-          var da = String((a.querySelector('.mq-date') || {}).value || '').trim();
-          var db = String((b.querySelector('.mq-date') || {}).value || '').trim();
-          if (da !== db) {
-            if (!da) return 1;
-            if (!db) return -1;
-            if (da < db) return -1;
-            if (da > db) return 1;
+        if (!rows.length) return;
+
+        var venueOrder = [];
+        var sampleCourt = rows[0].querySelector('.mq-court');
+        if (sampleCourt) {
+          Array.prototype.forEach.call(sampleCourt.options || [], function (o) {
+            var v = String(o.value || '').trim();
+            if (v) venueOrder.push(v);
+          });
+        }
+
+        var buckets = {};
+        var noCourt = [];
+        rows.forEach(function (row) {
+          var key = String((row.querySelector('.mq-court') || {}).value || '').trim();
+          if (!key) {
+            noCourt.push(row);
+            return;
           }
-          var ta = String((a.querySelector('.mq-time') || {}).value || '').trim();
-          var tb = String((b.querySelector('.mq-time') || {}).value || '').trim();
-          if (!ta && !tb) return 0;
-          if (!ta) return 1;
-          if (!tb) return -1;
-          if (ta < tb) return -1;
-          if (ta > tb) return 1;
-          return 0;
+          if (!buckets[key]) buckets[key] = [];
+          buckets[key].push(row);
         });
-        rows.forEach(function (r) { tbody.appendChild(r); });
+
+        var sections = [];
+        venueOrder.forEach(function (slug) {
+          if (buckets[slug] && buckets[slug].length) {
+            sections.push({ key: slug, rows: buckets[slug] });
+            delete buckets[slug];
+          }
+        });
+        Object.keys(buckets).sort().forEach(function (k) {
+          sections.push({ key: k, rows: buckets[k] });
+        });
+        if (noCourt.length) sections.push({ key: '', rows: noCourt });
+
+        tbody.querySelectorAll('tr.court-group-header').forEach(function (h) { h.remove(); });
+        sections.forEach(function (sec) {
+          sec.rows.sort(compareMatchRowsBySchedule);
+          var header = document.createElement('tr');
+          header.className = 'court-group-header border-b border-slate-800 bg-slate-950/90';
+          header.setAttribute('data-court-key', sec.key);
+          var td = document.createElement('td');
+          td.colSpan = 10;
+          td.className = 'px-3 py-2 text-xs font-semibold text-amber-300/90';
+          var label = courtLabelFromSelect(sampleCourt, sec.key);
+          td.innerHTML = label + ' <span class="ml-2 font-normal text-slate-500">' + sec.rows.length + ' 場</span>';
+          header.appendChild(td);
+          tbody.appendChild(header);
+          sec.rows.forEach(function (r) { tbody.appendChild(r); });
+        });
       }
+
+      function applySlotToRow(row, slot) {
+        if (!row || !slot) return;
+        var dateInp = row.querySelector('.mq-date');
+        var timeInp = row.querySelector('.mq-time');
+        var courtSel = row.querySelector('.mq-court');
+        if (dateInp) dateInp.value = slot.scheduledDate || '';
+        if (timeInp) timeInp.value = slot.scheduledTime || '';
+        if (courtSel) courtSel.value = slot.court || '';
+      }
+
+      function setRowSlotLocked(row, locked) {
+        if (!row) return;
+        row.setAttribute('data-slot-locked', locked ? '1' : '0');
+        var handle = row.querySelector('.mq-drag-handle');
+        if (!handle) return;
+        handle.draggable = !locked;
+        handle.classList.toggle('is-locked', !!locked);
+        handle.title = locked ? '進行中／完賽不可對調' : '拖到另一場放開＝對調時段';
+      }
+
+      function rowSlotSummary(row) {
+        var date = String((row.querySelector('.mq-date') || {}).value || '').trim() || '（無日期）';
+        var time = String((row.querySelector('.mq-time') || {}).value || '').trim() || '（無時間）';
+        var courtSel = row.querySelector('.mq-court');
+        var court = courtLabelFromSelect(courtSel, courtSel ? courtSel.value : '');
+        return date + ' ' + time + '／' + court;
+      }
+
+      function swapMatchSlots(rowA, rowB) {
+        var idA = rowA.getAttribute('data-match-id');
+        var idB = rowB.getAttribute('data-match-id');
+        if (!idA || !idB || idA === idB) return;
+        if (rowA.getAttribute('data-slot-locked') === '1' || rowB.getAttribute('data-slot-locked') === '1') {
+          alert('進行中或完賽的場次不可對調時段');
+          return;
+        }
+        var msg =
+          '對調這兩場的日期／時間／場地？\n\n' +
+          'A：' + rowSlotSummary(rowA) + '\n' +
+          'B：' + rowSlotSummary(rowB);
+        if (!confirm(msg)) return;
+
+        fetch('/api/admin/matches/' + idA + '/swap-slot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ otherMatchId: idB }),
+        })
+          .then(function (r) {
+            return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+          })
+          .then(function (ref) {
+            if (!ref.ok) {
+              var errMap = {
+                locked_status: '進行中或完賽的場次不可對調',
+                different_tournament: '只能對調同一賽事的場次',
+                other_not_found: '找不到目標場次',
+              };
+              alert(errMap[ref.j && ref.j.error] || (ref.j && ref.j.error) || '對調失敗');
+              return;
+            }
+            applySlotToRow(rowA, ref.j.a);
+            applySlotToRow(rowB, ref.j.b);
+            flashRow(rowA, true);
+            flashRow(rowB, true);
+            regroupMatchRowsByCourt();
+          })
+          .catch(function () {
+            alert('網路錯誤，請再試');
+          });
+      }
+
+      (function bindMatchDragDrop() {
+        var table = document.querySelector('.admin-matches-table');
+        if (!table) return;
+        var dragRow = null;
+
+        table.addEventListener('dragstart', function (e) {
+          var handle = e.target.closest && e.target.closest('.mq-drag-handle');
+          if (!handle || handle.classList.contains('is-locked')) {
+            e.preventDefault();
+            return;
+          }
+          var row = handle.closest('tr.match-quick-row');
+          if (!row || row.getAttribute('data-slot-locked') === '1') {
+            e.preventDefault();
+            return;
+          }
+          dragRow = row;
+          row.classList.add('mq-dragging');
+          try {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', row.getAttribute('data-match-id') || '');
+          } catch (err) { /* ignore */ }
+        });
+
+        table.addEventListener('dragend', function () {
+          if (dragRow) dragRow.classList.remove('mq-dragging');
+          table.querySelectorAll('tr.match-quick-row.mq-drag-over').forEach(function (r) {
+            r.classList.remove('mq-drag-over');
+          });
+          dragRow = null;
+        });
+
+        table.addEventListener('dragover', function (e) {
+          var row = e.target.closest && e.target.closest('tr.match-quick-row');
+          if (!dragRow || !row || row === dragRow) return;
+          if (row.getAttribute('data-slot-locked') === '1') return;
+          e.preventDefault();
+          table.querySelectorAll('tr.match-quick-row.mq-drag-over').forEach(function (r) {
+            if (r !== row) r.classList.remove('mq-drag-over');
+          });
+          row.classList.add('mq-drag-over');
+        });
+
+        table.addEventListener('dragleave', function (e) {
+          var row = e.target.closest && e.target.closest('tr.match-quick-row');
+          if (row) row.classList.remove('mq-drag-over');
+        });
+
+        table.addEventListener('drop', function (e) {
+          var row = e.target.closest && e.target.closest('tr.match-quick-row');
+          if (!dragRow || !row || row === dragRow) return;
+          e.preventDefault();
+          row.classList.remove('mq-drag-over');
+          var from = dragRow;
+          dragRow = null;
+          from.classList.remove('mq-dragging');
+          swapMatchSlots(from, row);
+        });
+      })();
 
       function saveQuick(row, fields) {
         var matchId = row.getAttribute('data-match-id');
@@ -1014,6 +1338,7 @@
           row._mqPending = null;
           var timeChanged = body.scheduledTime !== undefined;
           var dateChanged = body.scheduledDate !== undefined;
+          var courtChanged = body.court !== undefined;
           if (body.completedGames === undefined && (body.scheduledTime !== undefined || body.scheduledDate !== undefined || body.court !== undefined || body.showOnWebsite !== undefined)) {
             // keep partial updates
           } else if (body.completedGames !== undefined) {
@@ -1027,6 +1352,7 @@
             };
             timeChanged = true;
             dateChanged = true;
+            courtChanged = true;
           }
           fetch('/api/admin/matches/' + matchId + '/quick-update', {
             method: 'POST',
@@ -1044,6 +1370,7 @@
                 if (sel && ref.j.match.status) {
                   sel.value = ref.j.match.status;
                   sel.setAttribute('data-prev', ref.j.match.status);
+                  setRowSlotLocked(row, ref.j.match.status === 'live' || ref.j.match.status === 'finished');
                 }
                 if (timeChanged) {
                   var savedTime = ref.j.match.scheduledTime;
@@ -1058,7 +1385,11 @@
                     dateInp.value = String(ref.j.match.scheduledDate).trim();
                   }
                 }
-                if (timeChanged || dateChanged) sortMatchRowsByTime();
+                if (courtChanged && ref.j.match.court != null) {
+                  var courtSel = row.querySelector('.mq-court');
+                  if (courtSel) courtSel.value = String(ref.j.match.court).trim();
+                }
+                if (timeChanged || dateChanged || courtChanged) regroupMatchRowsByCourt();
               }
             })
             .catch(function () { flashRow(row, false); });
