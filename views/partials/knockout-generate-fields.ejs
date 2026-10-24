@@ -9,6 +9,7 @@
 <% if (typeof force !== 'undefined' && force) { %>
   <input type="hidden" name="force" value="1" />
 <% } %>
+<%- include('./schedule-timing-fields') %>
 <div class="mt-3 flex flex-wrap items-end gap-3">
   <div class="min-w-[160px]">
     <label class="block text-xs text-slate-500">賽制 <span class="text-rose-400">*</span></label>
@@ -22,7 +23,7 @@
     type="submit"
     class="rounded bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
     <%= realTeamCount < 2 ? 'disabled' : '' %>
-    onclick="return confirm('<%= confirmMsg %>');"
+    onclick="return confirm('<%= confirmMsg %>\\n\\n會按場地並行排時間（開始 + 每場 + 休息）。');"
   ><%= buttonLabel %></button>
 </div>
 <% if (_venues.length) { %>

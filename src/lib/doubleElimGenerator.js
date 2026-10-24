@@ -4,6 +4,7 @@ import { Team } from '../models/Team.js';
 import { Match, MATCH_FORMAT } from '../models/Match.js';
 import { Event } from '../models/Event.js';
 import { venueSlugList } from './venues.js';
+import { createCourtTimeAssigner, scheduleDateFromTournament } from './scheduleTiming.js';
 
 function nextPow2(n) {
   let p = 1;
@@ -66,7 +67,7 @@ function losersRoundLabel(idx, isFinal) {
  * 總決賽：teamA = 勝部冠軍占位 GF-W；teamB = 敗部冠軍占位 GF-L。
  * 若敗部喺 GF1 反勝，推進邏輯會啟動 GF2（勝部一次優勢）。
  */
-export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, courts }) {
+export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, courts, timing = null }) {
   if (!mongoose.isValidObjectId(tournamentId)) return { ok: false, error: 'invalid_id' };
 
   const t = await Tournament.findById(tournamentId).lean();
@@ -94,6 +95,20 @@ export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, c
 
   const fmt = parseMatchFormat(matchFormat);
   const assignCourt = makeCourtAssigner(venueList);
+  const timeAssign = createCourtTimeAssigner({
+    startTime: timing?.startTime,
+    startMinutes: timing?.startMinutes,
+    slotMinutes: timing?.slotMinutes,
+  });
+  const scheduleDate = scheduleDateFromTournament(t);
+  function courtAndTime(isBye = false) {
+    const court = assignCourt.next(isBye);
+    return {
+      court,
+      scheduledTime: timeAssign.next(court, { skip: isBye }),
+      scheduledDate: scheduleDate,
+    };
+  }
   const byeId = await ensurePlaceholderTeam(t._id, 'BYE');
   const bracketSize = nextPow2(teams.length);
   const createdMatchIds = [];
@@ -146,8 +161,7 @@ export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, c
         matchFormat: fmt,
         teamA,
         teamB,
-        court: assignCourt.next(isBye),
-        scheduledTime: '',
+        ...courtAndTime(isBye),
         status: isBye ? 'finished' : 'scheduled',
         completedGames: [],
         currentGameIndex: 0,
@@ -203,8 +217,7 @@ export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, c
           matchFormat: fmt,
           teamA,
           teamB,
-          court: assignCourt.next(),
-          scheduledTime: '',
+          ...courtAndTime(),
           status: 'scheduled',
           completedGames: [],
           currentGameIndex: 0,
@@ -242,8 +255,7 @@ export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, c
             matchFormat: fmt,
             teamA,
             teamB,
-            court: assignCourt.next(),
-            scheduledTime: '',
+            ...courtAndTime(),
             status: 'scheduled',
             completedGames: [],
             currentGameIndex: 0,
@@ -278,8 +290,7 @@ export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, c
             matchFormat: fmt,
             teamA,
             teamB,
-            court: assignCourt.next(),
-            scheduledTime: '',
+            ...courtAndTime(),
             status: 'scheduled',
             completedGames: [],
             currentGameIndex: 0,
@@ -311,8 +322,7 @@ export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, c
         matchFormat: fmt,
         teamA,
         teamB,
-        court: assignCourt.next(),
-        scheduledTime: '',
+        ...courtAndTime(),
         status: 'scheduled',
         completedGames: [],
         currentGameIndex: 0,
@@ -336,8 +346,7 @@ export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, c
     matchFormat: fmt,
     teamA: gfW,
     teamB: gfL,
-    court: assignCourt.next(),
-    scheduledTime: '',
+    ...courtAndTime(),
     status: 'scheduled',
     completedGames: [],
     currentGameIndex: 0,
@@ -351,6 +360,8 @@ export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, c
 
   const gf2A = await ensurePlaceholderTeam(t._id, 'GF2-A');
   const gf2B = await ensurePlaceholderTeam(t._id, 'GF2-B');
+  // GF2 預留、未確定是否開打：仍排時間但不佔場地（與舊行為 court:'' 一致）
+  const gf2Time = timeAssign.next('', { skip: false });
   const gf2 = await Match.create({
     tournamentId: t._id,
     round: '總決賽（若需要）',
@@ -358,7 +369,8 @@ export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, c
     teamA: gf2A,
     teamB: gf2B,
     court: '',
-    scheduledTime: '',
+    scheduledTime: gf2Time,
+    scheduledDate: scheduleDate,
     status: 'scheduled',
     completedGames: [],
     currentGameIndex: 0,
@@ -400,6 +412,7 @@ export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, c
     matchFormat: fmt,
     courtsUsed: (venueList || []).length,
     bracketSize,
+    timingApplied: timeAssign.enabled,
   };
 }
 

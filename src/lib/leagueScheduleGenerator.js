@@ -5,6 +5,11 @@ import { Match, MATCH_FORMAT } from '../models/Match.js';
 import { Event } from '../models/Event.js';
 import { buildRoundRobinRounds } from './groupScheduleGenerator.js';
 import { venueSlugList } from './venues.js';
+import {
+  createCourtTimeAssigner,
+  scheduleDateFromTournament,
+  latestTimeByCourt,
+} from './scheduleTiming.js';
 
 function sortTeams(teams) {
   return [...teams].sort((a, b) => {
@@ -53,7 +58,7 @@ function pairKey(a, b) {
 /**
  * 聯賽雙循環。fillMissing=true 時只補尚未出現嘅定向對賽（方便每週人手加場後再補齊）。
  */
-export async function generateLeagueDoubleRoundRobin({ tournamentId, fillMissing = false }) {
+export async function generateLeagueDoubleRoundRobin({ tournamentId, fillMissing = false, timing = null }) {
   if (!mongoose.isValidObjectId(tournamentId)) {
     return { ok: false, error: 'invalid_id' };
   }
@@ -62,7 +67,7 @@ export async function generateLeagueDoubleRoundRobin({ tournamentId, fillMissing
   if (!tournament) return { ok: false, error: 'not_found' };
   if (tournament.phase !== 'league') return { ok: false, error: 'target_not_league' };
 
-  const existing = await Match.find({ tournamentId }).select('teamA teamB').lean();
+  const existing = await Match.find({ tournamentId }).select('teamA teamB court scheduledTime').lean();
   if (existing.length && !fillMissing) {
     return { ok: false, error: 'target_has_matches' };
   }
@@ -78,20 +83,30 @@ export async function generateLeagueDoubleRoundRobin({ tournamentId, fillMissing
   const event = await Event.findById(tournament.eventId).select('venues').lean();
   const courts = resolveCourtSlugs(event?.venues);
   const assign = makeCourtAssigner(courts);
+  const seedByCourt = fillMissing ? latestTimeByCourt(existing) : null;
+  const timeAssign = createCourtTimeAssigner({
+    startTime: timing?.startTime,
+    startMinutes: timing?.startMinutes,
+    slotMinutes: timing?.slotMinutes,
+    seedByCourt,
+  });
+  const scheduleDate = scheduleDateFromTournament(tournament);
 
   const docs = [];
   rounds.forEach((pairs, r) => {
     assign.resetRound();
     for (const [a, b] of pairs) {
       if (fillMissing && existingPairs.has(pairKey(a, b))) continue;
+      const court = assign.next();
       docs.push({
         tournamentId,
         round: `第${r + 1}輪`,
         matchFormat: MATCH_FORMAT.LEAGUE_FIVE,
         teamA: a,
         teamB: b,
-        court: assign.next(),
-        scheduledTime: '',
+        court,
+        scheduledTime: timeAssign.next(court),
+        scheduledDate: scheduleDate,
         status: 'scheduled',
         completedGames: [],
         currentGameIndex: 0,
@@ -113,5 +128,6 @@ export async function generateLeagueDoubleRoundRobin({ tournamentId, fillMissing
     courtsUsed: courts.length,
     matchFormat: MATCH_FORMAT.LEAGUE_FIVE,
     filled: !!fillMissing,
+    timingApplied: timeAssign.enabled,
   };
 }

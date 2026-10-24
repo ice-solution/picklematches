@@ -6,6 +6,7 @@ import { Match, MATCH_FORMAT } from '../models/Match.js';
 import { Event } from '../models/Event.js';
 import { parseMatchFormat } from './knockoutGenerator.js';
 import { venueSlugList } from './venues.js';
+import { createCourtTimeAssigner, scheduleDateFromTournament } from './scheduleTiming.js';
 
 function sortTeamsInGroup(teams) {
   return [...teams].sort((a, b) => {
@@ -74,7 +75,7 @@ function resolveCourtSlugs(courts) {
  * 小組賽：各組內單循環，一鍵產生全部場次。
  * 同「輪次」跨組一齊排，方便同輪平均分配場地。
  */
-export async function generateGroupRoundRobin({ tournamentId, matchFormat, courts }) {
+export async function generateGroupRoundRobin({ tournamentId, matchFormat, courts, timing = null }) {
   if (!mongoose.isValidObjectId(tournamentId)) {
     return { ok: false, error: 'invalid_id' };
   }
@@ -118,6 +119,12 @@ export async function generateGroupRoundRobin({ tournamentId, matchFormat, court
 
   const fmt = parseMatchFormat(matchFormat);
   const assignCourt = makeCourtAssigner(venueList);
+  const timeAssign = createCourtTimeAssigner({
+    startTime: timing?.startTime,
+    startMinutes: timing?.startMinutes,
+    slotMinutes: timing?.slotMinutes,
+  });
+  const scheduleDate = scheduleDateFromTournament(tournament);
   const maxRounds = Math.max(...groupPlans.map((p) => p.rounds.length));
   const createdMatchIds = [];
 
@@ -127,6 +134,8 @@ export async function generateGroupRoundRobin({ tournamentId, matchFormat, court
     for (const plan of groupPlans) {
       const pairs = plan.rounds[r] || [];
       for (const [teamA, teamB] of pairs) {
+        const court = assignCourt.next();
+        const scheduledTime = timeAssign.next(court);
         const m = await Match.create({
           tournamentId,
           groupId: plan.group._id,
@@ -134,8 +143,9 @@ export async function generateGroupRoundRobin({ tournamentId, matchFormat, court
           matchFormat: fmt,
           teamA,
           teamB,
-          court: assignCourt.next(),
-          scheduledTime: '',
+          court,
+          scheduledTime,
+          scheduledDate: scheduleDate,
           status: 'scheduled',
           completedGames: [],
           currentGameIndex: 0,
@@ -154,6 +164,7 @@ export async function generateGroupRoundRobin({ tournamentId, matchFormat, court
     rounds: maxRounds,
     matchFormat: fmt,
     courtsUsed: (venueList || []).length,
+    timingApplied: timeAssign.enabled,
   };
 }
 

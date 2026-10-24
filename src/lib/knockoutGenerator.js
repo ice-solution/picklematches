@@ -6,6 +6,7 @@ import { Group } from '../models/Group.js';
 import { Event } from '../models/Event.js';
 import { computeGroupStandings } from './groupStandings.js';
 import { venueSlugList } from './venues.js';
+import { createCourtTimeAssigner, scheduleDateFromTournament } from './scheduleTiming.js';
 
 function nextPow2(n) {
   let p = 1;
@@ -164,16 +165,32 @@ function resolveCourtSlugs(courts) {
 
 /**
  * 以已在淘汰賽內的隊伍 ID 名單建立籤表場次（含 BYE／後續 TBD 占位）。
- * @param {{ matchFormat?: string, courts?: string[] }} [options]
+ * @param {{ matchFormat?: string, courts?: string[], timing?: object|null, scheduleDate?: string }} [options]
  * @returns {{ createdMatchIds: import('mongoose').Types.ObjectId[] }}
  */
 async function createBracketFromTeamIds(koTournamentId, koTeamIds, options = {}) {
   const matchFormat = parseMatchFormat(options.matchFormat);
   const assignCourt = makeCourtAssigner(options.courts);
+  const timing = options.timing || null;
+  const timeAssign = createCourtTimeAssigner({
+    startTime: timing?.startTime,
+    startMinutes: timing?.startMinutes,
+    slotMinutes: timing?.slotMinutes,
+  });
+  const scheduleDate = options.scheduleDate != null ? options.scheduleDate : '';
   const createdMatchIds = [];
   const bracketSize = nextPow2(koTeamIds.length);
   const byeTeamId = await ensurePlaceholderTeam(koTournamentId, 'BYE');
   const firstRoundLabel = roundLabelForSize(bracketSize);
+
+  function courtAndTime(isBye = false) {
+    const court = assignCourt.next(isBye);
+    return {
+      court,
+      scheduledTime: timeAssign.next(court, { skip: isBye }),
+      scheduledDate: scheduleDate,
+    };
+  }
 
   const seeds = new Array(bracketSize).fill(byeTeamId);
   for (let i = 0; i < koTeamIds.length; i++) {
@@ -194,8 +211,7 @@ async function createBracketFromTeamIds(koTournamentId, koTeamIds, options = {})
       matchFormat,
       teamA,
       teamB,
-      court: assignCourt.next(isBye),
-      scheduledTime: '',
+      ...courtAndTime(isBye),
       status: isBye ? 'finished' : 'scheduled',
       completedGames: [],
       currentGameIndex: 0,
@@ -226,8 +242,7 @@ async function createBracketFromTeamIds(koTournamentId, koTeamIds, options = {})
       matchFormat,
       teamA: w1,
       teamB: w2,
-      court: assignCourt.next(),
-      scheduledTime: '',
+      ...courtAndTime(),
       status: 'scheduled',
       completedGames: [],
       currentGameIndex: 0,
@@ -239,8 +254,7 @@ async function createBracketFromTeamIds(koTournamentId, koTeamIds, options = {})
       matchFormat,
       teamA: l1,
       teamB: l2,
-      court: assignCourt.next(),
-      scheduledTime: '',
+      ...courtAndTime(),
       status: 'scheduled',
       completedGames: [],
       currentGameIndex: 0,
@@ -262,8 +276,7 @@ async function createBracketFromTeamIds(koTournamentId, koTeamIds, options = {})
           matchFormat,
           teamA: t1,
           teamB: t2,
-          court: assignCourt.next(),
-          scheduledTime: '',
+          ...courtAndTime(),
           status: 'scheduled',
           completedGames: [],
           currentGameIndex: 0,
@@ -281,7 +294,7 @@ async function createBracketFromTeamIds(koTournamentId, koTeamIds, options = {})
 /**
  * 純淘汰賽：直接用本賽事已建立／匯入的隊伍產生鬼腳籤表（無需小組賽）。
  */
-export async function generateKnockoutFromTeams({ knockoutTournamentId, matchFormat, courts }) {
+export async function generateKnockoutFromTeams({ knockoutTournamentId, matchFormat, courts, timing = null }) {
   if (!mongoose.isValidObjectId(knockoutTournamentId)) {
     return { ok: false, error: 'invalid_id' };
   }
@@ -310,9 +323,12 @@ export async function generateKnockoutFromTeams({ knockoutTournamentId, matchFor
   }
 
   const koTeamIds = teams.map((t) => t._id);
+  const scheduleDate = scheduleDateFromTournament(ko);
   const { createdMatchIds } = await createBracketFromTeamIds(ko._id, koTeamIds, {
     matchFormat,
     courts: venueList,
+    timing,
+    scheduleDate,
   });
   return {
     ok: true,
@@ -320,6 +336,7 @@ export async function generateKnockoutFromTeams({ knockoutTournamentId, matchFor
     createdMatches: createdMatchIds.length,
     matchFormat: parseMatchFormat(matchFormat),
     courtsUsed: (venueList || []).length,
+    timingApplied: !!(timing && timing.enabled !== false && (timing.startTime || timing.startMinutes != null)),
   };
 }
 
@@ -330,6 +347,8 @@ export async function generateKnockoutFromGroup({
   sourceTournamentId,
   knockoutTournamentId,
   advancePerGroup,
+  timing = null,
+  courts,
 }) {
   if (!mongoose.isValidObjectId(sourceTournamentId) || !mongoose.isValidObjectId(knockoutTournamentId)) {
     return { ok: false, error: 'invalid_id' };
@@ -427,6 +446,14 @@ export async function generateKnockoutFromGroup({
   const canCross =
     isPow2(koTeamIds.length) && groups.length % 2 === 0 && koTeamIds.length === qualifiers.length;
 
+  let venueList = Array.isArray(courts) ? resolveCourtSlugs(courts) : null;
+  if (!venueList) {
+    const event = await Event.findById(ko.eventId).select('venues').lean();
+    venueList = venueSlugList(event?.venues);
+  }
+  const scheduleDate = scheduleDateFromTournament(ko);
+  const bracketOpts = { matchFormat: MATCH_FORMAT.BEST_OF_3, courts: venueList, timing, scheduleDate };
+
   const createdMatchIds = [];
 
   if (canCross) {
@@ -443,7 +470,22 @@ export async function generateKnockoutFromGroup({
     }
 
     const firstRoundLabel = roundLabelForSize(nextPow2(koTeamIds.length));
+    const assignCourt = makeCourtAssigner(venueList);
+    const timeAssign = createCourtTimeAssigner({
+      startTime: timing?.startTime,
+      startMinutes: timing?.startMinutes,
+      slotMinutes: timing?.slotMinutes,
+    });
+    function courtAndTime() {
+      const court = assignCourt.next();
+      return {
+        court,
+        scheduledTime: timeAssign.next(court),
+        scheduledDate: scheduleDate,
+      };
+    }
 
+    assignCourt.resetRound();
     for (let gi = 0; gi < groups.length; gi += 2) {
       const g1 = groups[gi];
       const g2 = groups[gi + 1];
@@ -462,8 +504,7 @@ export async function generateKnockoutFromGroup({
           matchFormat: MATCH_FORMAT.BEST_OF_3,
           teamA,
           teamB,
-          court: '',
-          scheduledTime: '',
+          ...courtAndTime(),
           status: 'scheduled',
           completedGames: [],
           currentGameIndex: 0,
@@ -485,14 +526,14 @@ export async function generateKnockoutFromGroup({
         const w2 = await ensurePlaceholderTeam(ko._id, 'W-SF2');
         const l1 = await ensurePlaceholderTeam(ko._id, 'L-SF1');
         const l2 = await ensurePlaceholderTeam(ko._id, 'L-SF2');
+        assignCourt.resetRound();
         const finalM = await Match.create({
           tournamentId: ko._id,
           round: '決賽',
           matchFormat: MATCH_FORMAT.BEST_OF_3,
           teamA: w1,
           teamB: w2,
-          court: '',
-          scheduledTime: '',
+          ...courtAndTime(),
           status: 'scheduled',
           completedGames: [],
           currentGameIndex: 0,
@@ -504,8 +545,7 @@ export async function generateKnockoutFromGroup({
           matchFormat: MATCH_FORMAT.BEST_OF_3,
           teamA: l1,
           teamB: l2,
-          court: '',
-          scheduledTime: '',
+          ...courtAndTime(),
           status: 'scheduled',
           completedGames: [],
           currentGameIndex: 0,
@@ -516,6 +556,7 @@ export async function generateKnockoutFromGroup({
         let size = nextPow2(koTeamIds.length) / 2;
         while (size >= 2) {
           const label = roundLabelForSize(size);
+          assignCourt.resetRound();
           for (let i = 0; i < size / 2; i++) {
             const t1 = await ensurePlaceholderTeam(ko._id, `TBD-${label}-${i * 2 + 1}`);
             const t2 = await ensurePlaceholderTeam(ko._id, `TBD-${label}-${i * 2 + 2}`);
@@ -525,8 +566,7 @@ export async function generateKnockoutFromGroup({
               matchFormat: MATCH_FORMAT.BEST_OF_3,
               teamA: t1,
               teamB: t2,
-              court: '',
-              scheduledTime: '',
+              ...courtAndTime(),
               status: 'scheduled',
               completedGames: [],
               currentGameIndex: 0,
@@ -543,7 +583,7 @@ export async function generateKnockoutFromGroup({
     await Match.deleteMany({ _id: { $in: createdMatchIds } });
   }
 
-  const { createdMatchIds: ids } = await createBracketFromTeamIds(ko._id, koTeamIds);
+  const { createdMatchIds: ids } = await createBracketFromTeamIds(ko._id, koTeamIds, bracketOpts);
   return { ok: true, createdTeams: koTeamIds.length, createdMatches: ids.length };
 }
 

@@ -496,16 +496,18 @@
           <% } %>
           <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-league-schedule" class="mt-3">
             <input type="hidden" name="force" value="<%= hasLeagueMatches ? '1' : '0' %>" />
+            <%- include('../partials/schedule-timing-fields') %>
             <button
               type="submit"
-              class="rounded bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
-              onclick="return confirm('<%= hasLeagueMatches ? ('會清空現有 ' + matches.length + ' 場再產生雙循環。隊伍會保留。確定？') : ('確定依目前 ' + realTeamCountLeague + ' 隊產生雙循環全季賽程？時間可之後每週再填。') %>');"
+              class="mt-3 rounded bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
+              onclick="return confirm('<%= hasLeagueMatches ? ('會清空現有 ' + matches.length + ' 場再產生雙循環。隊伍會保留。確定？') : ('確定依目前 ' + realTeamCountLeague + ' 隊產生雙循環全季賽程？') %>\\n\\n會按場地並行排時間（開始 + 每場 + 休息）。');"
             ><%= hasLeagueMatches ? '清空並重新產生雙循環' : '產生雙循環全季賽程' %></button>
           </form>
           <% if (hasLeagueMatches) { %>
             <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-league-schedule" class="mt-2">
               <input type="hidden" name="fillMissing" value="1" />
-              <button type="submit" class="rounded border border-amber-700/70 px-4 py-2 text-sm text-amber-200 hover:bg-amber-950/40">補齊未排對賽（保留已有場次）</button>
+              <%- include('../partials/schedule-timing-fields') %>
+              <button type="submit" class="mt-3 rounded border border-amber-700/70 px-4 py-2 text-sm text-amber-200 hover:bg-amber-950/40" onclick="return confirm('會為尚未排對的比賽補場，並接續各場地已有最晚時間排程。確定？');">補齊未排對賽（保留已有場次）</button>
             </form>
           <% } %>
         </div>
@@ -602,7 +604,7 @@
           <% if (hasGroupSources) { %>
             <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-knockout" class="mt-4 border-t border-sky-900/50 pt-4">
               <p class="text-xs font-semibold text-sky-300">方式二：由小組賽出線產生</p>
-              <p class="mt-1 text-xs text-slate-500">依小組賽已完賽場次計算名次，取每組前 N 名出線後畫鬼腳。</p>
+              <p class="mt-1 text-xs text-slate-500">依小組賽已完賽場次計算名次，取每組前 N 名出線後自動複製隊伍並畫鬼腳。若已預排 A1／B2 場次，只會填入出線隊、不改已有時間／場地。</p>
               <div class="mt-3 flex flex-wrap items-end gap-3">
                 <div class="min-w-[240px] flex-1">
                   <label class="block text-xs text-slate-500">來源小組賽賽事</label>
@@ -617,8 +619,9 @@
                   <label class="block text-xs text-slate-500">每組取前 N 名</label>
                   <input name="advancePerGroup" type="number" min="1" value="2" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
                 </div>
-                <button type="submit" class="rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-600" onclick="return confirm('確定要由小組賽產生淘汰賽？（若此淘汰賽已有場次會失敗）');">由小組產生</button>
               </div>
+              <%- include('../partials/schedule-timing-fields') %>
+              <button type="submit" class="mt-3 rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-600" onclick="return confirm('確定要由小組賽產生淘汰賽？\\n\\n新建籤表時會按場地並行排時間；若已有預排場次則只填入隊伍、不改時間。');">由小組產生</button>
             </form>
 
             <form method="post" action="/admin/tournaments/<%= tournament._id %>/link-group" class="mt-6 border-t border-sky-900/50 pt-4">

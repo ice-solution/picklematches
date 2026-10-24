@@ -1,0 +1,42 @@
+<%-
+  /* 產生賽程：開始時間／每場分鐘／休息分鐘
+     預期 locals（可選）: defaultStartTime, defaultMatchMinutes, defaultRestMinutes
+  */
+%>
+<%
+  var _start = typeof defaultStartTime !== 'undefined' && defaultStartTime ? defaultStartTime : '10:00';
+  var _matchMins = typeof defaultMatchMinutes !== 'undefined' ? defaultMatchMinutes : 15;
+  var _restMins = typeof defaultRestMinutes !== 'undefined' ? defaultRestMinutes : 5;
+%>
+<div class="mt-3 flex flex-wrap items-end gap-3">
+  <div class="w-36">
+    <label class="block text-xs text-slate-500">開始時間</label>
+    <input
+      type="time"
+      name="startTime"
+      value="<%= _start %>"
+      class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+    />
+  </div>
+  <div class="w-28">
+    <label class="block text-xs text-slate-500">每場預計（分鐘）</label>
+    <input
+      type="number"
+      name="matchMinutes"
+      min="1"
+      value="<%= _matchMins %>"
+      class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+    />
+  </div>
+  <div class="w-28">
+    <label class="block text-xs text-slate-500">休息（分鐘）</label>
+    <input
+      type="number"
+      name="restMinutes"
+      min="0"
+      value="<%= _restMins %>"
+      class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+    />
+  </div>
+</div>
+<p class="mt-1.5 text-[11px] text-slate-500">會按場地並行排時間（開始 + 每場 + 休息）。留空開始時間則不自動填時間。</p>

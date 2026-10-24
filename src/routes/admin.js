@@ -46,6 +46,7 @@ import { getSiteUrl } from '../lib/siteUrl.js';
 import { generateKnockoutFromGroup, generateKnockoutFromTeams } from '../lib/knockoutGenerator.js';
 import { generateDoubleElimFromTeams, buildDoubleElimTracks } from '../lib/doubleElimGenerator.js';
 import { generateGroupRoundRobin } from '../lib/groupScheduleGenerator.js';
+import { parseScheduleTimingBody } from '../lib/scheduleTiming.js';
 import { assignTeamCodeIfEmpty } from '../lib/teamCodes.js';
 import { buildGroupRoundRobinMatrices } from '../lib/groupRoundRobinMatrix.js';
 import { Division } from '../models/Division.js';
@@ -1102,10 +1103,12 @@ adminRouter.post('/tournaments/:tournamentId/generate-knockout', requireStaff, a
       if (!src) return forbidAccess(req, res);
     }
     const advancePerGroup = parseInt(String(req.body.advancePerGroup || '').trim(), 10);
+    const timing = parseScheduleTimingBody(req.body);
     const r = await generateKnockoutFromGroup({
       sourceTournamentId,
       knockoutTournamentId: tournamentId,
       advancePerGroup: Number.isNaN(advancePerGroup) ? undefined : advancePerGroup,
+      timing,
     });
     if (!r.ok) {
       const code = r.error || 'error';
@@ -1144,10 +1147,12 @@ adminRouter.post('/tournaments/:tournamentId/generate-knockout-bracket', require
       });
     }
 
+    const timing = parseScheduleTimingBody(req.body);
     const r = await generateKnockoutFromTeams({
       knockoutTournamentId: tournamentId,
       matchFormat: req.body.matchFormat,
       courts: undefined,
+      timing,
     });
     if (!r.ok) {
       const code = r.error || 'error';
@@ -1184,10 +1189,12 @@ adminRouter.post('/tournaments/:tournamentId/generate-double-elim', requireStaff
       await Team.deleteMany({ tournamentId, isPlaceholder: true });
     }
 
+    const timing = parseScheduleTimingBody(req.body);
     const r = await generateDoubleElimFromTeams({
       tournamentId,
       matchFormat: req.body.matchFormat,
       courts: undefined,
+      timing,
     });
     if (!r.ok) {
       const code = r.error || 'error';
@@ -1223,9 +1230,11 @@ adminRouter.post('/tournaments/:tournamentId/generate-group-schedule', requireSt
       }
     }
 
+    const timing = parseScheduleTimingBody(req.body);
     const r = await generateGroupRoundRobin({
       tournamentId,
       matchFormat: req.body.matchFormat,
+      timing,
     });
     if (!r.ok) {
       const code = r.error || 'error';
@@ -1262,9 +1271,11 @@ adminRouter.post('/tournaments/:tournamentId/generate-league-schedule', requireS
       }
     }
 
+    const timing = parseScheduleTimingBody(req.body);
     const r = await generateLeagueDoubleRoundRobin({
       tournamentId,
       fillMissing: fillMissing && !force,
+      timing,
     });
     if (!r.ok) {
       const code = r.error || 'error';
