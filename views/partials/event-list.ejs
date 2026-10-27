@@ -33,12 +33,6 @@
             }
             parts.push(d);
           }
-          if (ev.venues && ev.venues.length) {
-            var _vn = typeof normalizeEventVenues === 'function'
-              ? normalizeEventVenues(ev.venues).map(function (v) { return v.name; })
-              : ev.venues;
-            parts.push(_vn.slice(0, 2).join('、'));
-          }
           if (ev.registrationEnabled) parts.push('開放報名');
           desc = parts.join(' · ') || ev.name;
         }
