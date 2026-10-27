@@ -127,9 +127,10 @@
           <li>在下方<strong class="text-slate-200">新增第一筆賽事</strong>：類型選<strong class="text-slate-200">小組賽</strong>，並設定「各組前 N 名」（例如各組前 2 名出線）。</li>
           <li>進入該賽事 → 建立<strong>組別、隊伍</strong>，再用「產生小組循環賽程」排滿各組比賽。打完小組比分後，積分榜會決定名次。</li>
           <li>回到本頁<strong>再新增第二筆賽事</strong>：類型選<strong class="text-slate-200">淘汰賽</strong>（小組與淘汰係兩筆獨立賽事，唔會喺小組完賽後自動開淘汰）。</li>
-          <li>進入淘汰賽賽事 → 撳<strong class="text-slate-200">「由小組產生」</strong>：系統會依積分榜取每組前 N 名、自動複製出線隊伍到淘汰賽，並跨組對位／畫鬼腳（若已預排 A1／B2 場次，則只填入出線隊、唔改已有時間場地）。</li>
+          <li>進入淘汰賽 → 先撳<strong class="text-slate-200">「預排 A1／B2」</strong>（可提早排時間；前台即時見到時間表），小組打完後再撳<strong class="text-slate-200">「由小組產生」</strong>把占位換成真隊（唔改時間場地）。</li>
         </ol>
-        <p class="mt-3 text-xs text-slate-500">同一個大會底下可以有多筆「賽事」：先完成小組賽比分，再到淘汰賽頁手動撳「由小組產生」。出線隊複製同籤表會由系統自動完成，無需人手再逐隊建隊。</p>
+        <p class="mt-3 text-xs text-slate-500">同一個大會底下可以有多筆「賽事」。建議：預排籤表 → 打小組 → 由小組填入。唔好喺小組未完賽時用「由小組產生」填真隊（會用假排名）。</p>
+
       </div>
     </details>
 
@@ -421,6 +422,36 @@
     <section class="mt-8 text-sm text-slate-500">
       <p>常用入口已集中喺頁頂「實用連結」。</p>
     </section>
+
+    <details class="admin-fold mt-10 rounded border border-rose-900/50 bg-rose-950/20" data-fold-key="danger-delete">
+      <summary class="flex cursor-pointer items-center justify-between gap-3 px-5 py-4">
+        <h2 class="text-lg font-semibold text-rose-300">危險操作：刪除大會</h2>
+        <span class="fold-chevron text-rose-700/80" aria-hidden="true">▼</span>
+      </summary>
+      <div class="border-t border-rose-900/40 px-5 pb-5 pt-4">
+        <p class="text-sm text-slate-400">
+          會永久刪除此大會，以及底下所有<strong class="text-slate-200">賽事、組別、隊伍、場次、報名組別／紀錄、付款紀錄、顯示內容</strong>。無法復原。
+        </p>
+        <form
+          method="post"
+          action="/admin/events/<%= event._id %>/delete"
+          class="mt-4 space-y-3"
+          onsubmit="return confirm('最後確認：確定永久刪除大會「<%= String(event.name || '').replace(/'/g, '') %>」？此動作無法復原。');"
+        >
+          <div>
+            <label class="block text-xs text-slate-500">請輸入大會名稱「<%= event.name %>」以確認</label>
+            <input
+              name="confirmName"
+              required
+              autocomplete="off"
+              placeholder="<%= event.name %>"
+              class="mt-1 w-full max-w-md rounded border border-rose-900/60 bg-slate-950 px-3 py-2 text-sm text-slate-200"
+            />
+          </div>
+          <button type="submit" class="rounded bg-rose-700 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-600">永久刪除大會</button>
+        </form>
+      </div>
+    </details>
   </main>
   <script>
     (function () {

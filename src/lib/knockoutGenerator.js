@@ -378,6 +378,15 @@ export async function generateKnockoutFromGroup({
   const groups = await Group.find({ tournamentId: src._id }).sort({ order: 1, createdAt: 1 }).lean();
   if (!groups.length) return { ok: false, error: 'no_groups' };
 
+  const finishedGroupMatches = await Match.countDocuments({
+    tournamentId: src._id,
+    status: 'finished',
+  });
+  if (finishedGroupMatches === 0) {
+    // 未打完小組唔好用假排名填真隊；請先用預排 A1/B2 籤表
+    return { ok: false, error: 'group_not_finished' };
+  }
+
   const standings = await computeGroupStandings(src._id);
   const takeN = Math.max(1, parseInt(advancePerGroup ?? src.advancePerGroup ?? 2, 10) || 2);
 
@@ -585,5 +594,223 @@ export async function generateKnockoutFromGroup({
 
   const { createdMatchIds: ids } = await createBracketFromTeamIds(ko._id, koTeamIds, bracketOpts);
   return { ok: true, createdTeams: koTeamIds.length, createdMatches: ids.length };
+}
+
+/**
+ * 預排淘汰籤表：用 A1／B2… 占位（唔使小組出線結果），方便提早排時間／場地。
+ * 小組打完後再呼叫 generateKnockoutFromGroup，會只填入真隊、唔改時間場地。
+ */
+export async function generateKnockoutSlotBracket({
+  knockoutTournamentId,
+  sourceTournamentId,
+  advancePerGroup,
+  matchFormat,
+  courts,
+  timing = null,
+}) {
+  if (!mongoose.isValidObjectId(knockoutTournamentId) || !mongoose.isValidObjectId(sourceTournamentId)) {
+    return { ok: false, error: 'invalid_id' };
+  }
+
+  const ko = await Tournament.findById(knockoutTournamentId).lean();
+  const src = await Tournament.findById(sourceTournamentId).lean();
+  if (!src || !ko) return { ok: false, error: 'not_found' };
+  if (src.phase !== 'group') return { ok: false, error: 'source_not_group' };
+  if (ko.phase !== 'knockout') return { ok: false, error: 'target_not_knockout' };
+  if (String(src.eventId) !== String(ko.eventId)) return { ok: false, error: 'different_event' };
+
+  const existingMatchCount = await Match.countDocuments({ tournamentId: ko._id });
+  if (existingMatchCount > 0) return { ok: false, error: 'target_has_matches' };
+
+  const groups = await Group.find({ tournamentId: src._id }).sort({ order: 1, createdAt: 1 }).lean();
+  if (!groups.length) return { ok: false, error: 'no_groups' };
+
+  const takeN = Math.max(1, parseInt(advancePerGroup ?? src.advancePerGroup ?? 2, 10) || 2);
+  const slotCount = groups.length * takeN;
+  if (slotCount < 2) return { ok: false, error: 'not_enough_qualifiers' };
+
+  await Tournament.updateOne(
+    { _id: knockoutTournamentId },
+    {
+      $set: {
+        sourceGroupTournamentId: sourceTournamentId,
+        ...(src.competitionDate ? { competitionDate: String(src.competitionDate).trim() } : {}),
+      },
+    }
+  );
+
+  /** @type {string[]} 組序＋名次：A1,A2,…,B1,B2,… */
+  const slots = [];
+  for (let gi = 0; gi < groups.length; gi++) {
+    const letter = letterForIndex(gi);
+    for (let r = 1; r <= takeN; r++) slots.push(`${letter}${r}`);
+  }
+
+  let venueList = Array.isArray(courts) ? resolveCourtSlugs(courts) : null;
+  if (!venueList) {
+    const event = await Event.findById(ko.eventId).select('venues').lean();
+    venueList = venueSlugList(event?.venues);
+  }
+  const scheduleDate = scheduleDateFromTournament(ko) || scheduleDateFromTournament(src);
+  const fmt = parseMatchFormat(matchFormat);
+  const bracketOpts = { matchFormat: fmt, courts: venueList, timing, scheduleDate };
+
+  const canCross = isPow2(slotCount) && groups.length % 2 === 0;
+
+  if (canCross) {
+    const assignCourt = makeCourtAssigner(venueList);
+    const timeAssign = createCourtTimeAssigner({
+      startTime: timing?.startTime,
+      startMinutes: timing?.startMinutes,
+      slotMinutes: timing?.slotMinutes,
+    });
+    function courtAndTime() {
+      const court = assignCourt.next();
+      return {
+        court,
+        scheduledTime: timeAssign.next(court),
+        scheduledDate: scheduleDate,
+      };
+    }
+
+    const createdMatchIds = [];
+    const firstRoundLabel = roundLabelForSize(nextPow2(slotCount));
+    assignCourt.resetRound();
+
+    for (let gi = 0; gi < groups.length; gi += 2) {
+      const letterA = letterForIndex(gi);
+      const letterB = letterForIndex(gi + 1);
+      for (let i = 0; i < takeN; i++) {
+        const slotA = `${letterA}${i + 1}`;
+        const slotB = `${letterB}${takeN - i}`;
+        const teamA = await ensurePlaceholderTeam(ko._id, slotA);
+        const teamB = await ensurePlaceholderTeam(ko._id, slotB);
+        const sfIndex = createdMatchIds.length;
+        const m = await Match.create({
+          tournamentId: ko._id,
+          round: slotCount === 4 ? '準決賽' : firstRoundLabel,
+          matchFormat: fmt,
+          teamA,
+          teamB,
+          ...courtAndTime(),
+          status: 'scheduled',
+          completedGames: [],
+          currentGameIndex: 0,
+          currentPoints: { a: 0, b: 0 },
+          ...(slotCount === 4
+            ? {
+                knockoutWinnerSlot: `W-SF${sfIndex + 1}`,
+                knockoutLoserSlot: `L-SF${sfIndex + 1}`,
+              }
+            : {}),
+        });
+        createdMatchIds.push(m._id);
+      }
+    }
+
+    if (createdMatchIds.length !== slotCount / 2) {
+      await Match.deleteMany({ _id: { $in: createdMatchIds } });
+      // fall through to seed bracket
+    } else if (slotCount === 4) {
+      const w1 = await ensurePlaceholderTeam(ko._id, 'W-SF1');
+      const w2 = await ensurePlaceholderTeam(ko._id, 'W-SF2');
+      const l1 = await ensurePlaceholderTeam(ko._id, 'L-SF1');
+      const l2 = await ensurePlaceholderTeam(ko._id, 'L-SF2');
+      assignCourt.resetRound();
+      const finalM = await Match.create({
+        tournamentId: ko._id,
+        round: '決賽',
+        matchFormat: fmt,
+        teamA: w1,
+        teamB: w2,
+        ...courtAndTime(),
+        status: 'scheduled',
+        completedGames: [],
+        currentGameIndex: 0,
+        currentPoints: { a: 0, b: 0 },
+      });
+      const bronzeM = await Match.create({
+        tournamentId: ko._id,
+        round: '季軍賽',
+        matchFormat: fmt,
+        teamA: l1,
+        teamB: l2,
+        ...courtAndTime(),
+        status: 'scheduled',
+        completedGames: [],
+        currentGameIndex: 0,
+        currentPoints: { a: 0, b: 0 },
+      });
+      createdMatchIds.push(finalM._id, bronzeM._id);
+      return {
+        ok: true,
+        createdTeams: slotCount,
+        createdMatches: createdMatchIds.length,
+        slots,
+        matchFormat: fmt,
+        courtsUsed: (venueList || []).length,
+        preseed: true,
+      };
+    } else if (slotCount > 2) {
+      let size = nextPow2(slotCount) / 2;
+      while (size >= 2) {
+        const label = roundLabelForSize(size);
+        assignCourt.resetRound();
+        for (let i = 0; i < size / 2; i++) {
+          const t1 = await ensurePlaceholderTeam(ko._id, `TBD-${label}-${i * 2 + 1}`);
+          const t2 = await ensurePlaceholderTeam(ko._id, `TBD-${label}-${i * 2 + 2}`);
+          const m = await Match.create({
+            tournamentId: ko._id,
+            round: label,
+            matchFormat: fmt,
+            teamA: t1,
+            teamB: t2,
+            ...courtAndTime(),
+            status: 'scheduled',
+            completedGames: [],
+            currentGameIndex: 0,
+            currentPoints: { a: 0, b: 0 },
+          });
+          createdMatchIds.push(m._id);
+        }
+        size = size / 2;
+      }
+      return {
+        ok: true,
+        createdTeams: slotCount,
+        createdMatches: createdMatchIds.length,
+        slots,
+        matchFormat: fmt,
+        courtsUsed: (venueList || []).length,
+        preseed: true,
+      };
+    } else {
+      // slotCount === 2：只有決賽
+      return {
+        ok: true,
+        createdTeams: slotCount,
+        createdMatches: createdMatchIds.length,
+        slots,
+        matchFormat: fmt,
+        courtsUsed: (venueList || []).length,
+        preseed: true,
+      };
+    }
+  }
+
+  const slotTeamIds = [];
+  for (const name of slots) {
+    slotTeamIds.push(await ensurePlaceholderTeam(ko._id, name));
+  }
+  const { createdMatchIds } = await createBracketFromTeamIds(ko._id, slotTeamIds, bracketOpts);
+  return {
+    ok: true,
+    createdTeams: slots.length,
+    createdMatches: createdMatchIds.length,
+    slots,
+    matchFormat: fmt,
+    courtsUsed: (venueList || []).length,
+    preseed: true,
+  };
 }
 

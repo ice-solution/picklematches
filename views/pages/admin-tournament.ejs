@@ -598,7 +598,7 @@
           const realTeamCount = (teams || []).filter(function (t) { return !t.isPlaceholder; }).length;
           const hasGroupSources = groupTournaments && groupTournaments.length;
           const genErrorLabels = {
-            target_has_matches: '此淘汰賽已有場次，請先清空後再產生。',
+            target_has_matches: '此淘汰賽已有場次，請先清空後再產生（或用預排掣勾選清空重產）。',
             not_enough_teams: '至少需要 2 支真實隊伍（非 TBD/BYE）才可畫鬼腳。',
             not_enough_qualifiers: '小組出線隊伍不足 2 隊。',
             no_groups: '來源小組賽尚未建立組別。',
@@ -607,21 +607,20 @@
             different_event: '來源與目標不屬於同一大會。',
             invalid_id: '無效的賽事編號。',
             not_found: '找不到賽事。',
+            no_source: '請選擇來源小組賽。',
+            group_not_finished: '小組賽尚未有完賽場次。請先用「預排 A1／B2」產生時間表；小組打完後再撳「由小組產生」填入真隊。',
           };
         %>
         <section id="knockout-generate" class="mt-4 scroll-mt-24 rounded border border-sky-900/60 bg-sky-950/20 p-5">
           <h3 class="text-sm font-semibold text-sky-300">產生淘汰賽程（畫鬼腳）</h3>
           <p class="mt-1 text-xs text-slate-400">
-            純淘汰賽：匯入／新增全部參賽隊伍後，可直接依隊伍名單產生籤表。
-            若先有小組賽，亦可由小組出線結果產生。
-            <strong class="text-slate-200">2 隊</strong>→決賽；
-            <strong class="text-slate-200">4 隊</strong>→準決賽＋決賽＋季軍賽；
-            其他人數會自動加 BYE 並建立後續 TBD 占位。
+            建議流程：① <strong class="text-slate-200">預排 A1／B2</strong>（前台即時可見時間表）→ ② 小組打完 → ③ <strong class="text-slate-200">由小組產生</strong>（只換隊名，時間場地保留）。
+            純淘汰（無小組）用「由本賽事隊伍畫鬼腳」。
           </p>
           <% if (typeof query !== 'undefined' && query && query.gen) { %>
             <% if (query.gen === 'ok') { %>
               <p class="mt-3 rounded border border-emerald-500/40 bg-emerald-950/25 px-3 py-2 text-sm text-emerald-200">
-                已完成：隊伍 <%= query.teams || '?' %>
+                已完成<% if (query.preseed === '1') { %>（預排占位）<% } %>：隊伍／占位 <%= query.teams || '?' %>
                 <% if (query.matches) { %>、新增場次 <%= query.matches %> 場<% } %>
                 <% if (query.fmt) { %>、賽制 <%= typeof formatLabel === 'function' ? formatLabel(query.fmt) : query.fmt %><% } %>
                 <% if (query.courts !== undefined) { %>、已分配場地 <%= query.courts %> 個<% } %>
@@ -635,7 +634,7 @@
               <p class="mt-3 rounded border border-rose-500/50 bg-rose-950/25 px-3 py-2 text-sm text-rose-200">
                 產生失敗：<%= genErrorLabels[query.gen] || query.gen %>
               </p>
-              <% if (query.gen === 'target_has_matches') { %>
+              <% if (query.gen === 'target_has_matches' || query.gen === 'group_not_finished') { %>
                 <form method="post" action="/admin/tournaments/<%= tournament._id %>/reset-knockout" class="mt-3" onsubmit="return confirm('確定要清空此淘汰賽所有場次與自動產生的占位隊伍（含 BYE/TBD）？真實參賽隊伍會保留。');">
                   <button type="submit" class="rounded bg-rose-700 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-600">清空場次後重設</button>
                 </form>
@@ -643,26 +642,44 @@
             <% } %>
           <% } %>
 
-          <div class="mt-4 rounded border border-emerald-900/50 bg-emerald-950/20 p-4">
-            <p class="text-xs font-semibold text-emerald-300">方式一：由本賽事隊伍直接畫鬼腳（無需小組賽）</p>
-            <p class="mt-1 text-xs text-slate-500">目前真實隊伍：<%= realTeamCount %> 隊。請先匯入／新增全部參賽隊伍，且尚未有場次（或用 force 清空重畫）。</p>
-            <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-knockout-bracket" class="mt-1">
+          <% if (hasGroupSources) { %>
+            <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-knockout-slots" class="mt-4 rounded border border-amber-900/50 bg-amber-950/20 p-4">
+              <p class="text-xs font-semibold text-amber-300">步驟 1：預排淘汰賽程（A1／B2 占位）</p>
+              <p class="mt-1 text-xs text-slate-500">
+                小組未打完都可以用。會產生例如 A1 vs B2、A2 vs B1，並排好時間／場地；前台即時顯示時間表。
+                <% if (matches && matches.length) { %>目前已有 <%= matches.length %> 場，撳掣會<strong class="text-amber-200">先清空再預排</strong>。<% } %>
+              </p>
+              <div class="mt-3 flex flex-wrap items-end gap-3">
+                <div class="min-w-[240px] flex-1">
+                  <label class="block text-xs text-slate-500">來源小組賽賽事</label>
+                  <select name="sourceTournamentId" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+                    <option value="" disabled selected hidden>選擇小組賽…</option>
+                    <% groupTournaments.forEach(function (t) { %>
+                      <option value="<%= t._id %>"><%= t.name %></option>
+                    <% }); %>
+                  </select>
+                </div>
+                <div class="w-36">
+                  <label class="block text-xs text-slate-500">每組取前 N 名</label>
+                  <input name="advancePerGroup" type="number" min="1" value="2" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+                </div>
+              </div>
+              <% if (matches && matches.length) { %><input type="hidden" name="force" value="1" /><% } %>
               <%- include('../partials/knockout-generate-fields', {
                 event: event,
-                force: !!(matches && matches.length),
-                realTeamCount: realTeamCount,
-                buttonLabel: matches && matches.length ? '清空並重新產生鬼腳' : '產生鬼腳籤表',
+                force: false,
+                realTeamCount: 99,
+                buttonLabel: matches && matches.length ? '清空並重新預排 A1／B2' : '預排 A1／B2 籤表',
                 confirmMsg: matches && matches.length
-                  ? ('會先清空現有場次，再依目前 ' + realTeamCount + ' 隊與所選賽制重新產生。確定？')
-                  : ('確定依目前 ' + realTeamCount + ' 支隊伍、所選賽制產生淘汰籤表？'),
+                  ? ('會先清空現有 ' + matches.length + ' 場，再以 A1／B2 占位重新預排時間表。確定？')
+                  : '確定以 A1／B2 占位預排淘汰賽程？（小組打完後再用「由小組產生」填入真隊）',
+                noteBye: true,
               }) %>
             </form>
-          </div>
 
-          <% if (hasGroupSources) { %>
             <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-knockout" class="mt-4 border-t border-sky-900/50 pt-4">
-              <p class="text-xs font-semibold text-sky-300">方式二：由小組賽出線產生</p>
-              <p class="mt-1 text-xs text-slate-500">依小組賽已完賽場次計算名次，取每組前 N 名出線後自動複製隊伍並畫鬼腳。若已預排 A1／B2 場次，只會填入出線隊、不改已有時間／場地。</p>
+              <p class="text-xs font-semibold text-sky-300">步驟 2：由小組賽出線填入（小組打完後）</p>
+              <p class="mt-1 text-xs text-slate-500">需已有完賽場次。若已預排 A1／B2，只會換真隊、不改時間／場地；若未預排則會新建籤表。</p>
               <div class="mt-3 flex flex-wrap items-end gap-3">
                 <div class="min-w-[240px] flex-1">
                   <label class="block text-xs text-slate-500">來源小組賽賽事</label>
@@ -680,8 +697,27 @@
               </div>
               <%- include('../partials/schedule-timing-fields') %>
               <%- include('../partials/schedule-courts-fields', { event: event, venues: typeof venues !== 'undefined' ? venues : [] }) %>
-              <button type="submit" class="mt-3 rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-600" onclick="return confirm('確定要由小組賽產生淘汰賽？\\n\\n新建籤表時會按場地並行排時間；若已有預排場次則只填入隊伍、不改時間。');">由小組產生</button>
+              <button type="submit" class="mt-3 rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-600" onclick="return confirm('確定由小組出線填入淘汰賽？\\n\\n若已預排：只換隊名。若未預排：會新建籤表。');">由小組產生</button>
             </form>
+          <% } %>
+
+          <div class="mt-4 rounded border border-emerald-900/50 bg-emerald-950/20 p-4 <%= hasGroupSources ? 'border-t border-sky-900/50' : '' %>">
+            <p class="text-xs font-semibold text-emerald-300"><%= hasGroupSources ? '其他：' : '' %>由本賽事隊伍直接畫鬼腳（無需小組賽）</p>
+            <p class="mt-1 text-xs text-slate-500">目前真實隊伍：<%= realTeamCount %> 隊。請先匯入／新增全部參賽隊伍。</p>
+            <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-knockout-bracket" class="mt-1">
+              <%- include('../partials/knockout-generate-fields', {
+                event: event,
+                force: !!(matches && matches.length),
+                realTeamCount: realTeamCount,
+                buttonLabel: matches && matches.length ? '清空並重新產生鬼腳' : '產生鬼腳籤表',
+                confirmMsg: matches && matches.length
+                  ? ('會先清空現有場次，再依目前 ' + realTeamCount + ' 隊與所選賽制重新產生。確定？')
+                  : ('確定依目前 ' + realTeamCount + ' 支隊伍、所選賽制產生淘汰籤表？'),
+              }) %>
+            </form>
+          </div>
+
+          <% if (hasGroupSources) { %>
 
             <form method="post" action="/admin/tournaments/<%= tournament._id %>/link-group" class="mt-6 border-t border-sky-900/50 pt-4">
               <p class="text-xs font-semibold text-slate-400">前台綁定小組賽（選填）</p>

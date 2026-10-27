@@ -43,7 +43,11 @@ import { finalizeFinishedMatch, applyManualScoresFromBody } from '../lib/matchRe
 import { finishMatchManual } from '../lib/scoring.js';
 import { broadcastMatchUpdate } from '../lib/matchSocket.js';
 import { getSiteUrl } from '../lib/siteUrl.js';
-import { generateKnockoutFromGroup, generateKnockoutFromTeams } from '../lib/knockoutGenerator.js';
+import {
+  generateKnockoutFromGroup,
+  generateKnockoutFromTeams,
+  generateKnockoutSlotBracket,
+} from '../lib/knockoutGenerator.js';
 import { generateDoubleElimFromTeams, buildDoubleElimTracks } from '../lib/doubleElimGenerator.js';
 import { generateGroupRoundRobin } from '../lib/groupScheduleGenerator.js';
 import { parseScheduleTimingBody } from '../lib/scheduleTiming.js';
@@ -51,6 +55,8 @@ import { assignTeamCodeIfEmpty } from '../lib/teamCodes.js';
 import { buildGroupRoundRobinMatrices } from '../lib/groupRoundRobinMatrix.js';
 import { Division } from '../models/Division.js';
 import { Registration } from '../models/Registration.js';
+import { PaymentTransaction } from '../models/PaymentTransaction.js';
+import { DisplayContent } from '../models/DisplayContent.js';
 import { Member } from '../models/Member.js';
 import { countDivisionRegistrations } from '../lib/registrationEligibility.js';
 import {
@@ -70,6 +76,7 @@ import { demoteOtherLiveOnCourt } from '../lib/courtLive.js';
 import {
   startVenueStream,
   stopVenueStream,
+  stopAllStreamsForEvent,
   getAllStreamStatuses,
 } from '../lib/youtubeStreamService.js';
 import {
@@ -231,6 +238,7 @@ adminRouter.get('/', requireStaff, async (req, res, next) => {
       events,
       userEmail: req.session.email,
       role: req.session.role,
+      flash: req.query.event_deleted === '1' ? '已刪除大會及其底下所有賽事資料。' : null,
     });
   } catch (e) {
     next(e);
@@ -625,6 +633,7 @@ adminRouter.get('/events/:eventId', requireStaff, async (req, res, next) => {
     if (req.query.error === 'taken') error = '此 slug 已被其他大會使用';
     if (req.query.error === '1') error = '請填寫大會名稱';
     if (req.query.error === 'venue') error = '場地 ID 無效或重複（僅限小寫英文、數字、連字號）';
+    if (req.query.error === 'delete_confirm') error = '刪除失敗：請輸入完全相同的大會名稱以確認';
 
     let flash = null;
     if (req.query.saved === '1') flash = '已儲存';
@@ -662,6 +671,52 @@ adminRouter.get('/events/:eventId', requireStaff, async (req, res, next) => {
       dateEndLocal: toDatetimeLocalValue(event.dateEnd),
       tournamentImportReport,
     });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** 刪除大會：連底下賽事／組別／隊伍／場次／報名等一併清除 */
+adminRouter.post('/events/:eventId/delete', requireStaff, async (req, res, next) => {
+  try {
+    const { eventId } = req.params;
+    if (!mongoose.isValidObjectId(eventId)) return res.status(404).send('Not found');
+    const event = req.eventDoc || (await Event.findById(eventId));
+    if (!event) return res.status(404).send('Not found');
+    if (!canAccessEventDoc(req.session, event)) return forbidAccess(req, res);
+
+    const confirmName = String(req.body.confirmName || '').trim();
+    if (confirmName !== String(event.name || '').trim()) {
+      return res.redirect(`/admin/events/${eventId}?error=delete_confirm`);
+    }
+
+    try {
+      await stopAllStreamsForEvent(eventId);
+    } catch (err) {
+      console.error('stopAllStreamsForEvent failed:', err);
+    }
+
+    const tournaments = await Tournament.find({ eventId }).select('_id').lean();
+    const tournamentIds = tournaments.map((t) => t._id);
+    if (tournamentIds.length) {
+      const matches = await Match.find({ tournamentId: { $in: tournamentIds } }).select('_id').lean();
+      const matchIds = matches.map((m) => m._id);
+      if (matchIds.length) {
+        await MatchAssignment.deleteMany({ matchId: { $in: matchIds } });
+        await Match.deleteMany({ _id: { $in: matchIds } });
+      }
+      await Team.deleteMany({ tournamentId: { $in: tournamentIds } });
+      await Group.deleteMany({ tournamentId: { $in: tournamentIds } });
+      await Tournament.deleteMany({ _id: { $in: tournamentIds } });
+    }
+
+    await Registration.deleteMany({ eventId });
+    await PaymentTransaction.deleteMany({ eventId });
+    await Division.deleteMany({ eventId });
+    await DisplayContent.deleteMany({ eventId });
+    await Event.deleteOne({ _id: eventId });
+
+    res.redirect('/admin?event_deleted=1');
   } catch (e) {
     next(e);
   }
@@ -1125,6 +1180,62 @@ adminRouter.post('/tournaments/:tournamentId/generate-knockout', requireStaff, a
     const qs = [`gen=ok`, `teams=${r.createdTeams}`];
     if (r.createdMatches) qs.push(`matches=${r.createdMatches}`);
     if (r.updatedMatches) qs.push(`updated=${r.updatedMatches}`);
+    res.redirect(`/admin/tournaments/${tournamentId}?${qs.join('&')}`);
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** 預排淘汰：A1／B2 占位籤表（小組未完賽亦可；完賽後再用「由小組產生」填人） */
+adminRouter.post('/tournaments/:tournamentId/generate-knockout-slots', requireStaff, async (req, res, next) => {
+  try {
+    const { tournamentId } = req.params;
+    if (!mongoose.isValidObjectId(tournamentId)) return res.status(404).send('Not found');
+
+    const sourceTournamentId = String(req.body.sourceTournamentId || '').trim();
+    if (!sourceTournamentId) {
+      return res.redirect(`/admin/tournaments/${tournamentId}?gen=${encodeURIComponent('no_source')}`);
+    }
+    const src = await findAccessibleTournament(req.session, sourceTournamentId);
+    if (!src) return forbidAccess(req, res);
+
+    const force = req.body.force === '1' || req.body.force === 'true';
+    if (force) {
+      const t = await Tournament.findById(tournamentId).lean();
+      if (!t || t.phase !== 'knockout') {
+        return res.redirect(`/admin/tournaments/${tournamentId}`);
+      }
+      const matches = await Match.find({ tournamentId }).select('_id').lean();
+      const matchIds = matches.map((m) => m._id);
+      if (matchIds.length) {
+        await MatchAssignment.deleteMany({ matchId: { $in: matchIds } });
+        await Match.deleteMany({ _id: { $in: matchIds } });
+      }
+      await Team.deleteMany({
+        tournamentId,
+        $or: [{ isPlaceholder: true }, { sourceTeamId: { $exists: true, $ne: null } }],
+      });
+    }
+
+    const advancePerGroup = parseInt(String(req.body.advancePerGroup || '').trim(), 10);
+    const timing = parseScheduleTimingBody(req.body);
+    const courts = await resolveGenerateCourts(tournamentId, req.body);
+    const r = await generateKnockoutSlotBracket({
+      knockoutTournamentId: tournamentId,
+      sourceTournamentId,
+      advancePerGroup: Number.isNaN(advancePerGroup) ? undefined : advancePerGroup,
+      matchFormat: req.body.matchFormat,
+      timing,
+      courts,
+    });
+    if (!r.ok) {
+      const code = r.error || 'error';
+      return res.redirect(`/admin/tournaments/${tournamentId}?gen=${encodeURIComponent(code)}`);
+    }
+    const qs = [`gen=ok`, `preseed=1`, `teams=${r.createdTeams}`];
+    if (r.createdMatches) qs.push(`matches=${r.createdMatches}`);
+    if (r.matchFormat) qs.push(`fmt=${encodeURIComponent(r.matchFormat)}`);
+    if (r.courtsUsed != null) qs.push(`courts=${r.courtsUsed}`);
     res.redirect(`/admin/tournaments/${tournamentId}?${qs.join('&')}`);
   } catch (e) {
     next(e);

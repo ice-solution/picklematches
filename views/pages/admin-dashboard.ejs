@@ -5,6 +5,9 @@
       <h2 class="text-lg font-semibold text-white">大會列表</h2>
       <a href="/admin/events/new" class="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500">新增大會</a>
     </div>
+    <% if (typeof flash !== 'undefined' && flash) { %>
+      <p class="mt-4 rounded border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200"><%= flash %></p>
+    <% } %>
     <ul class="mt-6 space-y-2">
       <% if (!events.length) { %>
         <li class="text-slate-500">尚無大會。可 <a href="/admin/events/new" class="text-emerald-400 underline">新增大會</a> 或執行 <code class="rounded bg-slate-800 px-1">npm run seed</code> 建立示範資料。</li>
