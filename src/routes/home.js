@@ -6,8 +6,32 @@ import { OpenSession } from '../models/OpenSession.js';
 
 export const homeRouter = Router();
 
+/** VANITY_HOST_REDIRECTS=match.gpcchkmo.org=/e/gpcc-1?date=...&comp=... */
+function vanityRedirectPath(req) {
+  const raw = String(process.env.VANITY_HOST_REDIRECTS || '').trim();
+  if (!raw) return null;
+  const host = String(req.get('x-forwarded-host') || req.get('host') || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase()
+    .replace(/:\d+$/, '');
+  if (!host) return null;
+  for (const part of raw.split(',')) {
+    const idx = part.indexOf('=');
+    if (idx <= 0) continue;
+    const h = part.slice(0, idx).trim().toLowerCase();
+    const target = part.slice(idx + 1).trim();
+    if (h === host && target.startsWith('/')) return target;
+  }
+  return null;
+}
+
 homeRouter.get('/', async (req, res, next) => {
   try {
+    const vanity = vanityRedirectPath(req);
+    if (vanity) {
+      return res.redirect(302, vanity);
+    }
     const [events, alliances, players, openSessions] = await Promise.all([
       Event.find({ isActive: true }).sort({ dateStart: -1, createdAt: -1 }).lean(),
       Alliance.find({ status: 'approved', isListed: true }).sort({ order: 1, name: 1 }).limit(6).lean(),

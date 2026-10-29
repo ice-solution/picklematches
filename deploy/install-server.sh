@@ -18,8 +18,10 @@ a2enmod proxy proxy_http proxy_wstunnel rewrite headers remoteip
 log "安裝 Apache Virtual Host..."
 cp "$SCRIPT_DIR/apache/testmatch.picklevibes.hk.conf" /etc/apache2/sites-available/
 cp "$SCRIPT_DIR/apache/match.picklevibes.hk.conf" /etc/apache2/sites-available/
+cp "$SCRIPT_DIR/apache/match.gpcchkmo.org.conf" /etc/apache2/sites-available/
 a2ensite testmatch.picklevibes.hk.conf
 a2ensite match.picklevibes.hk.conf
+a2ensite match.gpcchkmo.org.conf
 a2dissite 000-default.conf 2>/dev/null || true
 
 log "安裝 systemd units..."

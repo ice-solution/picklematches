@@ -82,6 +82,27 @@ Wonder webhook：`{SITE_URL}/webhook/wonder`
 - WebSockets：**開啟**
 - DNS：兩個 subdomain 指到伺服器 IP（Proxied）
 
+## Vanity domain（match.gpcchkmo.org）
+
+**唔好** `ProxyPass` 去 `https://match.picklevibes.hk`（會再經 Cloudflare，易壞）。應直接代理本機 production：
+
+```bash
+sudo cp deploy/apache/match.gpcchkmo.org.conf /etc/apache2/sites-available/
+sudo a2ensite match.gpcchkmo.org.conf
+# 若 :443 已由 Certbot 建立：把 conf 內業務規則（Rewrite + ProxyPass → 127.0.0.1:5240）貼入該 :443
+sudo apache2ctl configtest && sudo systemctl reload apache2
+```
+
+可選：production `.env` 加
+
+```bash
+VANITY_HOST_REDIRECTS=match.gpcchkmo.org=/e/gpcc-1?date=2026-10-28&comp=6ae0366624e98702b06cd305
+```
+
+然後 `sudo systemctl restart pickleball-prod`。
+
+驗收：`curl -sI -H 'Host: match.gpcchkmo.org' http://127.0.0.1/e/gpcc-1` 應 200（經 Apache），且 `/public/css/styles.css` 亦 200。
+
 ## 指令權限
 
 ```bash
