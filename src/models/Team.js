@@ -14,11 +14,13 @@ const teamSchema = new mongoose.Schema(
     isPlaceholder: { type: Boolean, default: false },
     /** 報到／已登記 */
     checkedIn: { type: Boolean, default: false },
-    /** 聯賽固定隊員（只存姓名） */
+    /** 聯賽固定隊員：姓名 + 可選 DUPR ID */
     players: {
       type: [
         {
           name: { type: String, trim: true, required: true },
+          /** DUPR player ID／code（提交 DUPR 用；排陣仍用姓名） */
+          duprCode: { type: String, trim: true, default: '' },
         },
       ],
       default: [],

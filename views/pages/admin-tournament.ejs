@@ -321,7 +321,13 @@
                     <td class="team-code-cell px-3 py-2 font-mono text-sm font-bold <%= t.checkedIn ? 'text-emerald-400' : 'text-sky-300' %>"><%= t.code || '—' %></td>
                     <td class="px-3 py-2 text-slate-200"><%= t.name %></td>
                     <% if (tournament.phase === 'league') { %>
-                      <td class="px-3 py-2 text-xs text-slate-400"><%= (t.players && t.players.length) ? t.players.map(function (p) { return p.name; }).join('、') : '—' %></td>
+                      <td class="px-3 py-2 text-xs text-slate-400">
+                        <% if (t.players && t.players.length) { %>
+                          <% t.players.forEach(function (p, pi) { %>
+                            <% if (pi) { %>、<% } %><%= p.name || '' %><% if ((p.duprCode || '').trim()) { %><span class="text-slate-500"> (<%= p.duprCode %>)</span><% } %>
+                          <% }); %>
+                        <% } else { %>—<% } %>
+                      </td>
                     <% } %>
                     <td class="px-3 py-2 text-right whitespace-nowrap">
                       <button type="button" class="team-edit-toggle text-xs text-emerald-400 underline" data-team-id="<%= t._id %>">編輯</button>
@@ -354,9 +360,20 @@
                           <input name="name" required value="<%= t.name %>" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm" />
                         </div>
                         <% if (tournament.phase === 'league') { %>
-                        <div class="min-w-[16rem] flex-[2]">
-                          <label class="text-xs text-slate-500">固定隊員（每行或逗號分隔）</label>
-                          <textarea name="players" rows="2" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm"><%= (t.players && t.players.length) ? t.players.map(function (p) { return p.name; }).join('\n') : '' %></textarea>
+                        <div class="w-full min-w-[20rem] flex-[3]">
+                          <label class="text-xs text-slate-500">固定隊員（姓名 + DUPR ID）</label>
+                          <div class="league-roster-editor mt-1 space-y-1.5" data-roster-editor>
+                            <% var editPlayers = (t.players && t.players.length) ? t.players : [{ name: '', duprCode: '' }]; %>
+                            <% editPlayers.forEach(function (p) { %>
+                              <div class="flex flex-wrap gap-1.5" data-roster-row>
+                                <input name="playerName" value="<%= p.name || '' %>" placeholder="姓名" class="min-w-[8rem] flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm" />
+                                <input name="playerDuprCode" value="<%= p.duprCode || '' %>" placeholder="DUPR ID" class="w-36 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-sm" />
+                                <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:text-rose-300" data-roster-remove title="移除此人">×</button>
+                              </div>
+                            <% }); %>
+                          </div>
+                          <button type="button" class="mt-1.5 text-xs text-emerald-400 underline" data-roster-add>+ 加一位隊員</button>
+                          <p class="mt-1 text-[11px] text-slate-500">排陣用左邊姓名；右邊填 DUPR player ID（可留空）。</p>
                         </div>
                         <% } %>
                         <% if (tournament.phase === 'group') { %>
@@ -387,9 +404,9 @@
           <input name="name" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
         </div>
         <% if (tournament.phase === 'league') { %>
-        <div class="min-w-[200px] flex-1">
-          <label class="text-xs text-slate-500">固定隊員（每行或逗號）</label>
-          <input name="players" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="陳大文、李小明" />
+        <div class="min-w-[240px] flex-[2]">
+          <label class="text-xs text-slate-500">固定隊員（可稍後編輯補 DUPR）</label>
+          <input name="players" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" placeholder="陳大文、李小明 或 陳大文 | DUPR123" />
         </div>
         <% } %>
         <% if (tournament.phase === 'group') { %>
@@ -406,7 +423,7 @@
         <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-sm font-semibold">新增隊伍</button>
       </form>
       <% if (tournament.phase === 'league') { %>
-        <p class="mt-2 text-xs text-slate-500">新增時可同時填隊員：在隊名欄旁邊之後用編輯補齊名單。每隊固定球員，只填姓名。</p>
+        <p class="mt-2 text-xs text-slate-500">新增可用逗號寫姓名；要連 DUPR 一齊填可寫「姓名 | DUPRID」。更清楚就係新增後撳「編輯」，逐行填姓名同 DUPR ID。</p>
       <% } %>
 
       <% if (tournament.phase === 'knockout') {
@@ -1084,6 +1101,39 @@
           if (row) row.classList.add('hidden');
         });
       });
+
+      function bindRosterEditor(root) {
+        if (!root || root.getAttribute('data-roster-bound') === '1') return;
+        root.setAttribute('data-roster-bound', '1');
+        var editor = root.querySelector('[data-roster-editor]') || (root.hasAttribute('data-roster-editor') ? root : null);
+        if (!editor) return;
+        var addBtn = root.querySelector('[data-roster-add]');
+        function bindRemove(btn) {
+          btn.addEventListener('click', function () {
+            var rows = editor.querySelectorAll('[data-roster-row]');
+            var row = btn.closest('[data-roster-row]');
+            if (!row) return;
+            if (rows.length <= 1) {
+              row.querySelectorAll('input').forEach(function (inp) { inp.value = ''; });
+              return;
+            }
+            row.remove();
+          });
+        }
+        editor.querySelectorAll('[data-roster-remove]').forEach(bindRemove);
+        if (addBtn) {
+          addBtn.addEventListener('click', function () {
+            var proto = editor.querySelector('[data-roster-row]');
+            if (!proto) return;
+            var row = proto.cloneNode(true);
+            row.querySelectorAll('input').forEach(function (inp) { inp.value = ''; });
+            var rm = row.querySelector('[data-roster-remove]');
+            if (rm) bindRemove(rm);
+            editor.appendChild(row);
+          });
+        }
+      }
+      document.querySelectorAll('.team-edit-row').forEach(bindRosterEditor);
 
       document.querySelectorAll('.match-status-select').forEach(function (sel) {
         sel.addEventListener('change', function () {

@@ -31,7 +31,7 @@ import { buildKnockoutLadderColumns } from '../lib/knockoutLadder.js';
 import { getEventGroupStandings } from '../lib/groupStandings.js';
 import { getEventLeagueStandings, computeLeagueStandings } from '../lib/leagueStandings.js';
 import { generateLeagueDoubleRoundRobin } from '../lib/leagueScheduleGenerator.js';
-import { parseRosterNames, isLeagueFormat } from '../lib/leagueRules.js';
+import { parseRosterEntries, isLeagueFormat } from '../lib/leagueRules.js';
 import {
   ensureLineupTokens,
   getSideLineup,
@@ -1603,7 +1603,7 @@ adminRouter.post('/tournaments/:tournamentId/teams', requireStaff, async (req, r
       tournamentId,
       groupId,
       name,
-      players: parseRosterNames(req.body.players).map((n) => ({ name: n })),
+      players: parseRosterEntries(req.body.players, req.body),
     });
     await assignTeamCodeIfEmpty(doc);
     res.redirect(`/admin/tournaments/${tournamentId}`);
@@ -1645,8 +1645,8 @@ adminRouter.post('/teams/:teamId/update', requireStaff, async (req, res, next) =
     team.name = name;
     team.code = code;
     team.groupId = groupId;
-    if (req.body.players !== undefined) {
-      team.players = parseRosterNames(req.body.players).map((n) => ({ name: n }));
+    if (req.body.players !== undefined || req.body.playerName !== undefined) {
+      team.players = parseRosterEntries(req.body.players, req.body);
     }
     await team.save();
     res.redirect(`/admin/tournaments/${team.tournamentId}?team_saved=1`);

@@ -21,21 +21,73 @@ export function isLeagueGameComplete(scoreA, scoreB) {
 }
 
 export function parseRosterNames(raw) {
-  const text = String(raw || '');
-  const parts = text
-    .split(/[\n,，、;；]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  return parseRosterEntries(raw).map((p) => p.name);
+}
+
+/**
+ * 解析聯賽隊員。支援：
+ * - 表單陣列 playerName[] + playerDuprCode[]
+ * - 文字：每行一人；可用「姓名 | DUPR」或「姓名 / DUPR」
+ * - 相容舊格式：逗號／頓號分隔純姓名
+ */
+export function parseRosterEntries(raw, body) {
+  if (body && Array.isArray(body.playerName)) {
+    const names = body.playerName;
+    const codes = Array.isArray(body.playerDuprCode) ? body.playerDuprCode : [];
+    const seen = new Set();
+    const out = [];
+    for (let i = 0; i < names.length; i++) {
+      const name = String(names[i] || '').trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const duprCode = String(codes[i] || '').trim();
+      out.push({ name, duprCode });
+      if (out.length >= 24) break;
+    }
+    return out;
+  }
+
+  const text = String(raw || '').trim();
+  if (!text) return [];
+
+  const lines = text.includes('\n')
+    ? text.split(/\n+/).map((s) => s.trim()).filter(Boolean)
+    : text.split(/[,，、;；]+/).map((s) => s.trim()).filter(Boolean);
+
   const seen = new Set();
   const out = [];
-  for (const name of parts) {
+  for (const line of lines) {
+    let name = line;
+    let duprCode = '';
+    const m = line.match(/^(.+?)\s*[|／/]\s*([A-Za-z0-9._-]{3,})\s*$/);
+    if (m) {
+      name = m[1].trim();
+      duprCode = m[2].trim();
+    }
+    if (!name) continue;
     const key = name.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push(name);
+    out.push({ name, duprCode });
     if (out.length >= 24) break;
   }
   return out;
+}
+
+export function formatRosterEntriesForTextarea(players) {
+  const list = Array.isArray(players) ? players : [];
+  return list
+    .map((p) => {
+      if (typeof p === 'string') return p;
+      const name = String(p?.name || '').trim();
+      const code = String(p?.duprCode || '').trim();
+      if (!name) return '';
+      return code ? `${name} | ${code}` : name;
+    })
+    .filter(Boolean)
+    .join('\n');
 }
 
 export function rosterFromTeam(team) {

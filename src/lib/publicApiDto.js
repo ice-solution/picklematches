@@ -22,6 +22,17 @@ export function serializeTeam(team) {
     players: Array.isArray(team.players)
       ? team.players.map((p) => (typeof p === 'string' ? p : p?.name)).filter(Boolean)
       : [],
+    /** 姓名 + DUPR ID（聯賽） */
+    playerRoster: Array.isArray(team.players)
+      ? team.players
+          .map((p) => {
+            if (typeof p === 'string') return { name: p, duprCode: '' };
+            const name = String(p?.name || '').trim();
+            if (!name) return null;
+            return { name, duprCode: String(p?.duprCode || '').trim() };
+          })
+          .filter(Boolean)
+      : [],
   };
 }
 
