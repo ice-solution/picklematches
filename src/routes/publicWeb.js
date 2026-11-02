@@ -86,8 +86,15 @@ publicWebRouter.get('/:eventSlug', loadEventBySlug, async (req, res, next) => {
     let activeCompKey = compQuery;
 
     if (compQuery && compQuery !== '__podium__') {
-      const found = findCompInDateGroups(dateGroups, compQuery);
-      if (found) activeDateKey = found.dateKey;
+      const found = findCompInDateGroups(dateGroups, compQuery, dateQuery);
+      if (found) {
+        // 有明確 ?date= 且該日有此賽事 → 保留；否則跟賽事出現嘅日期
+        if (!dateQuery || !dateGroups.some((d) => d.key === dateQuery)) {
+          activeDateKey = found.dateKey;
+        } else {
+          activeDateKey = dateQuery;
+        }
+      }
     }
 
     if (!activeDateKey && dateGroups.length) {

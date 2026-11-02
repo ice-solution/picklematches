@@ -163,14 +163,25 @@
 
       function showComp(key, skipDateSync) {
         activeCompKey = key || '';
-        var panel = document.querySelector('.competition-panel[data-comp-key="' + key + '"]');
-        if (panel && !skipDateSync) {
-          var dk = panel.getAttribute('data-date-key');
-          if (dk && dk !== activeDate) showDate(dk, true);
+        if (!skipDateSync && key && key !== '__podium__') {
+          var preferred = null;
+          if (activeDate) {
+            preferred = document.querySelector(
+              '.competition-panel[data-comp-key="' + key + '"][data-date-key="' + activeDate + '"]'
+            );
+          }
+          var panel = preferred || document.querySelector('.competition-panel[data-comp-key="' + key + '"]');
+          if (panel) {
+            var dk = panel.getAttribute('data-date-key');
+            if (dk && dk !== activeDate) showDate(dk, true);
+          }
         }
 
         document.querySelectorAll('.competition-panel').forEach(function (el) {
-          el.classList.toggle('hidden', el.getAttribute('data-comp-key') !== key);
+          var sameComp = el.getAttribute('data-comp-key') === key;
+          var panelDate = el.getAttribute('data-date-key');
+          var sameDate = !panelDate || !activeDate || panelDate === activeDate;
+          el.classList.toggle('hidden', !(sameComp && sameDate));
         });
         document.querySelectorAll('.comp-tab').forEach(function (btn) {
           var compKey = btn.getAttribute('data-comp-key');
@@ -197,6 +208,12 @@
 
       function getActivePanel() {
         if (activeCompKey && activeCompKey !== '__podium__') {
+          if (activeDate) {
+            var byDate = document.querySelector(
+              '.competition-panel[data-comp-key="' + activeCompKey + '"][data-date-key="' + activeDate + '"]'
+            );
+            if (byDate) return byDate;
+          }
           return document.querySelector('.competition-panel[data-comp-key="' + activeCompKey + '"]');
         }
         return null;

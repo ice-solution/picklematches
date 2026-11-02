@@ -3,7 +3,7 @@ import { buildDoubleElimTracks } from './doubleElimGenerator.js';
 import { buildDoubleElimTreeLayout } from './doubleElimTree.js';
 import { getPodiumFromKnockoutMatches } from './knockoutPodium.js';
 import { formatDateDisplayZh, normalizeDateOnly } from './datetime.js';
-import { compareMatchesBySchedule } from './matchTime.js';
+import { compareMatchesBySchedule, matchScheduleDate } from './matchTime.js';
 
 function competitionDateLabel(groupTournament, knockoutTournament) {
   const g = normalizeDateOnly(groupTournament?.competitionDate);
@@ -186,7 +186,27 @@ export function buildEventCompetitions({
   return { competitions, orphanKnockouts, podiumsWithResults };
 }
 
-/** 依比賽日期分組（供前台導覽） */
+/** 賽事出現喺邊啲日期分頁：優先場次 scheduledDate，否則 competitionDate */
+function dateKeysForCompetition(item) {
+  const fromMatches = new Set();
+  for (const m of item?.matches || []) {
+    const d = matchScheduleDate(m);
+    if (d) fromMatches.add(d);
+  }
+  if (fromMatches.size) return [...fromMatches].sort();
+  const fallback = normalizeDateOnly(item?.competitionDate) || '';
+  return fallback ? [fallback] : [''];
+}
+
+function competitionForDate(item, dateKey) {
+  if (!dateKey) return item;
+  const matches = (item.matches || []).filter((m) => matchScheduleDate(m) === dateKey);
+  // 冇場次日期資料時（只用 tournament.competitionDate）保留原列表
+  if (!(item.matches || []).some((m) => matchScheduleDate(m))) return item;
+  return { ...item, matches, competitionDate: dateKey, competitionDateLabel: formatDateDisplayZh(dateKey) };
+}
+
+/** 依比賽日期分組（供前台導覽；聯賽跨日會出現喺多個日期，賽程只顯示當日，積分榜仍係成季） */
 export function buildEventDateGroups(competitions, orphanKnockouts) {
   const map = new Map();
   const undated = {
@@ -196,13 +216,7 @@ export function buildEventDateGroups(competitions, orphanKnockouts) {
     orphanKnockouts: [],
   };
 
-  function addItem(item, isOrphan) {
-    const dk = item.competitionDate || '';
-    if (!dk) {
-      if (isOrphan) undated.orphanKnockouts.push(item);
-      else undated.competitions.push(item);
-      return;
-    }
+  function ensureBucket(dk) {
     if (!map.has(dk)) {
       map.set(dk, {
         key: dk,
@@ -211,9 +225,21 @@ export function buildEventDateGroups(competitions, orphanKnockouts) {
         orphanKnockouts: [],
       });
     }
-    const bucket = map.get(dk);
-    if (isOrphan) bucket.orphanKnockouts.push(item);
-    else bucket.competitions.push(item);
+    return map.get(dk);
+  }
+
+  function addItem(item, isOrphan) {
+    for (const dk of dateKeysForCompetition(item)) {
+      const sliced = competitionForDate(item, dk);
+      if (!dk) {
+        if (isOrphan) undated.orphanKnockouts.push(sliced);
+        else undated.competitions.push(sliced);
+        continue;
+      }
+      const bucket = ensureBucket(dk);
+      if (isOrphan) bucket.orphanKnockouts.push(sliced);
+      else bucket.competitions.push(sliced);
+    }
   }
 
   for (const c of competitions || []) addItem(c, false);
@@ -267,9 +293,19 @@ export function pickDefaultEventDateKey(dateGroups, todayIso) {
   return dated[0].key;
 }
 
-/** 在指定日期組內找賽事 key */
-export function findCompInDateGroups(dateGroups, compKey) {
+/** 在指定日期組內找賽事 key；preferDateKey 有該賽事時優先用嗰日 */
+export function findCompInDateGroups(dateGroups, compKey, preferDateKey = '') {
   if (!compKey) return null;
+  const prefer = normalizeDateOnly(preferDateKey) || preferDateKey || '';
+  if (prefer) {
+    const dg = (dateGroups || []).find((d) => d.key === prefer);
+    if (dg) {
+      const hit =
+        dg.competitions.find((c) => c.key === compKey) ||
+        dg.orphanKnockouts.find((o) => o.key === compKey);
+      if (hit) return { dateKey: dg.key, comp: hit };
+    }
+  }
   for (const dg of dateGroups || []) {
     const hit =
       dg.competitions.find((c) => c.key === compKey) ||
