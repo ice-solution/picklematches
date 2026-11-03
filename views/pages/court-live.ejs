@@ -49,19 +49,20 @@
   }
   .to-card {
     text-align: center;
-    padding: 2rem 2.5rem;
-    border-radius: 1.5rem;
+    padding: 2.6rem 3.25rem;
+    border-radius: 1.75rem;
     border: 1px solid rgba(251, 191, 36, 0.35);
     background: rgba(15, 23, 42, 0.92);
     box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
     animation: toPulse 1.6s ease-in-out infinite;
-    min-width: min(88vw, 28rem);
+    /* 原 28rem，加大約 30% */
+    min-width: min(92vw, 36.4rem);
   }
   .to-ring-wrap {
     position: relative;
-    width: 11rem;
-    height: 11rem;
-    margin: 1.25rem auto 0;
+    width: 14.3rem;
+    height: 14.3rem;
+    margin: 1.5rem auto 0;
   }
   .to-ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
   .to-ring-wrap .track { fill: none; stroke: rgba(148, 163, 184, 0.25); stroke-width: 8; }
@@ -80,7 +81,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 3.25rem;
+    font-size: 4.2rem;
     font-weight: 800;
     font-variant-numeric: tabular-nums;
     color: #fff;
@@ -89,8 +90,8 @@
 <body class="court-live-page h-full overflow-hidden text-white antialiased">
   <div id="timeoutOverlay" aria-live="polite">
     <div class="to-card">
-      <p class="text-sm tracking-[0.35em] text-amber-300/90 uppercase">Timeout</p>
-      <p id="timeoutTeam" class="mt-2 text-2xl font-semibold text-white md:text-3xl">—</p>
+      <p id="timeoutKind" class="text-base tracking-[0.35em] text-amber-300/90 uppercase md:text-lg">Timeout</p>
+      <p id="timeoutTeam" class="mt-3 text-3xl font-semibold text-white md:text-4xl">—</p>
       <div class="to-ring-wrap">
         <svg viewBox="0 0 100 100" aria-hidden="true">
           <circle class="track" cx="50" cy="50" r="45"></circle>
@@ -98,7 +99,7 @@
         </svg>
         <div id="timeoutCount" class="to-count">1:00</div>
       </div>
-      <p class="mt-4 text-sm text-slate-400">暫停 60 秒</p>
+      <p id="timeoutHint" class="mt-5 text-base text-slate-400 md:text-lg">暫停 60 秒</p>
     </div>
   </div>
 
@@ -226,7 +227,7 @@
 
       var overlayTimer = null;
       var overlayMatch = null;
-      var TIMEOUT_TOTAL = 60;
+      var overlayTotalSec = 60;
 
       function hideTimeoutOverlay() {
         var ov = document.getElementById('timeoutOverlay');
@@ -241,7 +242,8 @@
         var m = Math.floor(remainSec / 60);
         var s = remainSec % 60;
         count.textContent = m + ':' + String(s).padStart(2, '0');
-        var done = Math.max(0, Math.min(1, 1 - remainSec / TIMEOUT_TOTAL));
+        var total = Math.max(1, overlayTotalSec || 60);
+        var done = Math.max(0, Math.min(1, 1 - remainSec / total));
         ring.style.strokeDashoffset = String(283 * (1 - done));
       }
 
@@ -254,15 +256,23 @@
         }
         overlayMatch = match;
         var t = match.timeouts || {};
-        var teamLabel =
-          t.activeSide === 'b'
-            ? teamName(match.teamB)
-            : teamName(match.teamA);
-        document.getElementById('timeoutTeam').textContent = teamLabel;
+        var isWarmup = t.activeSide === 'warmup';
+        overlayTotalSec = Number(t.durationSec) > 0 ? Number(t.durationSec) : (isWarmup ? 120 : 60);
+        document.getElementById('timeoutKind').textContent = isWarmup ? 'Warm-up' : 'Timeout';
+        document.getElementById('timeoutTeam').textContent = isWarmup
+          ? '熱身'
+          : (t.activeSide === 'b' ? teamName(match.teamB) : teamName(match.teamA));
+        document.getElementById('timeoutHint').textContent = isWarmup
+          ? '熱身 ' + overlayTotalSec + ' 秒'
+          : '暫停 ' + overlayTotalSec + ' 秒';
         document.getElementById('timeoutOverlay').classList.add('is-on');
         paintTimeoutOverlay(remain);
         if (overlayTimer) clearInterval(overlayTimer);
         overlayTimer = setInterval(function () {
+          if (!overlayMatch || !timeoutEndsMs(overlayMatch)) {
+            hideTimeoutOverlay();
+            return;
+          }
           var left = Math.max(0, Math.ceil((timeoutEndsMs(overlayMatch) - Date.now()) / 1000));
           paintTimeoutOverlay(left);
           if (left <= 0) hideTimeoutOverlay();

@@ -55,6 +55,7 @@
           </div>
           <button type="button" data-serve="a" class="serve-btn mt-3 w-full rounded-lg border border-emerald-600 py-3 text-emerald-400 hover:bg-emerald-950/50">A 發球</button>
           <button type="button" data-timeout="a" id="timeoutBtnA" class="timeout-btn mt-2 w-full rounded-lg border border-amber-600/70 bg-amber-950/30 py-3 font-semibold text-amber-200 hover:bg-amber-900/40 disabled:cursor-not-allowed disabled:opacity-40">Call Timeout（A）· 剩 2</button>
+          <button type="button" data-timeout-undo="a" id="timeoutUndoA" class="timeout-undo-btn mt-1.5 w-full rounded-lg border border-slate-700 py-2 text-xs text-slate-400 hover:border-slate-500 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-40">抹走 A 一次 T</button>
         </section>
 
         <section class="rounded-xl border border-slate-800 bg-slate-950 p-4">
@@ -65,7 +66,13 @@
           </div>
           <button type="button" data-serve="b" class="serve-btn mt-3 w-full rounded-lg border border-sky-600 py-3 text-sky-400 hover:bg-sky-950/50">B 發球</button>
           <button type="button" data-timeout="b" id="timeoutBtnB" class="timeout-btn mt-2 w-full rounded-lg border border-amber-600/70 bg-amber-950/30 py-3 font-semibold text-amber-200 hover:bg-amber-900/40 disabled:cursor-not-allowed disabled:opacity-40">Call Timeout（B）· 剩 2</button>
+          <button type="button" data-timeout-undo="b" id="timeoutUndoB" class="timeout-undo-btn mt-1.5 w-full rounded-lg border border-slate-700 py-2 text-xs text-slate-400 hover:border-slate-500 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-40">抹走 B 一次 T</button>
         </section>
+      </div>
+
+      <div class="mt-4 grid gap-2 sm:grid-cols-2">
+        <button type="button" id="warmupBtn" class="rounded-xl border border-violet-600/60 bg-violet-950/30 py-3.5 text-base font-semibold text-violet-200 hover:bg-violet-900/40 disabled:cursor-not-allowed disabled:opacity-40">熱身倒數 2 分鐘</button>
+        <button type="button" id="timeoutCancelBtn" class="rounded-xl border border-slate-600 bg-slate-900/60 py-3.5 text-base font-semibold text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40" disabled>取消暫停／熱身</button>
       </div>
       <p id="timeoutStatus" class="mt-3 hidden text-center text-sm font-medium text-amber-300"></p>
 
@@ -165,6 +172,10 @@
         document.getElementById('toMarksB').textContent = timeoutMarks(usedB);
         var btnA = document.getElementById('timeoutBtnA');
         var btnB = document.getElementById('timeoutBtnB');
+        var undoA = document.getElementById('timeoutUndoA');
+        var undoB = document.getElementById('timeoutUndoB');
+        var warmupBtn = document.getElementById('warmupBtn');
+        var cancelBtn = document.getElementById('timeoutCancelBtn');
         var leftA = Math.max(0, 2 - usedA);
         var leftB = Math.max(0, 2 - usedB);
         var ends = timeoutEndsMs(match);
@@ -173,11 +184,17 @@
         btnB.textContent = 'Call Timeout（B）· 剩 ' + leftB;
         btnA.disabled = active || leftA <= 0;
         btnB.disabled = active || leftB <= 0;
+        undoA.disabled = usedA <= 0 || (active && t.activeSide === 'a' && usedA <= 1);
+        undoB.disabled = usedB <= 0 || (active && t.activeSide === 'b' && usedB <= 1);
+        warmupBtn.disabled = active;
+        cancelBtn.disabled = !active;
         var st = document.getElementById('timeoutStatus');
         if (active) {
-          var side = t.activeSide === 'b' ? 'B' : 'A';
+          var label =
+            t.activeSide === 'warmup' ? '熱身' :
+            t.activeSide === 'b' ? '暫停（B）' : '暫停（A）';
           var sec = Math.max(0, Math.ceil((ends - Date.now()) / 1000));
-          st.textContent = '暫停中（' + side + '）· 剩餘 ' + sec + ' 秒';
+          st.textContent = label + '進行中 · 剩餘 ' + sec + ' 秒（可按「取消暫停／熱身」）';
           st.classList.remove('hidden');
         } else {
           st.classList.add('hidden');
@@ -283,8 +300,10 @@
             no_live_match: '沒有進行中的比賽',
             match_ended: '比賽已結束',
             court_auth_required: '請重新登入',
-            timeout_active: '暫停進行中，請等倒數完結',
+            timeout_active: '倒數進行中，請先取消或等完結',
             timeout_exhausted: '此隊已用完 2 次 Timeout',
+            no_active_timeout: '而家冇進行中嘅暫停／熱身',
+            no_timeout_used: '此隊未有 Timeout 紀錄可抹',
             invalid_side: '請選擇 A 或 B',
           };
           throw new Error(map[data.error] || data.error || '操作失敗');
@@ -326,6 +345,40 @@
             document.getElementById('msg').textContent = e.message;
           }
         });
+      });
+
+      document.querySelectorAll('.timeout-undo-btn').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          var side = btn.dataset.timeoutUndo;
+          var label = side === 'b' ? 'B' : 'A';
+          if (!confirm('抹走 ' + label + ' 隊一次已用 Timeout（少一個 T）？')) return;
+          try {
+            var data = await api('/timeout-undo', { side: side });
+            render(data.match);
+          } catch (e) {
+            document.getElementById('msg').textContent = e.message;
+          }
+        });
+      });
+
+      document.getElementById('warmupBtn').addEventListener('click', async function () {
+        if (!confirm('開始熱身倒數 2 分鐘？')) return;
+        try {
+          var data = await api('/warmup', {});
+          render(data.match);
+        } catch (e) {
+          document.getElementById('msg').textContent = e.message;
+        }
+      });
+
+      document.getElementById('timeoutCancelBtn').addEventListener('click', async function () {
+        if (!confirm('取消而家嘅暫停／熱身倒數？')) return;
+        try {
+          var data = await api('/timeout-cancel', {});
+          render(data.match);
+        } catch (e) {
+          document.getElementById('msg').textContent = e.message;
+        }
       });
 
       document.getElementById('nextGameBtn').addEventListener('click', async function () {

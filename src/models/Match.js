@@ -90,13 +90,14 @@ const matchSchema = new mongoose.Schema(
     /** 目前發球方：a | b；空字串＝未指定 */
     serving: { type: String, enum: ['a', 'b', ''], default: '' },
     /**
-     * 暫停（timeout）：每邊每場最多 2 次；active 時 Live 倒數至 endsAt
+     * 暫停／熱身：每邊每場最多 2 次暫停；activeSide=a|b|warmup；Live 倒數至 endsAt
      */
     timeouts: {
       usedA: { type: Number, min: 0, max: 2, default: 0 },
       usedB: { type: Number, min: 0, max: 2, default: 0 },
-      activeSide: { type: String, enum: ['', 'a', 'b'], default: '' },
+      activeSide: { type: String, enum: ['', 'a', 'b', 'warmup'], default: '' },
       endsAt: { type: Date, default: null },
+      durationSec: { type: Number, min: 0, default: 0 },
     },
     winnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Team' },
     /** 淘汰賽：完賽後勝者／敗者填入對應占位隊名（如 W-SF1、L-SF1） */

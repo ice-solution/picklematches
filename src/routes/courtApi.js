@@ -8,7 +8,14 @@ import {
   finishMatchManual,
   setServingSide,
 } from '../lib/scoring.js';
-import { callTimeout, clearExpiredTimeout, isTimeoutActive } from '../lib/courtTimeout.js';
+import {
+  callTimeout,
+  callWarmup,
+  cancelActiveTimeout,
+  clearExpiredTimeout,
+  isTimeoutActive,
+  undoTimeoutUsed,
+} from '../lib/courtTimeout.js';
 import { findLiveMatchOnCourt } from '../lib/courtLive.js';
 import { broadcastMatchUpdate, broadcastCourtIdle } from '../lib/matchSocket.js';
 import { normalizeVenueSlug } from '../lib/venues.js';
@@ -87,6 +94,66 @@ courtApiRouter.post(
       if (!match) return res.status(404).json({ error: 'no_live_match' });
 
       const r = callTimeout(match, req.body?.side);
+      if (!r.ok) return res.status(400).json({ error: r.error });
+
+      await match.save();
+      await respondMatch(req.app, match, res);
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+courtApiRouter.post(
+  '/:eventSlug/court/:venueSlug/warmup',
+  loadEventBySlug,
+  requireCourtSession,
+  async (req, res, next) => {
+    try {
+      const match = await loadLiveMatchDoc(req.event, req.courtVenue.slug);
+      if (!match) return res.status(404).json({ error: 'no_live_match' });
+
+      const r = callWarmup(match);
+      if (!r.ok) return res.status(400).json({ error: r.error });
+
+      await match.save();
+      await respondMatch(req.app, match, res);
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+courtApiRouter.post(
+  '/:eventSlug/court/:venueSlug/timeout-cancel',
+  loadEventBySlug,
+  requireCourtSession,
+  async (req, res, next) => {
+    try {
+      const match = await loadLiveMatchDoc(req.event, req.courtVenue.slug);
+      if (!match) return res.status(404).json({ error: 'no_live_match' });
+
+      const r = cancelActiveTimeout(match);
+      if (!r.ok) return res.status(400).json({ error: r.error });
+
+      await match.save();
+      await respondMatch(req.app, match, res);
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+courtApiRouter.post(
+  '/:eventSlug/court/:venueSlug/timeout-undo',
+  loadEventBySlug,
+  requireCourtSession,
+  async (req, res, next) => {
+    try {
+      const match = await loadLiveMatchDoc(req.event, req.courtVenue.slug);
+      if (!match) return res.status(404).json({ error: 'no_live_match' });
+
+      const r = undoTimeoutUsed(match, req.body?.side);
       if (!r.ok) return res.status(400).json({ error: r.error });
 
       await match.save();
