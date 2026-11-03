@@ -93,9 +93,19 @@ export function parseLineupGamesPayload(rawGames, roster) {
   const games = emptyLineupGames();
   const list = Array.isArray(rawGames) ? rawGames : [];
   const appear = new Map();
+  const unknown = [];
   for (let i = 0; i < LEAGUE_GAME_COUNT; i++) {
     const names = normalizeLineupNames(list[i]?.players ?? list[i]).slice(0, 2);
-    const filtered = names.filter((n) => allowed.has(n));
+    const filtered = [];
+    for (const n of names) {
+      if (!allowed.has(n)) {
+        if (!unknown.some((u) => u.player === n && u.slot === i)) {
+          unknown.push({ player: n, slot: i, label: LEAGUE_GAME_LABELS[i] });
+        }
+        continue;
+      }
+      filtered.push(n);
+    }
     // 同一回合唔重複；跨回合最多 MAX_PLAYER_APPEARANCES 次
     const uniq = [];
     for (const n of filtered) {
@@ -106,7 +116,7 @@ export function parseLineupGamesPayload(rawGames, roster) {
     }
     games[i] = { players: uniq.slice(0, 2) };
   }
-  return games;
+  return { games, unknown };
 }
 
 export function validateLineupComplete(games) {
@@ -215,7 +225,18 @@ export function applySideLineup(match, side, { games, confirm = false, roster } 
     return { ok: false, error: 'already_confirmed' };
   }
 
-  const parsed = parseLineupGamesPayload(games, roster);
+  const { games: parsed, unknown } = parseLineupGamesPayload(games, roster);
+  if (unknown.length) {
+    const first = unknown[0];
+    return {
+      ok: false,
+      error: 'unknown_players',
+      player: first.player,
+      slot: first.slot,
+      label: first.label,
+      unknown,
+    };
+  }
   const limit = validateAppearanceLimit(parsed);
   if (!limit.ok) return limit;
   if (confirm) {

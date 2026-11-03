@@ -10,7 +10,7 @@ function cmpNumDesc(a, b) {
 }
 
 /**
- * 聯賽榜：已完賽場次。排名先得失球，再贏場數。無和局。
+ * 聯賽榜：已完賽場次。排名先總得分，再贏場數（唔以得失球作主排序）。無和局。
  */
 export async function computeLeagueStandings(tournamentId, { listedOnly = false } = {}) {
   const tid = new mongoose.Types.ObjectId(tournamentId);
@@ -84,9 +84,9 @@ export async function computeLeagueStandings(tournamentId, { listedOnly = false 
     s.pointDiff = s.pointsFor - s.pointsAgainst;
   }
   rows.sort((x, y) => {
-    if (x.pointDiff !== y.pointDiff) return cmpNumDesc(x.pointDiff, y.pointDiff);
-    if (x.wins !== y.wins) return cmpNumDesc(x.wins, y.wins);
     if (x.pointsFor !== y.pointsFor) return cmpNumDesc(x.pointsFor, y.pointsFor);
+    if (x.wins !== y.wins) return cmpNumDesc(x.wins, y.wins);
+    if (x.pointDiff !== y.pointDiff) return cmpNumDesc(x.pointDiff, y.pointDiff);
     return String(x.name).localeCompare(String(y.name), 'zh-Hant');
   });
   rows.forEach((row, idx) => {

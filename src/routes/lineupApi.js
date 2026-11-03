@@ -63,6 +63,7 @@ lineupApiRouter.post('/lineup/:matchId/:side/:token', async (req, res, next) => 
         player: result.player,
         count: result.count,
         max: result.max,
+        unknown: result.unknown,
       });
     }
 

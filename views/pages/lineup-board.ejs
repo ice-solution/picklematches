@@ -188,6 +188,11 @@
       line-height: 1.25;
     }
     .player-chip.dragging { opacity: 0.4; cursor: grabbing; }
+    .player-chip.orphan {
+      border-color: #fb7185;
+      background: rgba(244, 63, 94, 0.22);
+      color: #fecdd3;
+    }
     .drag-ghost {
       position: fixed; z-index: 80; pointer-events: none;
       transform: translate(-50%, -50%);
@@ -329,9 +334,32 @@
       var initial = <%- JSON.stringify((lineup.games || []).map(function (g) { return g.players || []; })) %>;
       var labels = <%- JSON.stringify(gameLabels) %>;
       var apiBase = '/api/public/lineup/' + encodeURIComponent(matchId) + '/' + encodeURIComponent(side) + '/' + encodeURIComponent(token);
+      var rosterSet = {};
+      roster.forEach(function (n) { rosterSet[n] = true; });
 
       var state = [];
       for (var i = 0; i < 5; i++) state[i] = (initial[i] || []).slice(0, 2);
+
+      function findOrphans() {
+        var list = [];
+        state.forEach(function (arr, slot) {
+          (arr || []).forEach(function (n) {
+            if (!rosterSet[n]) list.push({ player: n, slot: slot, label: labels[slot] });
+          });
+        });
+        return list;
+      }
+
+      function warnOrphans() {
+        var orphans = findOrphans();
+        if (!orphans.length) return false;
+        var first = orphans[0];
+        setMsg(
+          '「' + first.player + '」唔喺固定名單（' + first.label + '）。請移走或改用名單內姓名；若拼錯，去後台改隊員名單。',
+          'err'
+        );
+        return true;
+      }
 
       var pool = document.getElementById('roster-pool');
       var msg = document.getElementById('msg');
@@ -406,9 +434,10 @@
       function makeChip(name, slotIdx) {
         var el = document.createElement('button');
         el.type = 'button';
-        el.className = 'player-chip';
+        var orphan = slotIdx != null && !rosterSet[name];
+        el.className = 'player-chip' + (orphan ? ' orphan' : '');
         el.textContent = name;
-        el.title = name;
+        el.title = orphan ? (name + '（唔喺固定名單）') : name;
         el.dataset.name = name;
         if (slotIdx != null) el.dataset.slot = String(slotIdx);
 
@@ -534,6 +563,7 @@
       }
 
       function save(confirm) {
+        if (warnOrphans()) return Promise.resolve();
         setMsg(confirm ? '確認中…' : '暫存中…');
         return fetch(apiBase, {
           method: 'POST',
@@ -547,7 +577,12 @@
           .then(function (ref) {
             if (!ref.ok) {
               var err = ref.j.error || '錯誤';
-              if (err === 'slot_incomplete') setMsg('請填齊五個回合，每位 2 人（缺：' + (ref.j.label || '') + '）', 'err');
+              if (err === 'unknown_players') {
+                setMsg(
+                  '「' + (ref.j.player || '') + '」唔喺固定名單（' + (ref.j.label || '') + '）。請移走或改用名單內姓名。',
+                  'err'
+                );
+              } else if (err === 'slot_incomplete') setMsg('請填齊五個回合，每位 2 人（缺：' + (ref.j.label || '') + '）', 'err');
               else if (err === 'player_overused') setMsg((ref.j.player || '球員') + ' 已超過最多 2 個回合', 'err');
               else if (err === 'already_confirmed') setMsg('已確認，請聯絡賽務解鎖', 'err');
               else if (err === 'need_five_slots') setMsg('請填齊五個回合', 'err');
@@ -567,6 +602,7 @@
       });
 
       render();
+      warnOrphans();
     })();
   </script>
   <% } %>

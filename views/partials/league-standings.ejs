@@ -6,7 +6,7 @@
     <% } else { %>
     <h3 class="text-lg font-bold text-emerald-400">聯賽積分榜</h3>
     <% } %>
-    <p class="mt-1 text-sm text-slate-400">每場五回合（男雙、女雙、混雙×3），各回合先到 21 分；五場總分較高者勝。排名：<strong class="text-slate-300">得失球</strong> → <strong class="text-slate-300">勝場</strong>。無和局。</p>
+    <p class="mt-1 text-sm text-slate-400">每場五回合（男雙、女雙、混雙×3），各回合先到 21 分；五場總分較高者勝。排名：<strong class="text-slate-300">總得分</strong> → <strong class="text-slate-300">勝場</strong>（同分再比得失球）。無和局。</p>
   </div>
 
   <% leagueStandingsList.forEach(function (tblock) { %>
@@ -42,9 +42,9 @@
                 <td class="px-2 py-2 text-center tabular-nums text-slate-400"><%= row.played %></td>
                 <td class="px-2 py-2 text-center tabular-nums text-emerald-400/90"><%= row.wins %></td>
                 <td class="px-2 py-2 text-center tabular-nums text-rose-400/80"><%= row.losses %></td>
-                <td class="px-2 py-2 text-center tabular-nums text-slate-300"><%= row.pointsFor %></td>
+                <td class="px-2 py-2 text-center tabular-nums font-semibold text-white"><%= row.pointsFor %></td>
                 <td class="px-2 py-2 text-center tabular-nums text-slate-400"><%= row.pointsAgainst %></td>
-                <td class="px-2 py-2 text-center tabular-nums font-semibold text-white"><%= row.pointDiff >= 0 ? '+' + row.pointDiff : row.pointDiff %></td>
+                <td class="px-2 py-2 text-center tabular-nums text-slate-400"><%= row.pointDiff >= 0 ? '+' + row.pointDiff : row.pointDiff %></td>
               </tr>
             <% }); %>
           </tbody>
