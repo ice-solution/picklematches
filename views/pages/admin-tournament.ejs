@@ -14,7 +14,7 @@
       <% } else if (tournament.phase === 'double_elim') { %>
         ｜ 勝部／敗部雙軌 · 總決賽勝部一次優勢
       <% } else if (tournament.phase === 'league') { %>
-        ｜ 雙循環 · 每場五回合 21 分 · 總分高者勝 · 排名先總得分再勝場
+        ｜ 雙循環 · 每場五回合 21 分 · 總分高者勝 · 排名先總得分再勝／負場
       <% } %>
       <span class="text-slate-600"> · </span>
       <a href="/admin/events/<%= event._id %>/matches-summary" class="text-emerald-400 underline">大會賽果總覽</a>
