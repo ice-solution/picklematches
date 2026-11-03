@@ -6,7 +6,7 @@
     <% } else { %>
     <h3 class="text-lg font-bold text-emerald-400">聯賽積分榜</h3>
     <% } %>
-    <p class="mt-1 text-sm text-slate-400">每場五回合（男雙、女雙、混雙×3），各回合先到 21 分；五場總分較高者勝。排名：<strong class="text-slate-300">總得分</strong> → <strong class="text-slate-300">勝場</strong> → <strong class="text-slate-300">負場較少</strong>。無和局。</p>
+    <p class="mt-1 text-sm text-slate-400">每場五回合（男雙、女雙、混雙×3），各回合先到 21 分；五場總分較高者勝。「賽」= 已完成場次。排名：<strong class="text-slate-300">總得分</strong> → <strong class="text-slate-300">勝場</strong> → <strong class="text-slate-300">負場較少</strong>。無和局。</p>
   </div>
 
   <% leagueStandingsList.forEach(function (tblock) { %>
@@ -19,7 +19,7 @@
               <th class="px-2 py-2 text-center w-10">名次</th>
               <th class="px-2 py-2">隊伍</th>
               <th class="px-2 py-2">隊員</th>
-              <th class="px-2 py-2 text-center">賽</th>
+              <th class="px-2 py-2 text-center" title="已完成場次">賽</th>
               <th class="px-2 py-2 text-center">勝</th>
               <th class="px-2 py-2 text-center">負</th>
               <th class="px-2 py-2 text-center">得分</th>

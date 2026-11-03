@@ -10,7 +10,7 @@ function cmpNumDesc(a, b) {
 }
 
 /**
- * 聯賽榜：已完賽場次。排名先總得分，再勝場、負場（唔以得失球作主排序）。無和局。
+ * 聯賽榜：已完賽場次累計。排名先總得分，再勝場、負場（唔以得失球作主排序）。無和局。
  */
 export async function computeLeagueStandings(tournamentId, { listedOnly = false } = {}) {
   const tid = new mongoose.Types.ObjectId(tournamentId);
