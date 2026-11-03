@@ -18,8 +18,90 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
   }
+  .timeout-marks {
+    letter-spacing: 0.12em;
+    font-weight: 800;
+    color: #fbbf24;
+  }
+  #timeoutOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(2, 6, 18, 0.82);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  #timeoutOverlay.is-on { display: flex; animation: toFadeIn 0.35s ease-out; }
+  @keyframes toFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes toPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.04); opacity: 0.92; }
+  }
+  @keyframes toRing {
+    from { stroke-dashoffset: 283; }
+    to { stroke-dashoffset: 0; }
+  }
+  .to-card {
+    text-align: center;
+    padding: 2rem 2.5rem;
+    border-radius: 1.5rem;
+    border: 1px solid rgba(251, 191, 36, 0.35);
+    background: rgba(15, 23, 42, 0.92);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+    animation: toPulse 1.6s ease-in-out infinite;
+    min-width: min(88vw, 28rem);
+  }
+  .to-ring-wrap {
+    position: relative;
+    width: 11rem;
+    height: 11rem;
+    margin: 1.25rem auto 0;
+  }
+  .to-ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .to-ring-wrap .track { fill: none; stroke: rgba(148, 163, 184, 0.25); stroke-width: 8; }
+  .to-ring-wrap .prog {
+    fill: none;
+    stroke: #fbbf24;
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 283;
+    stroke-dashoffset: 283;
+    transition: stroke-dashoffset 0.2s linear;
+  }
+  .to-count {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3.25rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+  }
 </style>
 <body class="court-live-page h-full overflow-hidden text-white antialiased">
+  <div id="timeoutOverlay" aria-live="polite">
+    <div class="to-card">
+      <p class="text-sm tracking-[0.35em] text-amber-300/90 uppercase">Timeout</p>
+      <p id="timeoutTeam" class="mt-2 text-2xl font-semibold text-white md:text-3xl">—</p>
+      <div class="to-ring-wrap">
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="track" cx="50" cy="50" r="45"></circle>
+          <circle id="timeoutRing" class="prog" cx="50" cy="50" r="45"></circle>
+        </svg>
+        <div id="timeoutCount" class="to-count">1:00</div>
+      </div>
+      <p class="mt-4 text-sm text-slate-400">暫停 60 秒</p>
+    </div>
+  </div>
+
   <div class="flex h-full items-center justify-center p-4 md:p-8">
     <div id="board" class="court-live-board w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-700/80 shadow-2xl">
       <div class="border-b border-slate-800/80 px-6 py-3 text-center md:px-10">
@@ -37,7 +119,10 @@
           <div class="flex items-center gap-4 px-6 py-6 md:px-10 md:py-9">
             <div id="serveA" class="serve-mark opacity-0" aria-hidden="true"></div>
             <div class="min-w-0 flex-1">
-              <div id="teamA" class="truncate text-xl font-medium tracking-wide text-emerald-400 md:text-3xl lg:text-4xl"><%= match && match.teamA ? match.teamA.name : '' %></div>
+              <div class="flex min-w-0 items-baseline gap-3">
+                <div id="teamA" class="truncate text-xl font-medium tracking-wide text-emerald-400 md:text-3xl lg:text-4xl"><%= match && match.teamA ? match.teamA.name : '' %></div>
+                <div id="timeoutMarksA" class="timeout-marks shrink-0 text-lg md:text-2xl"></div>
+              </div>
               <div id="playersA" class="mt-2 truncate text-2xl font-semibold tracking-wide text-emerald-100 md:text-4xl lg:text-5xl"></div>
             </div>
             <div id="scoreA" class="score-num text-5xl font-bold tabular-nums md:text-7xl lg:text-8xl"><%= match && match.currentPoints ? (match.currentPoints.a || 0) : 0 %></div>
@@ -45,7 +130,10 @@
           <div class="flex items-center gap-4 px-6 py-6 md:px-10 md:py-9">
             <div id="serveB" class="serve-mark opacity-0" aria-hidden="true"></div>
             <div class="min-w-0 flex-1">
-              <div id="teamB" class="truncate text-xl font-medium tracking-wide text-sky-400 md:text-3xl lg:text-4xl"><%= match && match.teamB ? match.teamB.name : '' %></div>
+              <div class="flex min-w-0 items-baseline gap-3">
+                <div id="teamB" class="truncate text-xl font-medium tracking-wide text-sky-400 md:text-3xl lg:text-4xl"><%= match && match.teamB ? match.teamB.name : '' %></div>
+                <div id="timeoutMarksB" class="timeout-marks shrink-0 text-lg md:text-2xl"></div>
+              </div>
               <div id="playersB" class="mt-2 truncate text-2xl font-semibold tracking-wide text-sky-100 md:text-4xl lg:text-5xl"></div>
             </div>
             <div id="scoreB" class="score-num text-5xl font-bold tabular-nums md:text-7xl lg:text-8xl"><%= match && match.currentPoints ? (match.currentPoints.b || 0) : 0 %></div>
@@ -124,6 +212,71 @@
         return a >= 14 && b >= 14 && a === b;
       }
 
+      function timeoutMarks(used) {
+        var n = Math.max(0, Math.min(2, Number(used) || 0));
+        return n ? Array(n + 1).join('T ').trim() : '';
+      }
+
+      function timeoutEndsMs(match) {
+        var t = match && match.timeouts;
+        if (!t || !t.activeSide || !t.endsAt) return 0;
+        var ms = new Date(t.endsAt).getTime();
+        return Number.isFinite(ms) ? ms : 0;
+      }
+
+      var overlayTimer = null;
+      var overlayMatch = null;
+      var TIMEOUT_TOTAL = 60;
+
+      function hideTimeoutOverlay() {
+        var ov = document.getElementById('timeoutOverlay');
+        ov.classList.remove('is-on');
+        if (overlayTimer) { clearInterval(overlayTimer); overlayTimer = null; }
+        overlayMatch = null;
+      }
+
+      function paintTimeoutOverlay(remainSec) {
+        var count = document.getElementById('timeoutCount');
+        var ring = document.getElementById('timeoutRing');
+        var m = Math.floor(remainSec / 60);
+        var s = remainSec % 60;
+        count.textContent = m + ':' + String(s).padStart(2, '0');
+        var done = Math.max(0, Math.min(1, 1 - remainSec / TIMEOUT_TOTAL));
+        ring.style.strokeDashoffset = String(283 * (1 - done));
+      }
+
+      function showTimeoutOverlay(match) {
+        var ends = timeoutEndsMs(match);
+        var remain = Math.max(0, Math.ceil((ends - Date.now()) / 1000));
+        if (remain <= 0) {
+          hideTimeoutOverlay();
+          return;
+        }
+        overlayMatch = match;
+        var t = match.timeouts || {};
+        var teamLabel =
+          t.activeSide === 'b'
+            ? teamName(match.teamB)
+            : teamName(match.teamA);
+        document.getElementById('timeoutTeam').textContent = teamLabel;
+        document.getElementById('timeoutOverlay').classList.add('is-on');
+        paintTimeoutOverlay(remain);
+        if (overlayTimer) clearInterval(overlayTimer);
+        overlayTimer = setInterval(function () {
+          var left = Math.max(0, Math.ceil((timeoutEndsMs(overlayMatch) - Date.now()) / 1000));
+          paintTimeoutOverlay(left);
+          if (left <= 0) hideTimeoutOverlay();
+        }, 200);
+      }
+
+      function syncTimeoutOverlay(match) {
+        if (!match || match.status !== 'live' || timeoutEndsMs(match) <= Date.now()) {
+          hideTimeoutOverlay();
+          return;
+        }
+        showTimeoutOverlay(match);
+      }
+
       function render(match) {
         var idle = document.getElementById('idle');
         var active = document.getElementById('active');
@@ -133,12 +286,18 @@
           active.classList.add('hidden');
           roundEl.classList.add('hidden');
           roundEl.textContent = '';
+          document.getElementById('timeoutMarksA').textContent = '';
+          document.getElementById('timeoutMarksB').textContent = '';
+          hideTimeoutOverlay();
           return;
         }
         idle.classList.add('hidden');
         active.classList.remove('hidden');
         document.getElementById('teamA').textContent = teamName(match.teamA);
         document.getElementById('teamB').textContent = teamName(match.teamB);
+        var to = match.timeouts || {};
+        document.getElementById('timeoutMarksA').textContent = timeoutMarks(to.usedA);
+        document.getElementById('timeoutMarksB').textContent = timeoutMarks(to.usedB);
         var ca = (match.currentPoints && match.currentPoints.a) || 0;
         var cb = (match.currentPoints && match.currentPoints.b) || 0;
         document.getElementById('scoreA').textContent = ca;
@@ -170,6 +329,8 @@
         var deuce = document.getElementById('deuce');
         if (match.matchFormat !== 'leagueFive' && isDeuce(ca, cb)) deuce.classList.remove('hidden');
         else deuce.classList.add('hidden');
+
+        syncTimeoutOverlay(match);
       }
 
       var socket = io({ transports: ['websocket', 'polling'] });
