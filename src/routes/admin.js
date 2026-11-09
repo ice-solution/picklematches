@@ -73,6 +73,7 @@ import {
   parseSelectedCourtsFromBody,
 } from '../lib/venues.js';
 import { demoteOtherLiveOnCourt } from '../lib/courtLive.js';
+import { resetTimeouts } from '../lib/courtTimeout.js';
 import {
   startVenueStream,
   stopVenueStream,
@@ -1825,6 +1826,8 @@ adminRouter.post('/matches/:matchId/update', requireStaff, async (req, res, next
     ]);
     if (!ta || !tb) return res.redirect(`/admin/matches/${matchId}/edit`);
 
+    const prevStatus = match.status;
+
     match.teamA = ta._id;
     match.teamB = tb._id;
     match.matchFormat = mf;
@@ -1850,6 +1853,8 @@ adminRouter.post('/matches/:matchId/update', requireStaff, async (req, res, next
         }
       } else {
         finalizeFinishedMatch(match);
+        resetTimeouts(match);
+        match.sidesSwapped = false;
       }
     } else if (
       (match.completedGames?.length || 0) > 0 ||
@@ -1857,6 +1862,12 @@ adminRouter.post('/matches/:matchId/update', requireStaff, async (req, res, next
       Number(match.currentPoints?.b) > 0
     ) {
       if (match.status === 'scheduled') match.status = 'live';
+    }
+
+    // 新開 live：暫停次數由 0 開始，唔帶上仗
+    if (match.status === 'live' && prevStatus !== 'live') {
+      resetTimeouts(match);
+      match.sidesSwapped = false;
     }
 
     await match.save();

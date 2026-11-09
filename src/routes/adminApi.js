@@ -2,6 +2,7 @@ import { demoteOtherLiveOnCourt } from '../lib/courtLive.js';
 import { addPointToCurrentGame, finishMatchManual } from '../lib/scoring.js';
 import { finalizeFinishedMatch, applyManualScoresFromBody } from '../lib/matchResult.js';
 import { broadcastMatchUpdate } from '../lib/matchSocket.js';
+import { resetTimeouts } from '../lib/courtTimeout.js';
 import { requireStaffApi } from '../middleware/auth.js';
 import { normalizeTimeToHHmm } from '../lib/matchTime.js';
 import { normalizeDateOnly } from '../lib/datetime.js';
@@ -94,10 +95,17 @@ adminApiRouter.post('/matches/:matchId/status', async (req, res, next) => {
     }
 
     const match = req.matchDoc;
+    const prevStatus = match.status;
 
     match.status = status;
     if (status === 'finished') {
       finalizeFinishedMatch(match);
+      resetTimeouts(match);
+      match.sidesSwapped = false;
+    } else if (status === 'live' && prevStatus !== 'live') {
+      // 開新 live：暫停次數由 0 開始，唔帶上仗
+      resetTimeouts(match);
+      match.sidesSwapped = false;
     }
 
     await match.save();
@@ -206,6 +214,7 @@ adminApiRouter.post('/matches/:matchId/swap-slot', async (req, res, next) => {
 adminApiRouter.post('/matches/:matchId/quick-update', async (req, res, next) => {
   try {
     const match = req.matchDoc;
+    const prevStatus = match.status;
 
     const body = req.body || {};
 
@@ -294,6 +303,8 @@ adminApiRouter.post('/matches/:matchId/quick-update', async (req, res, next) => 
       if (gamesA >= need || gamesB >= need) {
         match.status = 'finished';
         finalizeFinishedMatch(match);
+        resetTimeouts(match);
+        match.sidesSwapped = false;
       } else if ((match.completedGames?.length || 0) > 0) {
         if (match.status === 'scheduled' || match.status === 'finished') {
           match.status = 'live';
@@ -314,8 +325,18 @@ adminApiRouter.post('/matches/:matchId/quick-update', async (req, res, next) => 
         }
       } else {
         match.status = String(body.status);
-        if (match.status === 'finished') finalizeFinishedMatch(match);
+        if (match.status === 'finished') {
+          finalizeFinishedMatch(match);
+          resetTimeouts(match);
+          match.sidesSwapped = false;
+        }
       }
+    }
+
+    // 分數編輯／改狀態導致新開 live：暫停由 0 開始
+    if (match.status === 'live' && prevStatus !== 'live') {
+      resetTimeouts(match);
+      match.sidesSwapped = false;
     }
 
     await match.save();

@@ -16,17 +16,26 @@ const app = createApp();
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: true, credentials: true },
+  // 大螢幕／裁判機長開：較密 ping，斷線快啲發現並重連
+  pingInterval: 10000,
+  pingTimeout: 20000,
+  connectTimeout: 20000,
 });
 app.set('io', io);
 
 io.on('connection', (socket) => {
-  socket.on('join', (payload) => {
-    if (payload?.eventId) socket.join(`event:${payload.eventId}`);
-    if (payload?.matchId) socket.join(`match:${payload.matchId}`);
-    if (payload?.court?.eventId && payload?.court?.venueSlug) {
+  const joinRooms = (payload) => {
+    if (!payload || typeof payload !== 'object') return;
+    if (payload.eventId) socket.join(`event:${payload.eventId}`);
+    if (payload.matchId) socket.join(`match:${payload.matchId}`);
+    if (payload.court?.eventId && payload.court?.venueSlug) {
       socket.join(`court:${payload.court.eventId}:${payload.court.venueSlug}`);
     }
-  });
+  };
+
+  socket.on('join', joinRooms);
+  // 相容舊客戶端；重連後客戶端會再 emit join
+  socket.on('court:subscribe', joinRooms);
 });
 
 httpServer.listen(port, () => {

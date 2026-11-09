@@ -89,8 +89,10 @@ const matchSchema = new mongoose.Schema(
     },
     /** 目前發球方：a | b；空字串＝未指定 */
     serving: { type: String, enum: ['a', 'b', ''], default: '' },
+    /** Live／裁判畫面左右（上下）隊位對調；計分仍用 teamA／teamB */
+    sidesSwapped: { type: Boolean, default: false },
     /**
-     * 暫停／熱身：每邊每場最多 2 次暫停；activeSide=a|b|warmup；Live 倒數至 endsAt
+     * 暫停／熱身：每邊每局最多 2 次暫停（下一局／完賽會清零）；activeSide=a|b|warmup；Live 倒數至 endsAt
      */
     timeouts: {
       usedA: { type: Number, min: 0, max: 2, default: 0 },

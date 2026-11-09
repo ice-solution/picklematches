@@ -23,6 +23,19 @@ function touch(match) {
   if (typeof match.markModified === 'function') match.markModified('timeouts');
 }
 
+/** 清零暫停次數同進行中倒數（完賽／下一局／開新 live 用） */
+export function resetTimeouts(match) {
+  if (!match) return;
+  match.timeouts = {
+    usedA: 0,
+    usedB: 0,
+    activeSide: '',
+    endsAt: null,
+    durationSec: 0,
+  };
+  touch(match);
+}
+
 function assertMatchPlayable(match) {
   if (!match || match.status === 'finished' || match.status === 'cancelled') {
     return { ok: false, error: 'match_ended' };

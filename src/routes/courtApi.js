@@ -85,6 +85,27 @@ courtApiRouter.post(
 );
 
 courtApiRouter.post(
+  '/:eventSlug/court/:venueSlug/swap-sides',
+  loadEventBySlug,
+  requireCourtSession,
+  async (req, res, next) => {
+    try {
+      const match = await loadLiveMatchDoc(req.event, req.courtVenue.slug);
+      if (!match) return res.status(404).json({ error: 'no_live_match' });
+      if (match.status !== 'live' && match.status !== 'scheduled') {
+        return res.status(400).json({ error: 'not_live' });
+      }
+      match.sidesSwapped = !match.sidesSwapped;
+      if (match.status === 'scheduled') match.status = 'live';
+      await match.save();
+      await respondMatch(req.app, match, res);
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+courtApiRouter.post(
   '/:eventSlug/court/:venueSlug/timeout',
   loadEventBySlug,
   requireCourtSession,

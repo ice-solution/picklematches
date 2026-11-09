@@ -9,6 +9,7 @@ import {
   lineupFromCurrent,
 } from './leagueRules.js';
 import { playersFromConfirmedLineup, resolveCurrentPlayers } from './leagueLineup.js';
+import { resetTimeouts } from './courtTimeout.js';
 
 export function gamesNeededToWinMatch(matchFormat) {
   switch (matchFormat) {
@@ -130,6 +131,8 @@ export function commitCurrentGame(match) {
   match.currentGameIndex = match.completedGames.length;
   match.currentPoints = { a: 0, b: 0 };
   match.serving = '';
+  // 完一球局／換下一組：暫停次數清零，唔帶去下一場
+  resetTimeouts(match);
   if (isLeagueFormat(match.matchFormat)) {
     const next = playersFromConfirmedLineup(match, match.completedGames.length);
     match.currentLineup = { playersA: next.playersA, playersB: next.playersB };
@@ -193,6 +196,9 @@ export function finishMatchManual(match) {
   }
   const result = finalizeFinishedMatch(match);
   match.serving = '';
+  // 完賽清零暫停／轉場，避免殘留狀態影響顯示
+  resetTimeouts(match);
+  match.sidesSwapped = false;
   return { ok: true, ...result, matchEnded: true };
 }
 

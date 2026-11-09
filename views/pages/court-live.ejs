@@ -86,6 +86,21 @@
     font-variant-numeric: tabular-nums;
     color: #fff;
   }
+  /* truncate 會裁 descender（g / y）；加 line-height + padding 留位 */
+  .player-line {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.35;
+    padding-bottom: 0.18em;
+  }
+  .team-line {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.25;
+    padding-bottom: 0.08em;
+  }
 </style>
 <body class="court-live-page h-full overflow-hidden text-white antialiased">
   <div id="timeoutOverlay" aria-live="polite">
@@ -116,26 +131,26 @@
       </div>
 
       <div id="active" class="<%= match ? '' : 'hidden' %>">
-        <div class="divide-y divide-slate-800/80">
-          <div class="flex items-center gap-4 px-6 py-6 md:px-10 md:py-9">
+        <div id="teamsStack" class="flex flex-col divide-y divide-slate-800/80">
+          <div id="rowA" class="flex items-center gap-4 px-6 py-6 md:px-10 md:py-9" style="order:1">
             <div id="serveA" class="serve-mark opacity-0" aria-hidden="true"></div>
             <div class="min-w-0 flex-1">
               <div class="flex min-w-0 items-baseline gap-3">
-                <div id="teamA" class="truncate text-xl font-medium tracking-wide text-emerald-400 md:text-3xl lg:text-4xl"><%= match && match.teamA ? match.teamA.name : '' %></div>
+                <div id="teamA" class="team-line text-xl font-medium tracking-wide text-emerald-400 md:text-3xl lg:text-4xl"><%= match && match.teamA ? match.teamA.name : '' %></div>
                 <div id="timeoutMarksA" class="timeout-marks shrink-0 text-lg md:text-2xl"></div>
               </div>
-              <div id="playersA" class="mt-2 truncate text-2xl font-semibold tracking-wide text-emerald-100 md:text-4xl lg:text-5xl"></div>
+              <div id="playersA" class="player-line mt-1.5 text-2xl font-semibold tracking-wide text-emerald-100 md:text-4xl lg:text-5xl"></div>
             </div>
             <div id="scoreA" class="score-num text-5xl font-bold tabular-nums md:text-7xl lg:text-8xl"><%= match && match.currentPoints ? (match.currentPoints.a || 0) : 0 %></div>
           </div>
-          <div class="flex items-center gap-4 px-6 py-6 md:px-10 md:py-9">
+          <div id="rowB" class="flex items-center gap-4 px-6 py-6 md:px-10 md:py-9" style="order:2">
             <div id="serveB" class="serve-mark opacity-0" aria-hidden="true"></div>
             <div class="min-w-0 flex-1">
               <div class="flex min-w-0 items-baseline gap-3">
-                <div id="teamB" class="truncate text-xl font-medium tracking-wide text-sky-400 md:text-3xl lg:text-4xl"><%= match && match.teamB ? match.teamB.name : '' %></div>
+                <div id="teamB" class="team-line text-xl font-medium tracking-wide text-sky-400 md:text-3xl lg:text-4xl"><%= match && match.teamB ? match.teamB.name : '' %></div>
                 <div id="timeoutMarksB" class="timeout-marks shrink-0 text-lg md:text-2xl"></div>
               </div>
-              <div id="playersB" class="mt-2 truncate text-2xl font-semibold tracking-wide text-sky-100 md:text-4xl lg:text-5xl"></div>
+              <div id="playersB" class="player-line mt-1.5 text-2xl font-semibold tracking-wide text-sky-100 md:text-4xl lg:text-5xl"></div>
             </div>
             <div id="scoreB" class="score-num text-5xl font-bold tabular-nums md:text-7xl lg:text-8xl"><%= match && match.currentPoints ? (match.currentPoints.b || 0) : 0 %></div>
           </div>
@@ -150,12 +165,14 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/public/js/court-live-link.js"></script>
   <script>
     (function () {
       var eventSlug = <%- JSON.stringify(event.slug) %>;
       var venueSlug = <%- JSON.stringify(venue.slug) %>;
       var eventId = <%- JSON.stringify(eventIdStr) %>;
       var LEAGUE_LABELS = ['男雙', '女雙', '混雙（1）', '混雙（2）', '混雙（3）'];
+      var stateUrl = '/api/public/' + encodeURIComponent(eventSlug) + '/court/' + encodeURIComponent(venueSlug) + '/state';
 
       function teamName(team) {
         if (!team) return '—';
@@ -228,6 +245,7 @@
       var overlayTimer = null;
       var overlayMatch = null;
       var overlayTotalSec = 60;
+      var currentMatchId = '';
 
       function hideTimeoutOverlay() {
         var ov = document.getElementById('timeoutOverlay');
@@ -298,8 +316,14 @@
           roundEl.textContent = '';
           document.getElementById('timeoutMarksA').textContent = '';
           document.getElementById('timeoutMarksB').textContent = '';
+          currentMatchId = '';
           hideTimeoutOverlay();
           return;
+        }
+        var mid = match._id ? String(match._id) : '';
+        if (mid && mid !== currentMatchId) {
+          currentMatchId = mid;
+          hideTimeoutOverlay();
         }
         idle.classList.add('hidden');
         active.classList.remove('hidden');
@@ -315,6 +339,9 @@
         document.getElementById('serveA').style.opacity = match.serving === 'a' ? '1' : '0';
         document.getElementById('serveB').style.opacity = match.serving === 'b' ? '1' : '0';
         document.getElementById('gamesLine').textContent = gamesText(match);
+        var swapped = !!match.sidesSwapped;
+        document.getElementById('rowA').style.order = swapped ? '2' : '1';
+        document.getElementById('rowB').style.order = swapped ? '1' : '2';
 
         var info = currentRoundInfo(match);
         var playersA = document.getElementById('playersA');
@@ -343,18 +370,23 @@
         syncTimeoutOverlay(match);
       }
 
-      var socket = io({ transports: ['websocket', 'polling'] });
-      socket.emit('join', { eventId: eventId, court: { eventId: eventId, venueSlug: venueSlug } });
-      socket.on('court:update', function (payload) {
-        render(payload && payload.match);
+      CourtLiveLink.connect({
+        join: { eventId: eventId, court: { eventId: eventId, venueSlug: venueSlug } },
+        pollMs: 6000,
+        onUpdate: function (match) { render(match); },
+        fetchState: function () {
+          return fetch(stateUrl, {
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: { Accept: 'application/json' },
+          }).then(function (r) {
+            if (!r.ok) throw new Error('state_' + r.status);
+            return r.json();
+          }).then(function (data) {
+            return data && data.match;
+          });
+        },
       });
-
-      fetch('/api/public/' + encodeURIComponent(eventSlug) + '/court/' + encodeURIComponent(venueSlug) + '/state', {
-        headers: { Accept: 'application/json' },
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (data) { render(data.match); })
-        .catch(function () {});
 
       <% if (match) { %>
       render(<%- JSON.stringify(match) %>);

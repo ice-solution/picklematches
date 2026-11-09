@@ -52,6 +52,7 @@ export async function demoteOtherLiveOnCourt(match) {
     .lean();
   if (!others.length) return [];
 
-  await Match.updateMany({ _id: { $in: others.map((m) => m._id) } }, { $set: { status: 'scheduled' } });
-  return others.map((m) => m._id);
+  const ids = others.map((m) => m._id);
+  await Match.updateMany({ _id: { $in: ids } }, { $set: { status: 'scheduled' } });
+  return ids;
 }
