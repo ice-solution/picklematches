@@ -78,8 +78,18 @@
     };
   }
 
+  function formatDetailLine(row) {
+    if (!row) return '';
+    return (
+      (row.label || '') +
+      (row.score ? ' ' + row.score : '') +
+      (row.who ? ' ' + row.who : '') +
+      (row.note || '')
+    ).trim();
+  }
+
   function scoreDisplayParts(m) {
-    if (!m) return { main: '—', detail: '' };
+    if (!m) return { main: '—', detail: '', lines: [] };
     var ca = (m.currentPoints && m.currentPoints.a) || 0;
     var cb = (m.currentPoints && m.currentPoints.b) || 0;
     var completed = m.completedGames || [];
@@ -87,7 +97,7 @@
     if (m.matchFormat === 'leagueFive') {
       var ptsA = 0;
       var ptsB = 0;
-      var bits = [];
+      var lines = [];
       var liveLeague = m.status === 'live' || (m.status === 'scheduled' && (ca > 0 || cb > 0));
       var boardPreview = false;
       for (var bi = 0; bi < LEAGUE_LABELS.length; bi++) {
@@ -102,26 +112,41 @@
         if (g) {
           ptsA += Number(g.a || 0);
           ptsB += Number(g.b || 0);
-          bits.push(lab + ' ' + g.a + '-' + g.b + (who ? ' ' + who : '') + note);
+          lines.push({ label: lab, score: g.a + '-' + g.b, who: who, note: note, live: false });
         } else if (liveLeague && i === completed.length) {
           var liveWho = gameLineupNote(resolveCurrentPlayersClient(m));
-          bits.push(lab + ' [' + ca + '-' + cb + ']' + (liveWho ? ' ' + liveWho : ''));
+          lines.push({
+            label: lab,
+            score: '[' + ca + '-' + cb + ']',
+            who: liveWho,
+            note: '',
+            live: true,
+          });
           ptsA += ca;
           ptsB += cb;
         } else if (who) {
-          bits.push(lab + ' ' + who + note);
+          lines.push({ label: lab, score: '', who: who, note: note, live: false });
         }
       }
-      if (!completed.length && !liveLeague && !boardPreview) return { main: '—', detail: '' };
-      if (!completed.length && !liveLeague && boardPreview) return { main: '—', detail: bits.join(' · ') };
-      return { main: ptsA + '-' + ptsB, detail: bits.join(' · ') };
+      var detailLeague = lines.map(formatDetailLine).filter(Boolean).join(' · ');
+      if (!completed.length && !liveLeague && !boardPreview) return { main: '—', detail: '', lines: [] };
+      if (!completed.length && !liveLeague && boardPreview) {
+        return { main: '—', detail: detailLeague, lines: lines };
+      }
+      return { main: ptsA + '-' + ptsB, detail: detailLeague, lines: lines };
     }
 
     var won = countGamesWon(completed);
     var detail = completedGamesDetail(completed);
     var main = '';
+    var linesBo3 = [];
     if (completed.length) {
       main = won.gamesA + '-' + won.gamesB;
+      for (var gi = 0; gi < completed.length; gi++) {
+        var cg = completed[gi];
+        if (isSummaryCompletedGame(cg)) continue;
+        linesBo3.push({ label: '', score: cg.a + '-' + cg.b, who: '', note: '', live: false });
+      }
     }
     var live =
       m.status === 'live' || (m.status === 'scheduled' && (ca > 0 || cb > 0))
@@ -129,12 +154,13 @@
         : '';
     if (live) {
       detail = detail ? detail + ' · ' + live : live;
+      linesBo3.push({ label: '', score: live, who: '', note: '', live: true });
     }
     if (!main) {
       if (ca > 0 || cb > 0) main = '[' + ca + '-' + cb + ']';
       else main = '—';
     }
-    return { main: main, detail: detail };
+    return { main: main, detail: detail, lines: linesBo3 };
   }
 
   /** 小組矩陣：以列隊伍視角顯示比分 */
@@ -267,21 +293,76 @@
     return true;
   }
 
+  function renderScoreLines(detailEl, lines, fallbackDetail) {
+    if (!detailEl) return;
+    var list = Array.isArray(lines) ? lines : [];
+    if (list.length) {
+      detailEl.classList.add('match-score-lines');
+      detailEl.classList.remove('hidden');
+      if (detailEl.tagName !== 'UL') {
+        var ul = document.createElement('ul');
+        ul.className = detailEl.className;
+        ul.setAttribute('aria-label', '各場比分');
+        detailEl.parentNode.replaceChild(ul, detailEl);
+        detailEl = ul;
+      }
+      detailEl.textContent = '';
+      list.forEach(function (row) {
+        var li = document.createElement('li');
+        li.className = 'match-score-line' + (row.live ? ' is-live' : '');
+        if (row.label) {
+          var lab = document.createElement('span');
+          lab.className = 'ms-label';
+          lab.textContent = row.label;
+          li.appendChild(lab);
+        }
+        if (row.score) {
+          var sc = document.createElement('span');
+          sc.className = 'ms-score';
+          sc.textContent = row.score;
+          li.appendChild(sc);
+        }
+        if (row.who) {
+          var who = document.createElement('span');
+          who.className = 'ms-who';
+          who.textContent = row.who;
+          li.appendChild(who);
+        }
+        if (row.note) {
+          var note = document.createElement('span');
+          note.className = 'ms-note';
+          note.textContent = row.note;
+          li.appendChild(note);
+        }
+        detailEl.appendChild(li);
+      });
+      return;
+    }
+    if (fallbackDetail) {
+      detailEl.classList.remove('match-score-lines', 'hidden');
+      detailEl.textContent = fallbackDetail;
+    } else {
+      detailEl.textContent = '';
+      detailEl.classList.add('hidden');
+    }
+  }
+
   function patchScoreCell(cell, m) {
     if (!cell) return;
+    var root = cell.classList.contains('match-score-display')
+      ? cell
+      : cell.querySelector('.match-score-display') || cell;
     var sp = scoreDisplayParts(m);
-    var main = cell.querySelector('.match-score-main');
-    var detail = cell.querySelector('.match-score-detail');
+    var main = root.querySelector('.match-score-main');
+    var detail = root.querySelector('.match-score-detail');
     if (main) main.textContent = sp.main;
-    if (detail) {
-      if (sp.detail) {
-        detail.textContent = sp.detail;
-        detail.classList.remove('hidden');
-      } else {
-        detail.textContent = '';
-        detail.classList.add('hidden');
-      }
+    if (!detail && (sp.lines && sp.lines.length || sp.detail)) {
+      detail = document.createElement('ul');
+      detail.className = 'match-score-detail match-score-lines mt-1 text-[11px] leading-relaxed text-slate-400';
+      detail.setAttribute('aria-label', '各場比分');
+      root.appendChild(detail);
     }
+    renderScoreLines(detail, sp.lines, sp.detail);
   }
 
   /** 更新頁面上該場次的比分顯示；有對應節點則回傳 true */

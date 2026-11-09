@@ -48,7 +48,12 @@ import {
   generateKnockoutFromTeams,
   generateKnockoutSlotBracket,
 } from '../lib/knockoutGenerator.js';
-import { generateDoubleElimFromTeams, buildDoubleElimTracks } from '../lib/doubleElimGenerator.js';
+import {
+  generateDoubleElimFromTeams,
+  generateDoubleElimFromGroup,
+  generateDoubleElimSlotBracket,
+  buildDoubleElimTracks,
+} from '../lib/doubleElimGenerator.js';
 import { generateGroupRoundRobin } from '../lib/groupScheduleGenerator.js';
 import { parseScheduleTimingBody } from '../lib/scheduleTiming.js';
 import { assignTeamCodeIfEmpty } from '../lib/teamCodes.js';
@@ -1132,7 +1137,7 @@ adminRouter.post('/tournaments/:tournamentId/link-group', requireStaff, async (r
     const { tournamentId } = req.params;
     if (!mongoose.isValidObjectId(tournamentId)) return res.status(404).send('Not found');
     const tournament = await Tournament.findById(tournamentId);
-    if (!tournament || tournament.phase !== 'knockout') {
+    if (!tournament || (tournament.phase !== 'knockout' && tournament.phase !== 'double_elim')) {
       return res.redirect(`/admin/tournaments/${tournamentId}`);
     }
     const sid = String(req.body.sourceGroupTournamentId || '').trim();
@@ -1289,7 +1294,7 @@ adminRouter.post('/tournaments/:tournamentId/generate-knockout-bracket', require
   }
 });
 
-/** 雙敗淘汰：產生勝部／敗部／總決賽雙軌籤表 */
+/** 雙敗淘汰：產生勝部／敗部／總決賽雙軌籤表（本賽事真實隊伍） */
 adminRouter.post('/tournaments/:tournamentId/generate-double-elim', requireStaff, async (req, res, next) => {
   try {
     const { tournamentId } = req.params;
@@ -1307,7 +1312,10 @@ adminRouter.post('/tournaments/:tournamentId/generate-double-elim', requireStaff
         await MatchAssignment.deleteMany({ matchId: { $in: matchIds } });
         await Match.deleteMany({ _id: { $in: matchIds } });
       }
-      await Team.deleteMany({ tournamentId, isPlaceholder: true });
+      await Team.deleteMany({
+        tournamentId,
+        $or: [{ isPlaceholder: true }, { sourceTeamId: { $exists: true, $ne: null } }],
+      });
     }
 
     const timing = parseScheduleTimingBody(req.body);
@@ -1324,6 +1332,95 @@ adminRouter.post('/tournaments/:tournamentId/generate-double-elim', requireStaff
     }
     const qs = [`gen=ok`, `teams=${r.createdTeams}`];
     if (r.createdMatches) qs.push(`matches=${r.createdMatches}`);
+    if (r.matchFormat) qs.push(`fmt=${encodeURIComponent(r.matchFormat)}`);
+    if (r.courtsUsed != null) qs.push(`courts=${r.courtsUsed}`);
+    res.redirect(`/admin/tournaments/${tournamentId}?${qs.join('&')}`);
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** 雙敗預排：A1／B2 占位籤表（小組未完亦可） */
+adminRouter.post('/tournaments/:tournamentId/generate-double-elim-slots', requireStaff, async (req, res, next) => {
+  try {
+    const { tournamentId } = req.params;
+    if (!mongoose.isValidObjectId(tournamentId)) return res.status(404).send('Not found');
+
+    const sourceTournamentId = String(req.body.sourceTournamentId || '').trim();
+    if (!sourceTournamentId) {
+      return res.redirect(`/admin/tournaments/${tournamentId}?gen=${encodeURIComponent('no_source')}`);
+    }
+    const src = await findAccessibleTournament(req.session, sourceTournamentId);
+    if (!src) return forbidAccess(req, res);
+
+    const force = req.body.force === '1' || req.body.force === 'true';
+    if (force) {
+      const t = await Tournament.findById(tournamentId).lean();
+      if (!t || t.phase !== 'double_elim') {
+        return res.redirect(`/admin/tournaments/${tournamentId}`);
+      }
+      const matches = await Match.find({ tournamentId }).select('_id').lean();
+      const matchIds = matches.map((m) => m._id);
+      if (matchIds.length) {
+        await MatchAssignment.deleteMany({ matchId: { $in: matchIds } });
+        await Match.deleteMany({ _id: { $in: matchIds } });
+      }
+      await Team.deleteMany({
+        tournamentId,
+        $or: [{ isPlaceholder: true }, { sourceTeamId: { $exists: true, $ne: null } }],
+      });
+    }
+
+    const advancePerGroup = parseInt(String(req.body.advancePerGroup || '').trim(), 10);
+    const timing = parseScheduleTimingBody(req.body);
+    const courts = await resolveGenerateCourts(tournamentId, req.body);
+    const r = await generateDoubleElimSlotBracket({
+      tournamentId,
+      sourceTournamentId,
+      advancePerGroup: Number.isNaN(advancePerGroup) ? undefined : advancePerGroup,
+      matchFormat: req.body.matchFormat,
+      timing,
+      courts,
+    });
+    if (!r.ok) {
+      return res.redirect(`/admin/tournaments/${tournamentId}?gen=${encodeURIComponent(r.error || 'error')}`);
+    }
+    const qs = [`gen=ok`, `preseed=1`, `teams=${r.createdTeams}`];
+    if (r.createdMatches) qs.push(`matches=${r.createdMatches}`);
+    if (r.matchFormat) qs.push(`fmt=${encodeURIComponent(r.matchFormat)}`);
+    if (r.courtsUsed != null) qs.push(`courts=${r.courtsUsed}`);
+    res.redirect(`/admin/tournaments/${tournamentId}?${qs.join('&')}`);
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** 雙敗：由小組賽出線填入 */
+adminRouter.post('/tournaments/:tournamentId/generate-double-elim-from-group', requireStaff, async (req, res, next) => {
+  try {
+    const { tournamentId } = req.params;
+    const sourceTournamentId = String(req.body.sourceTournamentId || '').trim();
+    if (sourceTournamentId) {
+      const src = await findAccessibleTournament(req.session, sourceTournamentId);
+      if (!src) return forbidAccess(req, res);
+    }
+    const advancePerGroup = parseInt(String(req.body.advancePerGroup || '').trim(), 10);
+    const timing = parseScheduleTimingBody(req.body);
+    const courts = await resolveGenerateCourts(tournamentId, req.body);
+    const r = await generateDoubleElimFromGroup({
+      sourceTournamentId,
+      tournamentId,
+      advancePerGroup: Number.isNaN(advancePerGroup) ? undefined : advancePerGroup,
+      matchFormat: req.body.matchFormat,
+      timing,
+      courts,
+    });
+    if (!r.ok) {
+      return res.redirect(`/admin/tournaments/${tournamentId}?gen=${encodeURIComponent(r.error || 'error')}`);
+    }
+    const qs = [`gen=ok`, `teams=${r.createdTeams}`];
+    if (r.createdMatches) qs.push(`matches=${r.createdMatches}`);
+    if (r.updatedMatches) qs.push(`updated=${r.updatedMatches}`);
     if (r.matchFormat) qs.push(`fmt=${encodeURIComponent(r.matchFormat)}`);
     if (r.courtsUsed != null) qs.push(`courts=${r.courtsUsed}`);
     res.redirect(`/admin/tournaments/${tournamentId}?${qs.join('&')}`);

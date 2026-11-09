@@ -2,14 +2,42 @@ import mongoose from 'mongoose';
 import { Tournament } from '../models/Tournament.js';
 import { Team } from '../models/Team.js';
 import { Match, MATCH_FORMAT } from '../models/Match.js';
+import { Group } from '../models/Group.js';
 import { Event } from '../models/Event.js';
+import { computeGroupStandings } from './groupStandings.js';
 import { venueSlugList } from './venues.js';
 import { createCourtTimeAssigner, scheduleDateFromTournament } from './scheduleTiming.js';
+import {
+  ensureTeamInTournament,
+  fillKnockoutSlots,
+  letterForIndex,
+} from './knockoutGenerator.js';
 
 function nextPow2(n) {
   let p = 1;
   while (p < n) p *= 2;
   return p;
+}
+
+function isPow2(n) {
+  return n > 0 && (n & (n - 1)) === 0;
+}
+
+/** 偶數組 × 每組前 N：交叉對賽順序寫入種子位（1vN、2vN-1…） */
+function orderSlotsForCrossSeed(groupCount, takeN) {
+  const n = groupCount * takeN;
+  const seedArr = new Array(n).fill(null);
+  let matchIdx = 0;
+  for (let gi = 0; gi < groupCount; gi += 2) {
+    const letterA = letterForIndex(gi);
+    const letterB = letterForIndex(gi + 1);
+    for (let i = 0; i < takeN; i++) {
+      seedArr[matchIdx] = `${letterA}${i + 1}`;
+      seedArr[n - 1 - matchIdx] = `${letterB}${takeN - i}`;
+      matchIdx += 1;
+    }
+  }
+  return seedArr;
 }
 
 function parseMatchFormat(raw) {
@@ -66,8 +94,15 @@ function losersRoundLabel(idx, isFinal) {
  * 產生雙敗淘汰完整籤表（勝部 + 敗部 + 總決賽 1／2）。
  * 總決賽：teamA = 勝部冠軍占位 GF-W；teamB = 敗部冠軍占位 GF-L。
  * 若敗部喺 GF1 反勝，推進邏輯會啟動 GF2（勝部一次優勢）。
+ * @param {object[]} [seedTeamIds] 若提供，用呢批隊伍／占位作勝部首輪種子（順序＝種子 1…N）
  */
-export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, courts, timing = null }) {
+export async function generateDoubleElimFromTeams({
+  tournamentId,
+  matchFormat,
+  courts,
+  timing = null,
+  seedTeamIds = null,
+}) {
   if (!mongoose.isValidObjectId(tournamentId)) return { ok: false, error: 'invalid_id' };
 
   const t = await Tournament.findById(tournamentId).lean();
@@ -77,13 +112,18 @@ export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, c
   const existingMatchCount = await Match.countDocuments({ tournamentId: t._id });
   if (existingMatchCount > 0) return { ok: false, error: 'target_has_matches' };
 
-  const teams = await Team.find({
-    tournamentId: t._id,
-    isPlaceholder: { $ne: true },
-  })
-    .sort({ seed: 1, createdAt: 1 })
-    .select('_id')
-    .lean();
+  let teams;
+  if (Array.isArray(seedTeamIds) && seedTeamIds.length) {
+    teams = seedTeamIds.map((id) => ({ _id: id }));
+  } else {
+    teams = await Team.find({
+      tournamentId: t._id,
+      isPlaceholder: { $ne: true },
+    })
+      .sort({ seed: 1, createdAt: 1 })
+      .select('_id')
+      .lean();
+  }
 
   if (teams.length < 2) return { ok: false, error: 'not_enough_teams' };
 
@@ -383,7 +423,6 @@ export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, c
   createdMatchIds.push(gf2._id);
 
   // 處理勝部首輪 BYE：自動推進 slot
-  const { fillKnockoutSlots } = await import('./knockoutGenerator.js');
   const finishedFirst = await Match.find({
     tournamentId: t._id,
     bracketTrack: 'winners',
@@ -414,6 +453,219 @@ export async function generateDoubleElimFromTeams({ tournamentId, matchFormat, c
     bracketSize,
     timingApplied: timeAssign.enabled,
   };
+}
+
+/**
+ * 預排雙敗：勝部首輪用 A1／B2… 占位（小組未完亦可），其餘敗部／總決賽用 W/L slot。
+ * 小組打完後再呼叫 generateDoubleElimFromGroup，只填真隊、唔改時間場地。
+ */
+export async function generateDoubleElimSlotBracket({
+  tournamentId,
+  sourceTournamentId,
+  advancePerGroup,
+  matchFormat,
+  courts,
+  timing = null,
+}) {
+  if (!mongoose.isValidObjectId(tournamentId) || !mongoose.isValidObjectId(sourceTournamentId)) {
+    return { ok: false, error: 'invalid_id' };
+  }
+
+  const de = await Tournament.findById(tournamentId).lean();
+  const src = await Tournament.findById(sourceTournamentId).lean();
+  if (!src || !de) return { ok: false, error: 'not_found' };
+  if (src.phase !== 'group') return { ok: false, error: 'source_not_group' };
+  if (de.phase !== 'double_elim') return { ok: false, error: 'target_not_double_elim' };
+  if (String(src.eventId) !== String(de.eventId)) return { ok: false, error: 'different_event' };
+
+  const existingMatchCount = await Match.countDocuments({ tournamentId: de._id });
+  if (existingMatchCount > 0) return { ok: false, error: 'target_has_matches' };
+
+  const groups = await Group.find({ tournamentId: src._id }).sort({ order: 1, createdAt: 1 }).lean();
+  if (!groups.length) return { ok: false, error: 'no_groups' };
+
+  const takeN = Math.max(1, parseInt(advancePerGroup ?? src.advancePerGroup ?? 2, 10) || 2);
+  const slotCount = groups.length * takeN;
+  if (slotCount < 2) return { ok: false, error: 'not_enough_qualifiers' };
+
+  await Tournament.updateOne(
+    { _id: tournamentId },
+    {
+      $set: {
+        sourceGroupTournamentId: sourceTournamentId,
+        ...(src.competitionDate ? { competitionDate: String(src.competitionDate).trim() } : {}),
+      },
+    }
+  );
+
+  const canCross = isPow2(slotCount) && groups.length % 2 === 0;
+  const slots = canCross
+    ? orderSlotsForCrossSeed(groups.length, takeN)
+    : (() => {
+        const list = [];
+        for (let gi = 0; gi < groups.length; gi++) {
+          const letter = letterForIndex(gi);
+          for (let r = 1; r <= takeN; r++) list.push(`${letter}${r}`);
+        }
+        return list;
+      })();
+
+  const seedTeamIds = [];
+  for (const name of slots) {
+    seedTeamIds.push(await ensurePlaceholderTeam(de._id, name));
+  }
+
+  const r = await generateDoubleElimFromTeams({
+    tournamentId,
+    matchFormat,
+    courts,
+    timing,
+    seedTeamIds,
+  });
+  if (!r.ok) return r;
+  return { ...r, slots, preseed: true };
+}
+
+/**
+ * 由小組賽出線填入雙敗（同單敗流程）：
+ * - 已有預排場次：只把 A1／B2… 換成真隊
+ * - 未預排：新建完整雙敗籤表
+ */
+export async function generateDoubleElimFromGroup({
+  sourceTournamentId,
+  tournamentId,
+  advancePerGroup,
+  matchFormat,
+  courts,
+  timing = null,
+}) {
+  if (!mongoose.isValidObjectId(sourceTournamentId) || !mongoose.isValidObjectId(tournamentId)) {
+    return { ok: false, error: 'invalid_id' };
+  }
+
+  const src = await Tournament.findById(sourceTournamentId).lean();
+  const de = await Tournament.findById(tournamentId).lean();
+  if (!src || !de) return { ok: false, error: 'not_found' };
+  if (src.phase !== 'group') return { ok: false, error: 'source_not_group' };
+  if (de.phase !== 'double_elim') return { ok: false, error: 'target_not_double_elim' };
+  if (String(src.eventId) !== String(de.eventId)) return { ok: false, error: 'different_event' };
+
+  await Tournament.updateOne(
+    { _id: tournamentId },
+    {
+      $set: {
+        sourceGroupTournamentId: sourceTournamentId,
+        ...(src.competitionDate ? { competitionDate: String(src.competitionDate).trim() } : {}),
+      },
+    }
+  );
+
+  const existingMatchCount = await Match.countDocuments({ tournamentId: de._id });
+  const groups = await Group.find({ tournamentId: src._id }).sort({ order: 1, createdAt: 1 }).lean();
+  if (!groups.length) return { ok: false, error: 'no_groups' };
+
+  const finishedGroupMatches = await Match.countDocuments({
+    tournamentId: src._id,
+    status: 'finished',
+  });
+  if (finishedGroupMatches === 0) {
+    return { ok: false, error: 'group_not_finished' };
+  }
+
+  const standings = await computeGroupStandings(src._id);
+  const takeN = Math.max(1, parseInt(advancePerGroup ?? src.advancePerGroup ?? 2, 10) || 2);
+
+  const qualifiers = [];
+  for (const block of standings) {
+    const picked = block.rows.slice(0, takeN);
+    for (let i = 0; i < picked.length; i++) {
+      qualifiers.push({
+        sourceTeamId: picked[i].teamId,
+        name: picked[i].name,
+        groupId: String(block.group._id),
+        groupName: block.group.name,
+        rankInGroup: i + 1,
+      });
+    }
+  }
+  if (qualifiers.length < 2) return { ok: false, error: 'not_enough_qualifiers' };
+
+  qualifiers.sort((a, b) => {
+    const ag = groups.findIndex((g) => String(g._id) === a.groupId);
+    const bg = groups.findIndex((g) => String(g._id) === b.groupId);
+    if (ag !== bg) return ag - bg;
+    return a.rankInGroup - b.rankInGroup;
+  });
+
+  const sourceTeams = await Team.find({ _id: { $in: qualifiers.map((q) => q.sourceTeamId) } })
+    .select('_id name code')
+    .lean();
+  const srcById = new Map(sourceTeams.map((t) => [String(t._id), t]));
+
+  const deTeamIds = [];
+  for (const q of qualifiers) {
+    const t = srcById.get(String(q.sourceTeamId));
+    if (!t) continue;
+    deTeamIds.push(await ensureTeamInTournament(de._id, t));
+  }
+
+  if (existingMatchCount > 0) {
+    const slotToTeamId = {};
+    for (let gi = 0; gi < groups.length; gi++) {
+      const letter = letterForIndex(gi);
+      for (let r = 1; r <= takeN; r++) {
+        const q = qualifiers.find(
+          (x) => String(x.groupId) === String(groups[gi]._id) && x.rankInGroup === r
+        );
+        if (!q) continue;
+        const idx = qualifiers.indexOf(q);
+        if (idx >= 0 && deTeamIds[idx]) {
+          slotToTeamId[`${letter}${r}`] = deTeamIds[idx];
+        }
+      }
+    }
+    const filledIds = await fillKnockoutSlots(de._id, slotToTeamId);
+    return {
+      ok: true,
+      createdTeams: deTeamIds.length,
+      createdMatches: 0,
+      updatedMatches: filledIds.length,
+    };
+  }
+
+  const canCross = isPow2(deTeamIds.length) && groups.length % 2 === 0 && deTeamIds.length === qualifiers.length;
+  let seedTeamIds = deTeamIds;
+  if (canCross) {
+    const byGroup = new Map();
+    for (let i = 0; i < qualifiers.length; i++) {
+      const q = qualifiers[i];
+      const gid = String(q.groupId);
+      if (!byGroup.has(gid)) byGroup.set(gid, []);
+      byGroup.get(gid).push({ rank: q.rankInGroup, teamId: deTeamIds[i] });
+    }
+    for (const arr of byGroup.values()) arr.sort((a, b) => a.rank - b.rank);
+
+    const orderedSlots = orderSlotsForCrossSeed(groups.length, takeN);
+    const slotToId = {};
+    for (let gi = 0; gi < groups.length; gi++) {
+      const letter = letterForIndex(gi);
+      const ranks = byGroup.get(String(groups[gi]._id)) || [];
+      for (let r = 1; r <= takeN; r++) {
+        const row = ranks.find((x) => x.rank === r);
+        if (row) slotToId[`${letter}${r}`] = row.teamId;
+      }
+    }
+    seedTeamIds = orderedSlots.map((s) => slotToId[s]).filter(Boolean);
+    if (seedTeamIds.length !== deTeamIds.length) seedTeamIds = deTeamIds;
+  }
+
+  return generateDoubleElimFromTeams({
+    tournamentId,
+    matchFormat,
+    courts,
+    timing,
+    seedTeamIds,
+  });
 }
 
 /**

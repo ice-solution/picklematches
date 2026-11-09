@@ -56,7 +56,9 @@ export function buildEventCompetitions({
   );
 
   const koByGroupId = new Map();
+  const deByGroupId = new Map();
   const usedKoIds = new Set();
+  const usedDeIds = new Set();
 
   for (const ko of knockouts) {
     const sid =
@@ -65,6 +67,16 @@ export function buildEventCompetitions({
     if (sid && !koByGroupId.has(sid)) {
       koByGroupId.set(sid, ko);
       usedKoIds.add(String(ko._id));
+    }
+  }
+
+  for (const de of doubleElims) {
+    const sid =
+      (de.sourceGroupTournamentId && String(de.sourceGroupTournamentId)) ||
+      guessKnockoutSourceGroupId(de, groups);
+    if (sid && !deByGroupId.has(sid)) {
+      deByGroupId.set(sid, de);
+      usedDeIds.add(String(de._id));
     }
   }
 
@@ -78,27 +90,39 @@ export function buildEventCompetitions({
   const competitions = groups.map((g) => {
     const gid = String(g._id);
     const ko = koByGroupId.get(gid) || null;
+    const de = deByGroupId.get(gid) || null;
     const koId = ko ? String(ko._id) : '';
+    const deId = de ? String(de._id) : '';
     const groupMs = matchesByTid.get(gid) || [];
     const koMs = koId ? knockoutMatchesByTournamentId?.get(koId) || matchesByTid.get(koId) || [] : [];
-    const allMs = [...groupMs, ...koMs].sort(sortMatches);
+    const deMs = deId ? knockoutMatchesByTournamentId?.get(deId) || matchesByTid.get(deId) || [] : [];
+    const allMs = [...groupMs, ...koMs, ...deMs].sort(sortMatches);
+    const deTracks = de ? buildDoubleElimTracks(deMs) : null;
 
     const koPopulated = koMs;
+    const linkedBracket = ko || de;
     const competitionDate =
-      normalizeDateOnly(g.competitionDate) || normalizeDateOnly(ko?.competitionDate) || '';
+      normalizeDateOnly(g.competitionDate) ||
+      normalizeDateOnly(ko?.competitionDate) ||
+      normalizeDateOnly(de?.competitionDate) ||
+      '';
     return {
       key: gid,
       name: g.name,
       order: g.order ?? 0,
       competitionDate,
-      competitionDateLabel: competitionDateLabel(g, ko),
+      competitionDateLabel: competitionDateLabel(g, linkedBracket),
       groupTournamentId: gid,
-      knockoutTournamentId: koId,
+      knockoutTournamentId: koId || deId,
       hasKnockout: !!ko,
+      hasDoubleElim: !!de,
       standings: standingsByGroupId.get(gid) || null,
       advancePerGroup: g.advancePerGroup ?? 2,
       knockoutLadderColumns: ko ? buildKnockoutLadderColumns(koPopulated) : [],
       knockoutBracket: ko ? buildKnockoutBracket(koPopulated) : null,
+      doubleElimTracks: deTracks,
+      doubleElimTree: deTracks ? buildDoubleElimTreeLayout(deTracks) : null,
+      isDoubleElim: !!de && !ko,
       podium: ko ? getPodiumFromKnockoutMatches(koPopulated) : null,
       groupMatches: groupMs,
       knockoutMatches: koMs,
@@ -129,7 +153,9 @@ export function buildEventCompetitions({
       };
     })
     .concat(
-      doubleElims.map((de) => {
+      doubleElims
+        .filter((de) => !usedDeIds.has(String(de._id)))
+        .map((de) => {
         const deId = String(de._id);
         const deMs = knockoutMatchesByTournamentId?.get(deId) || matchesByTid.get(deId) || [];
         const label = formatDateDisplayZh(de.competitionDate);

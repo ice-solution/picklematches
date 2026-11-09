@@ -172,7 +172,7 @@
       <% if (tournament.phase === 'group') { %>
         <p class="text-xs text-slate-500">名次計算：積分（勝*勝分 + 負*負分）→ 得失分 → 得分。</p>
       <% } else if (tournament.phase === 'double_elim') { %>
-        <p class="text-xs text-slate-500">雙敗淘汰：加入隊伍後用下方按鈕產生勝部／敗部／總決賽籤表。總決賽採勝部一次優勢（敗部反勝須再打一場）。</p>
+        <p class="text-xs text-slate-500">雙敗淘汰：可先由小組預排 A1／B2，打完後填入；或直接用本賽事隊伍產生勝部／敗部／總決賽（勝部一次優勢）。</p>
       <% } else if (tournament.phase === 'league') { %>
         <p class="text-xs text-slate-500">聯賽：固定隊員、每場男雙／女雙／混雙三場。真正開賽<strong class="text-slate-300">日期、時間、場地</strong>喺下面每一場設定（唔使成季只寫一日）。完賽後積分榜自動更新。</p>
       <% } else if (tournament.phase === 'knockout') { %>
@@ -455,26 +455,145 @@
         var realTeamsForDe = (teams || []).filter(function (t) { return !t.isPlaceholder; });
         var realTeamCountDe = realTeamsForDe.length;
         var hasMatchesDe = matches && matches.length;
+        var hasGroupSourcesDe = groupTournaments && groupTournaments.length;
+        var deGenErrorLabels = {
+          target_has_matches: '此雙敗賽已有場次，請先清空後再產生（或用預排掣勾選清空重產）。',
+          not_enough_teams: '至少需要 2 支真實隊伍（非 TBD/BYE）才可產生籤表。',
+          not_enough_qualifiers: '小組出線隊伍不足 2 隊。',
+          no_groups: '來源小組賽尚未建立組別。',
+          source_not_group: '來源必須是小組賽。',
+          target_not_double_elim: '目標必須是雙敗淘汰賽。',
+          different_event: '來源與目標不屬於同一大會。',
+          invalid_id: '無效的賽事編號。',
+          not_found: '找不到賽事。',
+          no_source: '請選擇來源小組賽。',
+          group_not_finished: '小組賽尚未有完賽場次。請先用「預排 A1／B2」產生時間表；小組打完後再撳「由小組產生」填入真隊。',
+        };
       %>
         <div class="mt-6 rounded border border-violet-800/60 bg-violet-950/25 p-4">
-          <p class="text-sm font-semibold text-violet-300">入完隊伍 → 一鍵產生雙敗淘汰籤表</p>
+          <p class="text-sm font-semibold text-violet-300">產生雙敗淘汰籤表</p>
           <p class="mt-1 text-xs text-slate-400">
+            建議流程同單敗：① <strong class="text-slate-200">預排 A1／B2</strong> → ② 小組打完 → ③ <strong class="text-slate-200">由小組產生</strong>（只換隊名）。
+            會產生<strong class="text-slate-300">勝部</strong>、<strong class="text-slate-300">敗部</strong>同<strong class="text-slate-300">總決賽</strong>（勝部一次優勢）。
             目前真實隊伍 <strong class="text-slate-200"><%= realTeamCountDe %></strong> 隊。
-            會產生<strong class="text-slate-300">勝部</strong>、<strong class="text-slate-300">敗部</strong>同<strong class="text-slate-300">總決賽</strong>（勝部一次優勢：敗部反勝先要再打第二場）。
-            <% if (hasMatchesDe) { %>已有 <%= matches.length %> 場次時會先清空再重畫。<% } %>
           </p>
-          <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-double-elim" class="mt-1">
-            <%- include('../partials/knockout-generate-fields', {
-              event: event,
-              force: !!hasMatchesDe,
-              realTeamCount: realTeamCountDe,
-              buttonLabel: hasMatchesDe ? '清空並重新產生雙敗籤表' : '產生雙敗淘汰籤表',
-              confirmMsg: hasMatchesDe
-                ? ('會先清空現有 ' + matches.length + ' 場次，再依目前 ' + realTeamCountDe + ' 隊重新產生雙敗籤表。真實隊伍會保留。確定？')
-                : ('確定依目前 ' + realTeamCountDe + ' 支隊伍產生雙敗淘汰籤表？'),
-              noteBye: true,
-            }) %>
-          </form>
+          <% if (typeof query !== 'undefined' && query && query.gen) { %>
+            <% if (query.gen === 'ok') { %>
+              <p class="mt-3 rounded border border-emerald-500/40 bg-emerald-950/25 px-3 py-2 text-sm text-emerald-200">
+                已完成<% if (query.preseed === '1') { %>（預排占位）<% } %>：隊伍／占位 <%= query.teams || '?' %>
+                <% if (query.matches) { %>、新增場次 <%= query.matches %> 場<% } %>
+                <% if (query.updated) { %>、填入/更新場次 <%= query.updated %> 場<% } %>。
+              </p>
+            <% } else if (query.gen === 'reset') { %>
+              <p class="mt-3 rounded border border-emerald-500/40 bg-emerald-950/25 px-3 py-2 text-sm text-emerald-200">已清空雙敗場次與占位，可重新產生。</p>
+            <% } else { %>
+              <p class="mt-3 rounded border border-rose-500/50 bg-rose-950/25 px-3 py-2 text-sm text-rose-200">
+                產生失敗：<%= deGenErrorLabels[query.gen] || query.gen %>
+              </p>
+            <% } %>
+          <% } %>
+
+          <% if (hasGroupSourcesDe) { %>
+            <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-double-elim-slots" class="mt-4 rounded border border-amber-900/50 bg-amber-950/20 p-4">
+              <p class="text-xs font-semibold text-amber-300">步驟 1：預排雙敗賽程（A1／B2 占位）</p>
+              <p class="mt-1 text-xs text-slate-500">
+                小組未打完都可以用。勝部首輪用 A1 vs B2 等占位排時間／場地；前台即時可見。
+                <% if (hasMatchesDe) { %>目前已有 <%= matches.length %> 場，撳掣會<strong class="text-amber-200">先清空再預排</strong>。<% } %>
+              </p>
+              <div class="mt-3 flex flex-wrap items-end gap-3">
+                <div class="min-w-[240px] flex-1">
+                  <label class="block text-xs text-slate-500">來源小組賽賽事</label>
+                  <select name="sourceTournamentId" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+                    <option value="" disabled selected hidden>選擇小組賽…</option>
+                    <% groupTournaments.forEach(function (t) { %>
+                      <option value="<%= t._id %>"><%= t.name %></option>
+                    <% }); %>
+                  </select>
+                </div>
+                <div class="w-36">
+                  <label class="block text-xs text-slate-500">每組取前 N 名</label>
+                  <input name="advancePerGroup" type="number" min="1" value="2" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+                </div>
+              </div>
+              <% if (hasMatchesDe) { %><input type="hidden" name="force" value="1" /><% } %>
+              <%- include('../partials/knockout-generate-fields', {
+                event: event,
+                force: false,
+                realTeamCount: 99,
+                buttonLabel: hasMatchesDe ? '清空並重新預排 A1／B2' : '預排 A1／B2 雙敗籤表',
+                confirmMsg: hasMatchesDe
+                  ? ('會先清空現有 ' + matches.length + ' 場，再以 A1／B2 占位重新預排雙敗時間表。確定？')
+                  : '確定以 A1／B2 占位預排雙敗賽程？（小組打完後再用「由小組產生」填入真隊）',
+                noteBye: true,
+              }) %>
+            </form>
+
+            <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-double-elim-from-group" class="mt-4 border-t border-violet-900/50 pt-4">
+              <p class="text-xs font-semibold text-violet-200">步驟 2：由小組賽出線填入（小組打完後）</p>
+              <p class="mt-1 text-xs text-slate-500">需已有完賽場次。若已預排 A1／B2，只會換真隊、不改時間／場地；若未預排則會新建雙敗籤表。</p>
+              <div class="mt-3 flex flex-wrap items-end gap-3">
+                <div class="min-w-[240px] flex-1">
+                  <label class="block text-xs text-slate-500">來源小組賽賽事</label>
+                  <select name="sourceTournamentId" required class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+                    <option value="" disabled selected hidden>選擇小組賽…</option>
+                    <% groupTournaments.forEach(function (t) { %>
+                      <option value="<%= t._id %>"><%= t.name %></option>
+                    <% }); %>
+                  </select>
+                </div>
+                <div class="w-36">
+                  <label class="block text-xs text-slate-500">每組取前 N 名</label>
+                  <input name="advancePerGroup" type="number" min="1" value="2" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2" />
+                </div>
+              </div>
+              <%- include('../partials/schedule-timing-fields') %>
+              <%- include('../partials/schedule-courts-fields', { event: event, venues: typeof venues !== 'undefined' ? venues : [] }) %>
+              <button type="submit" class="mt-3 rounded bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-600" onclick="return confirm('確定由小組出線填入雙敗賽？\\n\\n若已預排：只換隊名。若未預排：會新建籤表。');">由小組產生</button>
+            </form>
+          <% } %>
+
+          <div class="mt-4 rounded border border-violet-900/40 bg-violet-950/30 p-4">
+            <p class="text-xs font-semibold text-violet-200"><%= hasGroupSourcesDe ? '其他：' : '' %>由本賽事隊伍直接產生（無需小組賽）</p>
+            <p class="mt-1 text-xs text-slate-500">目前真實隊伍：<%= realTeamCountDe %> 隊。請先匯入／新增全部參賽隊伍。</p>
+            <form method="post" action="/admin/tournaments/<%= tournament._id %>/generate-double-elim" class="mt-1">
+              <%- include('../partials/knockout-generate-fields', {
+                event: event,
+                force: !!hasMatchesDe,
+                realTeamCount: realTeamCountDe,
+                buttonLabel: hasMatchesDe ? '清空並重新產生雙敗籤表' : '產生雙敗淘汰籤表',
+                confirmMsg: hasMatchesDe
+                  ? ('會先清空現有 ' + matches.length + ' 場次，再依目前 ' + realTeamCountDe + ' 隊重新產生雙敗籤表。真實隊伍會保留。確定？')
+                  : ('確定依目前 ' + realTeamCountDe + ' 支隊伍產生雙敗淘汰籤表？'),
+                noteBye: true,
+              }) %>
+            </form>
+          </div>
+
+          <% if (hasGroupSourcesDe) { %>
+            <form method="post" action="/admin/tournaments/<%= tournament._id %>/link-group" class="mt-4 border-t border-violet-900/50 pt-4">
+              <p class="text-xs font-semibold text-slate-400">前台綁定小組賽（選填）</p>
+              <p class="mt-1 text-xs text-slate-500">觀眾前台會將此雙敗賽與所選小組賽顯示在同一「比賽組別」分頁。</p>
+              <% if (typeof query !== 'undefined' && query && query.link === 'ok') { %>
+                <p class="mt-2 text-sm text-emerald-300">已更新綁定。</p>
+              <% } %>
+              <% if (typeof query !== 'undefined' && query && query.link === 'invalid') { %>
+                <p class="mt-2 text-sm text-rose-300">綁定失敗：請選擇有效的小組賽。</p>
+              <% } %>
+              <div class="mt-3 flex flex-wrap items-end gap-3">
+                <div class="min-w-[240px] flex-1">
+                  <label class="block text-xs text-slate-500">對應小組賽</label>
+                  <select name="sourceGroupTournamentId" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2">
+                    <option value="">（不綁定）</option>
+                    <% groupTournaments.forEach(function (t) { %>
+                      <option value="<%= t._id %>" <%= String(tournament.sourceGroupTournamentId || '') === String(t._id) ? 'selected' : '' %>><%= t.name %></option>
+                    <% }); %>
+                  </select>
+                </div>
+                <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-600">儲存綁定</button>
+              </div>
+            </form>
+          <% } %>
+
           <% if (hasMatchesDe) { %>
             <form method="post" action="/admin/tournaments/<%= tournament._id %>/reset-knockout" class="mt-3" onsubmit="return confirm('確定清空此雙敗賽事所有場次與占位隊伍？真實隊伍會保留。');">
               <button type="submit" class="text-xs text-rose-400 underline">清空場次與占位（重置）</button>

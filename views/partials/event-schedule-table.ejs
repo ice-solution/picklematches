@@ -42,7 +42,7 @@
       </div>
       <div class="mt-3 flex items-center justify-between gap-2 border-t border-slate-800/80 pt-3">
         <div class="score-cell text-sm">
-          <%- include('score-display', { m: m, scoreMainClass: 'font-mono font-semibold text-emerald-300', scoreDetailClass: 'mt-0.5 block font-mono text-xs text-slate-400' }) %>
+          <%- include('score-display', { m: m, scoreMainClass: 'font-mono text-base font-semibold text-emerald-300', scoreDetailClass: 'text-[11px] text-slate-400' }) %>
         </div>
         <% if (liveHref) { %>
           <a
@@ -99,7 +99,7 @@
           <td class="py-2.5 pr-3 text-slate-300"><%= m.court ? (typeof venueLabel === 'function' && event ? venueLabel(event.venues, m.court) : m.court) : '—' %></td>
           <td class="max-w-[10rem] py-2.5 pr-3 text-sm leading-snug"><%- include('team-display', { team: m.teamA }) %></td>
           <td class="max-w-[10rem] py-2.5 pr-3 text-sm leading-snug"><%- include('team-display', { team: m.teamB }) %></td>
-          <td class="py-2.5 pr-3 score-cell"><%- include('score-display', { m: m, scoreMainClass: 'font-mono text-sm font-semibold text-emerald-300', scoreDetailClass: 'mt-0.5 block font-mono text-xs text-slate-400' }) %></td>
+          <td class="py-2.5 pr-3 score-cell"><%- include('score-display', { m: m, scoreMainClass: 'font-mono text-sm font-semibold text-emerald-300', scoreDetailClass: 'text-[11px] text-slate-400' }) %></td>
           <td class="py-2.5 whitespace-nowrap"><%= typeof matchStatusLabel === 'function' ? matchStatusLabel(m.status) : m.status %></td>
         </tr>
       <% }); %>

@@ -1,12 +1,24 @@
 <% var sp = scoreDisplayParts(m); %>
 <% var mainCls = typeof scoreMainClass !== 'undefined' ? scoreMainClass : 'font-semibold tabular-nums text-emerald-300'; %>
-<% var detailCls = typeof scoreDetailClass !== 'undefined' ? scoreDetailClass : 'mt-0.5 block text-[10px] leading-snug tabular-nums text-slate-400'; %>
-<div class="match-score-display text-center">
+<% var detailCls = typeof scoreDetailClass !== 'undefined' ? scoreDetailClass : 'mt-1 text-[11px] leading-relaxed text-slate-400'; %>
+<% var lines = Array.isArray(sp.lines) ? sp.lines : []; %>
+<div class="match-score-display text-left">
   <span class="match-score-main <%= mainCls %>"><%= sp.main %></span>
-  <% if (sp.detail) { %>
+  <% if (lines.length) { %>
+    <ul class="match-score-detail match-score-lines <%= detailCls %>" aria-label="各場比分">
+      <% lines.forEach(function (row) { %>
+        <li class="match-score-line<%= row.live ? ' is-live' : '' %>">
+          <% if (row.label) { %><span class="ms-label"><%= row.label %></span><% } %>
+          <% if (row.score) { %><span class="ms-score"><%= row.score %></span><% } %>
+          <% if (row.who) { %><span class="ms-who"><%= row.who %></span><% } %>
+          <% if (row.note) { %><span class="ms-note"><%= row.note %></span><% } %>
+        </li>
+      <% }); %>
+    </ul>
+  <% } else if (sp.detail) { %>
     <span class="match-score-detail <%= detailCls %>"><%= sp.detail %></span>
   <% } %>
   <% if (m && m.remark) { %>
-    <span class="mt-0.5 block text-[10px] leading-snug text-slate-500"><%= m.remark %></span>
+    <span class="mt-1 block text-[10px] leading-snug text-slate-500"><%= m.remark %></span>
   <% } %>
 </div>

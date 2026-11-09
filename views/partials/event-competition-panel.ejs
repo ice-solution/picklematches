@@ -70,11 +70,11 @@
   <section class="comp-schedule mt-10 overflow-x-auto">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <h3 class="text-lg font-semibold text-white">賽程與結果</h3>
-      <% if (comp.hasKnockout) { %>
+      <% if (comp.hasKnockout || comp.hasDoubleElim) { %>
       <div class="flex flex-wrap gap-2 text-xs" role="tablist">
         <button type="button" class="phase-filter rounded bg-emerald-800/70 px-3 py-1.5 font-semibold text-white" data-phase="all">全部</button>
         <button type="button" class="phase-filter rounded border border-slate-600 px-3 py-1.5 text-slate-300" data-phase="group">小組</button>
-        <button type="button" class="phase-filter rounded border border-slate-600 px-3 py-1.5 text-slate-300" data-phase="knockout">淘汰</button>
+        <button type="button" class="phase-filter rounded border border-slate-600 px-3 py-1.5 text-slate-300" data-phase="<%= comp.hasDoubleElim && !comp.hasKnockout ? 'double_elim' : 'knockout' %>"><%= comp.hasDoubleElim && !comp.hasKnockout ? '雙敗' : '淘汰' %></button>
       </div>
       <% } %>
     </div>

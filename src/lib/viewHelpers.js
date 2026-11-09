@@ -26,9 +26,17 @@ export function completedGamesDetail(completedGames) {
   return real.map((g) => `${g.a}-${g.b}`).join(' · ');
 }
 
-/** 比分顯示：main = 大比分贏局數（2-1），聯賽則為五回合總分 */
+function formatDetailLine(row) {
+  if (!row) return '';
+  const score = row.score ? ` ${row.score}` : '';
+  const who = row.who ? ` ${row.who}` : '';
+  const note = row.note || '';
+  return `${row.label || ''}${score}${who}${note}`.trim();
+}
+
+/** 比分顯示：main = 大比分贏局數（2-1），聯賽則為五回合總分；lines = 逐場明細 */
 export function scoreDisplayParts(m) {
-  if (!m) return { main: '—', detail: '' };
+  if (!m) return { main: '—', detail: '', lines: [] };
   const ca = m.currentPoints?.a ?? 0;
   const cb = m.currentPoints?.b ?? 0;
   const completed = m.completedGames || [];
@@ -36,7 +44,7 @@ export function scoreDisplayParts(m) {
   if (m.matchFormat === 'leagueFive') {
     let ptsA = 0;
     let ptsB = 0;
-    const bits = [];
+    const lines = [];
     const live = m.status === 'live' || (m.status === 'scheduled' && (ca > 0 || cb > 0));
     const boardPreview = LEAGUE_GAME_LABELS.some((_, i) => {
       const p = playersFromConfirmedLineup(m, i);
@@ -51,28 +59,40 @@ export function scoreDisplayParts(m) {
       if (g) {
         ptsA += Number(g.a || 0);
         ptsB += Number(g.b || 0);
-        bits.push(`${lab} ${g.a}-${g.b}${who ? ' ' + who : ''}${note}`);
+        lines.push({ label: lab, score: `${g.a}-${g.b}`, who, note, live: false });
       } else if (live && i === completed.length) {
         const liveWho = gameLineupNote(resolveCurrentPlayers(m));
-        bits.push(`${lab} [${ca}-${cb}]${liveWho ? ' ' + liveWho : ''}`);
+        lines.push({
+          label: lab,
+          score: `[${ca}-${cb}]`,
+          who: liveWho,
+          note: '',
+          live: true,
+        });
         ptsA += ca;
         ptsB += cb;
       } else if (who) {
-        bits.push(`${lab} ${who}${note}`);
+        lines.push({ label: lab, score: '', who, note, live: false });
       }
     }
 
-    if (!completed.length && !live && !boardPreview) return { main: '—', detail: '' };
-    if (!completed.length && !live && boardPreview) return { main: '—', detail: bits.join(' · ') };
-    return { main: `${ptsA}-${ptsB}`, detail: bits.join(' · ') };
+    const detail = lines.map(formatDetailLine).filter(Boolean).join(' · ');
+    if (!completed.length && !live && !boardPreview) return { main: '—', detail: '', lines: [] };
+    if (!completed.length && !live && boardPreview) return { main: '—', detail, lines };
+    return { main: `${ptsA}-${ptsB}`, detail, lines };
   }
 
   const { gamesA, gamesB } = countGamesWon(completed);
   let detail = completedGamesDetail(completed);
   let main = '';
+  const lines = [];
 
   if (completed.length) {
     main = `${gamesA}-${gamesB}`;
+    for (const g of completed) {
+      if (isSummaryCompletedGame(g)) continue;
+      lines.push({ label: '', score: `${g.a}-${g.b}`, who: '', note: '', live: false });
+    }
   }
 
   const live =
@@ -82,6 +102,7 @@ export function scoreDisplayParts(m) {
 
   if (live) {
     detail = detail ? `${detail} · ${live}` : live;
+    lines.push({ label: '', score: live, who: '', note: '', live: true });
   }
 
   if (!main) {
@@ -89,7 +110,7 @@ export function scoreDisplayParts(m) {
     else main = '—';
   }
 
-  return { main, detail };
+  return { main, detail, lines };
 }
 
 /** EJS helper：單行摘要（列表欄位用） */

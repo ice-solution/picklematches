@@ -546,4 +546,67 @@
       padding: 0.35rem 0.4rem;
     }
   }
+
+  /* 賽程表比分：逐場分行，避免擠成一坨 */
+  .event-schedule-table td.score-cell {
+    min-width: 16rem;
+    max-width: 22rem;
+    vertical-align: top;
+  }
+
+  .match-score-display {
+    min-width: 0;
+  }
+
+  .match-score-lines {
+    margin: 0.35rem 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .match-score-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.15rem 0.45rem;
+    line-height: 1.45;
+    padding-bottom: 0.08em;
+  }
+
+  .match-score-line .ms-label {
+    flex: 0 0 3.75rem;
+    color: #94a3b8;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .match-score-line .ms-score {
+    flex: 0 0 auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    color: #e2e8f0;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .match-score-line .ms-who {
+    flex: 1 1 7rem;
+    min-width: 0;
+    color: #64748b;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .match-score-line .ms-note {
+    flex: 1 0 100%;
+    color: #64748b;
+    font-size: 0.65rem;
+  }
+
+  .match-score-line.is-live .ms-score {
+    color: #fbbf24;
+  }
 }

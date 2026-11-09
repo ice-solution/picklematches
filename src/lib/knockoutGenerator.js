@@ -36,7 +36,7 @@ function isPow2(n) {
   return n > 0 && (n & (n - 1)) === 0;
 }
 
-function letterForIndex(i) {
+export function letterForIndex(i) {
   const A = 'A'.charCodeAt(0);
   if (i < 26) return String.fromCharCode(A + i);
   const hi = Math.floor(i / 26) - 1;
@@ -95,7 +95,7 @@ async function ensurePlaceholderTeam(tournamentId, name) {
   return doc._id;
 }
 
-async function ensureTeamInTournament(knockoutTournamentId, sourceTeam) {
+export async function ensureTeamInTournament(knockoutTournamentId, sourceTeam) {
   const tid = new mongoose.Types.ObjectId(knockoutTournamentId);
   const code = String(sourceTeam.code || '').trim().toUpperCase();
   let existing = await Team.findOne({
